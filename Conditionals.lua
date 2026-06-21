@@ -403,72 +403,34 @@ function CleveRoids.HasItemCached(item)
     return CleveRoids.FindItemLocation(item) ~= nil
 end
 
--- Fast item cooldown lookup using cache
--- Enhanced with Nampower v2.18+ GetItemIdCooldown for detailed info
--- @param item: item ID (number) or item name (string)
--- @return remainingSeconds, totalDuration, enabled
-function CleveRoids.GetItemCooldownCached(item)
-    local location = CleveRoids.FindItemLocation(item)
-    if not location then
-        return 0, 0, 0
-    end
-
-    -- Try Nampower v2.18+ GetItemIdCooldown for more detailed info
-    -- This requires knowing the item ID
-    if GetItemIdCooldown then
-        local itemId = nil
-
-        -- Get item ID from location or input
-        if location.itemData and location.itemData.id then
-            itemId = location.itemData.id
-        elseif type(item) == "number" and item > 19 then
-            itemId = item
-        else
-            -- Extract item ID from inventory/bag link
-            local link
-            if location.type == "inventory" then
-                link = GetInventoryItemLink("player", location.inventoryID)
-            else
-                link = GetContainerItemLink(location.bag, location.slot)
-            end
-            if link then
-                local _, _, id = string.find(link, "item:(%d+)")
-                if id then itemId = tonumber(id) end
-            end
-        end
-
-        if itemId then
-            local cdInfo = GetItemIdCooldown(itemId)
-            if cdInfo then
-                local remaining = (cdInfo.cooldownRemainingMs or 0) / 1000
-                local duration = (cdInfo.individualDurationMs or cdInfo.categoryDurationMs or 0) / 1000
-                local enabled = (cdInfo.isOnCooldown == 1) and 1 or 0
-                return remaining, duration, enabled
-            end
-        end
-    end
-
-    -- Fallback to standard WoW API
-    local start, duration, enable
-    if location.type == "inventory" then
-        start, duration, enable = GetInventoryItemCooldown("player", location.inventoryID)
-    else
-        start, duration, enable = GetContainerItemCooldown(location.bag, location.slot)
-    end
-
-    -- Normalize cooldown values
+-- Normalize a (startTime, duration, enable) cooldown triple to
+-- (remainingSeconds, totalDuration, enabled).
+local function NormalizeCooldown(start, duration, enable)
     start = tonumber(start) or 0
     duration = tonumber(duration) or 0
     enable = tonumber(enable) or 0
-
     if duration <= 0 or start <= 0 then
         return 0, 0, enable
     end
-
     local remaining = (start + duration) - GetTime()
     if remaining < 0 then remaining = 0 end
-
     return remaining, duration, enable
+end
+
+-- Item cooldown lookup. Equipment-slot numbers (1-19) query the inventory slot;
+-- everything else resolves through ClassicAPI's GetItemCooldown, which takes an
+-- item id/name directly (the item's ON_USE cooldown) with no bag/slot lookup.
+-- @param item: item ID (number), item name (string), or equipment slot (1-19)
+-- @return remainingSeconds, totalDuration, enabled
+function CleveRoids.GetItemCooldownCached(item)
+    if not item then return 0, 0, 0 end
+
+    local numericItem = tonumber(item)
+    if numericItem and numericItem >= 1 and numericItem <= 19 then
+        return NormalizeCooldown(GetInventoryItemCooldown("player", numericItem))
+    end
+
+    return NormalizeCooldown(GetItemCooldown(item))
 end
 
 --This table maps stat keys to the functions that retrieve their values.
