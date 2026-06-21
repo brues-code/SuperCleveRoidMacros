@@ -2012,7 +2012,7 @@ function CleveRoids.GetCurrentShapeshiftIndex()
     if CleveRoids.playerClass == "PRIEST" then
         return CleveRoids.ValidatePlayerBuff(CleveRoids.Localized.Spells["Shadowform"]) and 1 or 0
     elseif CleveRoids.playerClass == "ROGUE" then
-        return CleveRoids.ValidatePlayerBuff(CleveRoids.Localized.Spells["Stealth"]) and 1 or 0
+        return CleveRoids.ClassicAPI.IsStealthed() and 1 or 0
     end
     for i=1, GetNumShapeshiftForms() do
         _, _, active = GetShapeshiftFormInfo(i)
@@ -3043,24 +3043,19 @@ function CleveRoids.CountEnemiesMatching(checkFunc)
         end
     end
 
-    -- 3. Nameplate scan: visible nameplates give live GUIDs without target switching
-    --    Requires Nampower v2.28+ (hasNameplateGUID) or SuperWoW
-    local API = CleveRoids.NampowerAPI
-    if (API and API.features.hasNameplateGUID) or CleveRoids.hasSuperwow then
-        local numChildren = WorldFrame:GetNumChildren()
-        local children = { WorldFrame:GetChildren() }
-        for i = 1, numChildren do
-            local frame = children[i]
-            if frame and frame:IsVisible() then
-                local success, guid = pcall(frame.GetName, frame, 1)
-                if success and guid and type(guid) == "string" and string.len(guid) > 0 and not checked[guid] then
-                    if UnitExists(guid) and UnitCanAttack("player", guid) then
-                        checked[guid] = true
-                        CleveRoids.knownEnemyGuids[guid] = true
-                        if checkFunc(guid) then
-                            count = count + 1
-                        end
-                    end
+    -- 3. Nameplate scan: visible nameplates give live GUIDs without target switching.
+    --    ClassicAPI's C_NamePlate.GetNamePlateGUIDs() lists every unit with an
+    --    allocated nameplate (including default vanilla nameplates), replacing the
+    --    old WorldFrame child-walk + frame:GetName(1) GUID-extraction.
+    local plateGuids = CleveRoids.ClassicAPI.GetNamePlateGUIDs()
+    if plateGuids then
+        for i = 1, table.getn(plateGuids) do
+            local guid = plateGuids[i]
+            if guid and not checked[guid] and UnitExists(guid) and UnitCanAttack("player", guid) then
+                checked[guid] = true
+                CleveRoids.knownEnemyGuids[guid] = true
+                if checkFunc(guid) then
+                    count = count + 1
                 end
             end
         end
@@ -5856,17 +5851,11 @@ CleveRoids.Keywords = {
     end,
 
     stealth = function(conditionals)
-        return (
-            (CleveRoids.playerClass == "ROGUE" and CleveRoids.ValidatePlayerBuff(CleveRoids.Localized.Spells["Stealth"]))
-            or (CleveRoids.playerClass == "DRUID" and CleveRoids.ValidatePlayerBuff(CleveRoids.Localized.Spells["Prowl"]))
-        )
+        return CleveRoids.ClassicAPI.IsStealthed()
     end,
 
     nostealth = function(conditionals)
-        return (
-            (CleveRoids.playerClass == "ROGUE" and not CleveRoids.ValidatePlayerBuff(CleveRoids.Localized.Spells["Stealth"]))
-            or (CleveRoids.playerClass == "DRUID" and not CleveRoids.ValidatePlayerBuff(CleveRoids.Localized.Spells["Prowl"]))
-        )
+        return not CleveRoids.ClassicAPI.IsStealthed()
     end,
 
     casting = function(conditionals)
@@ -9376,16 +9365,10 @@ CleveRoids.Keywords = {
 
     -- stl / nostl → stealth / nostealth (saves 4/6 chars)
     stl = function(conditionals)
-        return (
-            (CleveRoids.playerClass == "ROGUE" and CleveRoids.ValidatePlayerBuff(CleveRoids.Localized.Spells["Stealth"]))
-            or (CleveRoids.playerClass == "DRUID" and CleveRoids.ValidatePlayerBuff(CleveRoids.Localized.Spells["Prowl"]))
-        )
+        return CleveRoids.ClassicAPI.IsStealthed()
     end,
     nostl = function(conditionals)
-        return (
-            (CleveRoids.playerClass == "ROGUE" and not CleveRoids.ValidatePlayerBuff(CleveRoids.Localized.Spells["Stealth"]))
-            or (CleveRoids.playerClass == "DRUID" and not CleveRoids.ValidatePlayerBuff(CleveRoids.Localized.Spells["Prowl"]))
-        )
+        return not CleveRoids.ClassicAPI.IsStealthed()
     end,
 
     -- ic / ooc → combat / nocombat (saves 4/5 chars)

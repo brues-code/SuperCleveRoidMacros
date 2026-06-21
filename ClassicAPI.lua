@@ -118,3 +118,22 @@ end
 function API.GetActionInfo(slot)
     return GetActionInfo(slot)
 end
+
+--------------------------------------------------------------------------------
+-- State
+--------------------------------------------------------------------------------
+
+-- True if the player is in Stealth (Rogue) or Prowl (Druid).
+function API.IsStealthed()
+    return IsStealthed()
+end
+
+--------------------------------------------------------------------------------
+-- NamePlate
+--------------------------------------------------------------------------------
+
+-- 1-based table of GUID strings (0x... format) for every unit with an allocated
+-- nameplate, including default vanilla nameplates. Order isn't stable.
+function API.GetNamePlateGUIDs()
+    return C_NamePlate.GetNamePlateGUIDs()
+end
