@@ -8,6 +8,7 @@
 Localization.lua
 Init.lua
 NampowerAPI.lua
+ClassicAPI.lua
 Utility.lua
 Core.lua
 Conditionals.lua

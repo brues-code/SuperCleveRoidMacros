@@ -152,6 +152,21 @@ local BOOLEAN_CONDITIONALS = {
     nopet = true,
     bg = true,
     nobg = true,
+    -- Dispel-type conditionals (ClassicAPI C_UnitAuras)
+    magic = true,
+    nomagic = true,
+    curse = true,
+    nocurse = true,
+    disease = true,
+    nodisease = true,
+    poison = true,
+    nopoison = true,
+    dispellable = true,
+    nodispellable = true,
+    magicbuff = true,
+    nomagicbuff = true,
+    dispellablebuff = true,
+    nodispellablebuff = true,
 }
 
 local requirementCheckFrame = CreateFrame("Frame")

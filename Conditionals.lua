@@ -6515,6 +6515,87 @@ CleveRoids.Keywords = {
         end, conditionals, "nomydebuff")
     end,
 
+    -- Dispel-type conditionals (ClassicAPI C_UnitAuras).
+    -- [magic]/[curse]/[disease]/[poison] = target has a debuff of that dispel
+    -- type; [dispellable] = target has any dispellable debuff. These require the
+    -- ClassicAPI client mod; without it the positive checks return false and the
+    -- negated checks return true (graceful degradation — vanilla cannot read
+    -- aura dispel types). They honor @unit like [debuff] does.
+    magic = function(conditionals)
+        if not conditionals.target then return false end
+        return CleveRoids.ClassicAPI.UnitHasDispelType(conditionals.target, "Magic")
+    end,
+
+    nomagic = function(conditionals)
+        if not conditionals.target then return false end
+        return not CleveRoids.ClassicAPI.UnitHasDispelType(conditionals.target, "Magic")
+    end,
+
+    curse = function(conditionals)
+        if not conditionals.target then return false end
+        return CleveRoids.ClassicAPI.UnitHasDispelType(conditionals.target, "Curse")
+    end,
+
+    nocurse = function(conditionals)
+        if not conditionals.target then return false end
+        return not CleveRoids.ClassicAPI.UnitHasDispelType(conditionals.target, "Curse")
+    end,
+
+    disease = function(conditionals)
+        if not conditionals.target then return false end
+        return CleveRoids.ClassicAPI.UnitHasDispelType(conditionals.target, "Disease")
+    end,
+
+    nodisease = function(conditionals)
+        if not conditionals.target then return false end
+        return not CleveRoids.ClassicAPI.UnitHasDispelType(conditionals.target, "Disease")
+    end,
+
+    poison = function(conditionals)
+        if not conditionals.target then return false end
+        return CleveRoids.ClassicAPI.UnitHasDispelType(conditionals.target, "Poison")
+    end,
+
+    nopoison = function(conditionals)
+        if not conditionals.target then return false end
+        return not CleveRoids.ClassicAPI.UnitHasDispelType(conditionals.target, "Poison")
+    end,
+
+    dispellable = function(conditionals)
+        if not conditionals.target then return false end
+        return CleveRoids.ClassicAPI.UnitHasDispelType(conditionals.target, "any")
+    end,
+
+    nodispellable = function(conditionals)
+        if not conditionals.target then return false end
+        return not CleveRoids.ClassicAPI.UnitHasDispelType(conditionals.target, "any")
+    end,
+
+    -- Buff-side dispel-type conditionals (offensive dispel / strip / purge).
+    -- [magicbuff] = unit has a dispellable Magic buff (the only kind offensive
+    -- dispel removes in 1.12); [dispellablebuff] = unit has any dispel-typed
+    -- buff. Same ClassicAPI requirement and graceful degradation as the debuff
+    -- variants. The `true` arg makes UnitHasDispelType scan buffs, not debuffs.
+    magicbuff = function(conditionals)
+        if not conditionals.target then return false end
+        return CleveRoids.ClassicAPI.UnitHasDispelType(conditionals.target, "Magic", true)
+    end,
+
+    nomagicbuff = function(conditionals)
+        if not conditionals.target then return false end
+        return not CleveRoids.ClassicAPI.UnitHasDispelType(conditionals.target, "Magic", true)
+    end,
+
+    dispellablebuff = function(conditionals)
+        if not conditionals.target then return false end
+        return CleveRoids.ClassicAPI.UnitHasDispelType(conditionals.target, "any", true)
+    end,
+
+    nodispellablebuff = function(conditionals)
+        if not conditionals.target then return false end
+        return not CleveRoids.ClassicAPI.UnitHasDispelType(conditionals.target, "any", true)
+    end,
+
     power = function(conditionals)
         return Multi(conditionals.power, function(args)
             if type(args) ~= "table" then return false end

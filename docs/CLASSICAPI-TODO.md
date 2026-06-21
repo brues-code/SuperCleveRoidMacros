@@ -20,16 +20,38 @@ API references are line numbers into `C:\Git\ClassicAPI\docs\API.md`.
   `applications` (stacks), `duration`.
 - **Unlocks:** `[dispellable]` / `[curse]` / `[magic]` target conditionals and
   spellID-based (rank/locale-proof) aura matching.
-- **Replaces today:** pfUI libdebuff + tooltip scanning (`Conditionals.lua:1815+`).
 - **Caveat:** `expirationTime` is only populated for `unit=="player"`; it's `0`
   for target/focus (vanilla server limitation). Target debuff *timers* still
   need the existing libdebuff tracking — only presence/stacks/school/spellId
   are reliable cross-unit.
 
+- **DONE (slice 1 — dispel-type conditionals):** added `ClassicAPI.lua`
+  detection module (`CleveRoids.ClassicAPI`, mirrors NampowerAPI's
+  `HasMinimumVersion`) and the `[magic]`/`[curse]`/`[disease]`/`[poison]`/
+  `[dispellable]` conditionals + negations, backed by
+  `C_UnitAuras.GetDebuffDataByIndex(...).dispelName`. No-arg booleans, honor
+  `@unit`, graceful fallback (positive→false, negated→true) when ClassicAPI is
+  absent. Purely additive — the existing `ValidateAura` path is untouched.
+- **DONE (slice 2 — buff-side / offensive dispel):** `UnitHasDispelType` now
+  takes a `helpful` flag (scans `GetBuffDataByIndex`), exposed as
+  `[magicbuff]`/`[dispellablebuff]` + negations — detect a dispellable buff to
+  strip off an enemy (e.g. `[harm,magicbuff] Dispel Magic`). Magic-only is the
+  practical set since 1.12 offensive dispel removes Magic buffs.
+- **Follow-ups (still TODO):**
+  - spellID-based aura matching via `GetUnitAuraBySpellID` (rank/locale-proof),
+    optionally wired into `ValidateAura` as a fast path with libdebuff fallback.
+  - more reliable cross-unit stacks via `applications`.
+  - class-aware `[dispellable]` (only types this character can actually remove).
+  - optional name filtering on the type keywords (e.g. `[magic:Polymorph]`).
+
 ### 2. `C_Item.GetWeaponEnchantInfo()` — temp-enchant IDs
 - **API:** `API.md:7159` — returns 12-tuple including `enchantID` for main/off/ranged.
-- **Unlocks:** `[poison:<id>]` / `[weaponenchant:<id>]` conditionals — detect
-  *which* poison/oil/sharpening stone is applied, not just that one exists.
+- **Unlocks:** detect *which* temp enchant (poison/oil/sharpening stone) is
+  applied to a weapon, not just that one exists.
+- **Naming:** `[poison]` is now taken by the target dispel-type conditional
+  (slice 1 above). Use weapon-specific keywords for this — e.g.
+  `[mhenchant:<id>]` / `[ohenchant:<id>]` (or `[mhpoison:<id>]`/`[ohpoison:<id>]`),
+  not a bare `[poison]`.
 - Vanilla's global only reports presence; this is a genuinely new capability
   (rogue/shaman/enhance).
 
