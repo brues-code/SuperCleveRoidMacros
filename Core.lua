@@ -169,12 +169,12 @@ requirementCheckFrame:SetScript("OnEvent", function()
         -- Show warnings (don't disable — tearing down a partially-initialized addon causes hangs)
         if not hasNampower then
             CleveRoids.Print("|cFFFF9900WARNING:|r |cFF00FFFFAvitasia's Nampower v3.0.0+|r is required:")
-            CleveRoids.Print("https://gitea.com/avitasia/nampower")
+            CleveRoids.Print("https://github.com/brues-code/nampower")
             CleveRoids.Print("Many features will be unavailable without Nampower.")
         elseif not hasNampower30 then
             local major, minor, patch = CleveRoids.NampowerAPI.GetVersion()
             CleveRoids.Print(format("|cFFFF9900WARNING:|r |cFF00FFFFNampower v3.0.0+|r is required (you have v%d.%d.%d):", major, minor, patch))
-            CleveRoids.Print("https://gitea.com/avitasia/nampower")
+            CleveRoids.Print("https://github.com/brues-code/nampower")
             CleveRoids.Print("Some features may be unavailable with this version.")
         end
         if not hasUnitXP then
