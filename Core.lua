@@ -179,8 +179,9 @@ requirementCheckFrame:SetScript("OnEvent", function()
     local hasUnitXP = pcall(UnitXP, "nop", "nop")
     local hasNampower30 = hasNampower and CleveRoids.NampowerAPI
         and CleveRoids.NampowerAPI.HasMinimumVersion(3, 0, 0)
+    local hasClassicAPI = CleveRoids.ClassicAPI and CleveRoids.ClassicAPI.IsAvailable()
 
-    if not hasNampower30 or not hasUnitXP then
+    if not hasNampower30 or not hasUnitXP or not hasClassicAPI then
         -- Show warnings (don't disable — tearing down a partially-initialized addon causes hangs)
         if not hasNampower then
             CleveRoids.Print("|cFFFF9900WARNING:|r |cFF00FFFFAvitasia's Nampower v3.0.0+|r is required:")
@@ -195,6 +196,11 @@ requirementCheckFrame:SetScript("OnEvent", function()
         if not hasUnitXP then
             CleveRoids.Print("|cFFFF9900WARNING:|r |cFF00FFFFKonaka's UnitXP_SP3|r is required:")
             CleveRoids.Print("https://codeberg.org/konaka/UnitXP_SP3")
+        end
+        if not hasClassicAPI then
+            CleveRoids.Print("|cFFFF9900WARNING:|r |cFF00FFFFClassicAPI|r is required:")
+            CleveRoids.Print("https://github.com/brues-code/ClassicAPI")
+            CleveRoids.Print("Dispel-type and movement conditionals will be unavailable without it.")
         end
     end
 
@@ -1654,20 +1660,7 @@ end
 
 -- Returns the name of the focus target or nil
 function CleveRoids.GetFocusName()
-    -- 1. Add specific compatibility for pfUI.
-    -- pfUI stores its focus unit information in a table.
-    if pfUI and pfUI.uf and pfUI.uf.focus and pfUI.uf.focus.unitname then
-        return pfUI.uf.focus.unitname
-    end
-
-    -- Fallback for other focus addons
-    if ClassicFocus_CurrentFocus then
-        return ClassicFocus_CurrentFocus
-    elseif CURR_FOCUS_TARGET then
-        return CURR_FOCUS_TARGET
-    end
-
-    return nil
+    return UnitName('focus')
 end
 
 -- Attempts to target the focus target.
@@ -4047,13 +4040,11 @@ local GetTime = GetTime
 local UnitAffectingCombat = UnitAffectingCombat
 local pairs = pairs
 local next = next
-local UnitPosition = UnitPosition
 local IsAltKeyDown = IsAltKeyDown
 local IsShiftKeyDown = IsShiftKeyDown
 local IsControlKeyDown = IsControlKeyDown
 
 -- PERFORMANCE: Module-level constants (avoid re-creation per frame)
-local POS_TRACK_INTERVAL = 0.01  -- 10ms between position samples (100 Hz, matches MonkeySpeed)
 local SEQUENCE_STALE_TIME = 300  -- 5 minutes
 
 function CleveRoids.OnUpdate(self)
@@ -4116,61 +4107,6 @@ function CleveRoids.OnUpdate(self)
             end
         end
         return
-    end
-
-    -- =========================================================================
-    -- CONTINUOUS POSITION TRACKING (for [moving] fallback without MonkeySpeed)
-    -- =========================================================================
-    -- Track player position at ~100 Hz with 4-sample circular buffer for snappy movement detection.
-    -- Matches MonkeySpeed's 0.01s detection interval for similar responsiveness.
-    -- PERFORMANCE: Pre-allocated circular buffer eliminates ~100 table allocs/sec and table.remove shifting.
-    local lastPosTime = CR._positionTrackTime or 0
-
-    if (time - lastPosTime) >= POS_TRACK_INTERVAL then
-        CR._positionTrackTime = time
-
-        if UnitPosition then
-            local x, y = UnitPosition("player")
-            if x and y then
-                -- Initialize circular buffer if needed (pre-allocate 4 entry tables)
-                local history = CR._positionHistory
-                if not history then
-                    history = {
-                        { x = 0, y = 0, time = 0 },
-                        { x = 0, y = 0, time = 0 },
-                        { x = 0, y = 0, time = 0 },
-                        { x = 0, y = 0, time = 0 },
-                    }
-                    CR._positionHistory = history
-                    CR._posHistoryIndex = 0
-                    CR._posHistoryCount = 0
-                end
-
-                -- Advance circular index (1-based, wraps at 4)
-                local idx = CR._posHistoryIndex + 1
-                if idx > 4 then idx = 1 end
-                CR._posHistoryIndex = idx
-
-                -- Reuse existing entry (zero allocation)
-                local entry = history[idx]
-                entry.x = x
-                entry.y = y
-                entry.time = time
-
-                -- Track how many samples we have (caps at 4)
-                if CR._posHistoryCount < 4 then
-                    CR._posHistoryCount = CR._posHistoryCount + 1
-                end
-
-                -- Maintain legacy vars for any code that uses them directly
-                if CR._posHistoryCount >= 2 then
-                    local prevIdx = idx - 1
-                    if prevIdx < 1 then prevIdx = 4 end
-                    CR._previousPlayerPos = history[prevIdx]
-                    CR._currentPlayerPos = entry
-                end
-            end
-        end
     end
 
     -- PERFORMANCE: Delayed WDB warmup after login (ensures GetItemInfo works after WDB clear)

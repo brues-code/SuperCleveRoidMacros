@@ -2,10 +2,10 @@
     ClassicAPI.lua - ClassicAPI Integration Layer
 
     ClassicAPI is a client mod (sibling to Nampower/SuperWoW) that backports the
-    modern C_* API into the 1.12.1 Lua environment. This module provides feature
-    detection and thin wrappers so every ClassicAPI-backed code path can fall
-    back gracefully when the DLL is absent, mirroring NampowerAPI's
-    HasMinimumVersion pattern.
+    modern C_* API into the 1.12.1 Lua environment. It is a HARD REQUIREMENT of
+    this addon, so the wrappers below call the API directly — no fallbacks. The
+    load-time requirement check (Core.lua) uses IsAvailable() to warn when the
+    DLL is missing; users who don't want ClassicAPI should run the upstream addon.
 
     Detection: the global CLASSIC_API_VERSION is defined once the client has
     booted, encoded as X*10000 + Y*100 + Z for a vX.Y.Z tag (untagged dev builds
@@ -14,6 +14,7 @@
     Currently used for:
     - C_UnitAuras: dispel-type detection (Magic/Curse/Disease/Poison) on any unit,
       powering the [magic]/[curse]/[disease]/[poison]/[dispellable] conditionals.
+    - GetUnitSpeed / IsFalling: the [moving] conditional.
 ]]
 
 local _G = _G or getfenv(0)
@@ -51,20 +52,9 @@ end
 -- C_UnitAuras
 --------------------------------------------------------------------------------
 
--- Cached capability flag (C_UnitAuras is injected by the DLL before addons load).
-local _hasUnitAuras = nil
-function API.HasUnitAuras()
-    if _hasUnitAuras == nil then
-        _hasUnitAuras = (type(C_UnitAuras) == "table"
-            and type(C_UnitAuras.GetDebuffDataByIndex) == "function"
-            and type(C_UnitAuras.GetBuffDataByIndex) == "function") or false
-    end
-    return _hasUnitAuras
-end
-
--- Module-level scan (passed to pcall with args to avoid per-call closure alloc).
--- indexFn is C_UnitAuras.GetBuffDataByIndex or GetDebuffDataByIndex.
--- Vanilla descriptors hold 32 helpful / 16 harmful slots; cap as a backstop.
+-- Scan a unit's auras (indexFn = C_UnitAuras.GetBuffDataByIndex or
+-- GetDebuffDataByIndex) for one matching the dispel type. Vanilla descriptors
+-- hold 32 helpful / 16 harmful slots; cap as a backstop.
 local function scanDispel(indexFn, unit, dispelType, wantAny)
     local i = 1
     while i <= 48 do
@@ -84,16 +74,35 @@ end
 --               dispellable aura (any non-empty dispelName).
 --   helpful:    true  -> scan buffs   (offensive dispel / strip / purge)
 --               false -> scan debuffs (defensive cleanse, default)
--- Returns false (never errors) when ClassicAPI/C_UnitAuras is unavailable or the
--- unit doesn't exist, so callers degrade gracefully.
 function API.UnitHasDispelType(unit, dispelType, helpful)
-    if not unit then return false end
-    if not API.HasUnitAuras() then return false end
-    if not UnitExists(unit) then return false end
-
+    if not unit or not UnitExists(unit) then return false end
     local indexFn = helpful and C_UnitAuras.GetBuffDataByIndex
         or C_UnitAuras.GetDebuffDataByIndex
     local wantAny = (dispelType == nil or dispelType == "any")
-    local ok, found = pcall(scanDispel, indexFn, unit, dispelType, wantAny)
-    return (ok and found) or false
+    return scanDispel(indexFn, unit, dispelType, wantAny)
+end
+
+--------------------------------------------------------------------------------
+-- GetUnitSpeed
+--------------------------------------------------------------------------------
+
+-- Normal unmounted run speed in yards/second; treated as 100% on the speed
+-- scale used by the [moving] conditional.
+local BASE_RUN_SPEED = 7.0
+
+-- Current speed of `unit` in yards/second (0 when stationary or the token
+-- doesn't resolve).
+function API.GetUnitCurrentSpeed(unit)
+    return GetUnitSpeed(unit or "player") or 0
+end
+
+-- Player's current speed as a percentage of normal run speed (100 = run).
+function API.GetPlayerSpeedPercent()
+    return (API.GetUnitCurrentSpeed("player") / BASE_RUN_SPEED) * 100
+end
+
+-- True if the player is mid-jump or falling. GetUnitSpeed's currentSpeed is
+-- horizontal-only, so this catches vertical movement it would report as 0.
+function API.IsPlayerFalling()
+    return IsFalling()
 end

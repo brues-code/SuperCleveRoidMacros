@@ -2978,92 +2978,23 @@ function CleveRoids.ValidateTTE(operator, amount)
 end
 
 -- ============================================================================
--- MONKEYSPEED ADDON INTEGRATION
+-- MOVEMENT SPEED DETECTION
 -- ============================================================================
--- Integrates with MonkeySpeed addon for accurate movement speed detection
--- MonkeySpeed uses SuperWoW's UnitPosition to calculate actual movement speed
-
---- Check if MonkeySpeed addon is available and loaded
---- @return boolean True if MonkeySpeed is available with speed data
-function CleveRoids.HasMonkeySpeed()
-    return type(MonkeySpeed) == "table" and
-           MonkeySpeed.m_bLoaded == true and
-           MonkeySpeed.m_fSpeed ~= nil
-end
-
---- Require MonkeySpeed for a feature, warn once if missing
---- @param feature string Feature name for warning message
---- @return boolean True if MonkeySpeed is available
-function CleveRoids.RequireMonkeySpeed(feature)
-    if CleveRoids.HasMonkeySpeed() then
-        return true
-    end
-    if not CleveRoids._monkeySpeedErrorShown then
-        DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[SuperCleveRoidMacros]|r The [moving] speed conditional requires the MonkeySpeed addon.", 1, 0.5, 0.5)
-        CleveRoids._monkeySpeedErrorShown = true
-    end
-    return false
-end
+-- Backed by ClassicAPI's GetUnitSpeed (a hard requirement of this addon).
 
 --- Get current player movement speed as percentage (100 = normal run speed)
---- @return number|nil Speed percentage, or nil if MonkeySpeed not available
+--- @return number|nil Speed percentage, or nil if ClassicAPI is unavailable
 function CleveRoids.GetPlayerSpeed()
-    if not CleveRoids.HasMonkeySpeed() then
-        return nil
-    end
-    return MonkeySpeed.m_fSpeed or 0
+    return CleveRoids.ClassicAPI.GetPlayerSpeedPercent()
 end
 
 --- Check if player is currently moving (speed > 0)
---- Falls back to basic position checking if MonkeySpeed isn't available
+--- Backed by ClassicAPI's GetUnitSpeed; currentSpeed is horizontal-only, so
+--- jumping/falling is also treated as moving via IsFalling.
 --- @return boolean True if player is moving
 function CleveRoids.IsPlayerMoving()
-    -- If MonkeySpeed is available, use it for accurate speed-based detection
-    if CleveRoids.HasMonkeySpeed() then
-        return (MonkeySpeed.m_fSpeed or 0) > 0
-    end
-
-    -- Nampower 2.36+ provides direct movement flag query (catches jumping, falling, pitching)
-    if CleveRoids.NampowerAPI.features.hasPlayerIsMoving then
-        return PlayerIsMoving() == 1
-    end
-
-    -- Fallback: use continuously tracked position history from OnUpdate
-    -- Core.lua tracks position at ~100 Hz with 4-sample circular buffer (matches MonkeySpeed's 0.01s).
-    -- Movement is detected if ANY consecutive pair of samples shows movement.
-    -- This gives instant start-of-movement detection (first sample shows delta).
-    local history = CleveRoids._positionHistory
-    local count = CleveRoids._posHistoryCount or 0
-    local headIdx = CleveRoids._posHistoryIndex or 0
-
-    if history and count >= 2 then
-        -- Compare the most recent pair: headIdx (newest) vs. the slot before it.
-        -- Use (headIdx - 2 + 4) mod 4 to safely wrap backwards in the 1-based ring.
-        -- This avoids Lua 5.0 math.mod returning negative values for negative inputs.
-        local prevIdx = math.mod((headIdx - 2 + 4), 4) + 1
-        local curr = history[headIdx]
-        local prev = history[prevIdx]
-        if curr and prev then
-            local dx = curr.x - prev.x
-            local dy = curr.y - prev.y
-            return math.sqrt(dx * dx + dy * dy) > 0.001
-        end
-        return false
-    end
-
-    -- Legacy fallback for code that might not have history yet
-    local current = CleveRoids._currentPlayerPos
-    local previous = CleveRoids._previousPlayerPos
-
-    if current and previous then
-        local dx = current.x - previous.x
-        local dy = current.y - previous.y
-        local dist = math.sqrt(dx * dx + dy * dy)
-        return dist > 0.001
-    end
-
-    -- Not enough data yet (first 0.15s after login) - assume not moving
-    return false
+    local cur = CleveRoids.ClassicAPI.GetUnitCurrentSpeed("player") or 0
+    return cur > 0 or CleveRoids.ClassicAPI.IsPlayerFalling()
 end
 
 --- Validates a movement speed conditional.
@@ -3074,15 +3005,7 @@ end
 function CleveRoids.ValidateMovingSpeed(operator, amount)
     if not operator or not amount then return false end
 
-    -- Check if MonkeySpeed is available for speed comparisons
-    if not CleveRoids.RequireMonkeySpeed("moving speed comparison") then
-        return false
-    end
-
     local speed = CleveRoids.GetPlayerSpeed()
-    if speed == nil then
-        return false
-    end
 
     -- Compare speed against threshold
     if CleveRoids.operators[operator] then
@@ -8998,12 +8921,11 @@ CleveRoids.Keywords = {
     end,
 
     -- =========================================================================
-    -- MOVEMENT SPEED CONDITIONALS (MonkeySpeed integration)
+    -- MOVEMENT SPEED CONDITIONALS (ClassicAPI GetUnitSpeed)
     -- =========================================================================
-    -- [moving] - Player is moving (speed > 0)
+    -- [moving] - Player is moving (speed > 0, or jumping/falling)
     -- [moving:>100] - Player speed is above 100% (faster than normal run)
     -- [moving:<50] - Player speed is below 50% (slower than half speed)
-    -- Requires MonkeySpeed addon for speed comparisons (basic moving check uses fallback)
     moving = function(conditionals)
         -- Boolean form [moving] - just check if moving at all
         if conditionals.moving == true then
@@ -9017,10 +8939,6 @@ CleveRoids.Keywords = {
             -- Handle multi-comparison (e.g., >50&<150)
             if args.comparisons and type(args.comparisons) == "table" then
                 local speed = CleveRoids.GetPlayerSpeed()
-                if speed == nil then
-                    CleveRoids.RequireMonkeySpeed("moving speed comparison")
-                    return false
-                end
 
                 -- ALL comparisons must pass (AND logic)
                 for _, comp in ipairs(args.comparisons) do
@@ -9052,10 +8970,6 @@ CleveRoids.Keywords = {
 
             if args.comparisons and type(args.comparisons) == "table" then
                 local speed = CleveRoids.GetPlayerSpeed()
-                if speed == nil then
-                    -- If MonkeySpeed not available, negated returns true (fail-safe)
-                    return true
-                end
 
                 for _, comp in ipairs(args.comparisons) do
                     if not CleveRoids.operators[comp.operator] then
@@ -9233,7 +9147,6 @@ CleveRoids.Keywords = {
             if type(args) ~= "table" then return false end
             if args.comparisons and type(args.comparisons) == "table" then
                 local speed = CleveRoids.GetPlayerSpeed()
-                if speed == nil then return false end
                 for _, comp in ipairs(args.comparisons) do
                     if not CleveRoids.operators[comp.operator] then return false end
                     if not CleveRoids.comparators[comp.operator](speed, comp.amount) then return false end
@@ -9251,7 +9164,6 @@ CleveRoids.Keywords = {
             if type(args) ~= "table" then return false end
             if args.comparisons and type(args.comparisons) == "table" then
                 local speed = CleveRoids.GetPlayerSpeed()
-                if speed == nil then return true end
                 for _, comp in ipairs(args.comparisons) do
                     if not CleveRoids.operators[comp.operator] then return true end
                     if not CleveRoids.comparators[comp.operator](speed, comp.amount) then return true end

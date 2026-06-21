@@ -1,11 +1,16 @@
 # ClassicAPI Adoption Backlog
 
-Opportunities to use [ClassicAPI](https://github.com/) (`C:\Git\ClassicAPI`, see
-`docs/API.md`) in SuperCleveRoidMacros. ClassicAPI is a client mod (sibling to
-nampower/SuperWoW) that backports the modern `C_*` API into the 1.12.1 client.
-We already gate nampower behind version detection — every ClassicAPI path below
-must follow the same pattern: **feature-detect, then fall back to the current
-implementation** so users without ClassicAPI are unaffected.
+Opportunities to use [ClassicAPI](https://github.com/brues-code/ClassicAPI)
+(`C:\Git\ClassicAPI`, see `docs/API.md`) in SuperCleveRoidMacros. ClassicAPI is
+a client mod (sibling to nampower/SuperWoW) that backports the modern `C_*` API
+into the 1.12.1 client.
+
+**Policy: ClassicAPI is a hard requirement of this fork — no fallbacks.** The
+load-time requirement check warns when it's missing (`Core.lua`), the same as
+nampower/UnitXP. ClassicAPI-backed code may assume the API is present (light
+`pcall`/nil guards for runtime safety are fine, but do not maintain alternate
+non-ClassicAPI implementations). Users who don't want ClassicAPI should run the
+upstream addon instead.
 
 API references are line numbers into `C:\Git\ClassicAPI\docs\API.md`.
 
@@ -59,6 +64,19 @@ API references are line numbers into `C:\Git\ClassicAPI\docs\API.md`.
 - **API:** `API.md:8312`, `API.md:7629`.
 - **Replaces today:** MonkeySpeed addon dependency (which needs SuperWoW
   `UnitPosition`) for `[moving]` — `Conditionals.lua:2981`.
+
+- **DONE:** `ClassicAPI.lua` exposes `HasUnitSpeed` / `GetUnitCurrentSpeed` /
+  `GetPlayerSpeedPercent` (100% = 7.0 yd/s) plus `IsPlayerFalling` (`IsFalling`).
+  `GetPlayerSpeed` and `IsPlayerMoving` are ClassicAPI-only now; the boolean
+  `[moving]` ORs in `IsPlayerFalling` so jumping/falling registers even though
+  `currentSpeed` is horizontal-only.
+- **Fallbacks removed (ClassicAPI mandatory):** deleted the MonkeySpeed
+  integration (`HasMonkeySpeed`, `RequireMonkeySpeed`), the Nampower
+  `PlayerIsMoving` branch, and the 100 Hz position-tracking buffer in Core.lua's
+  OnUpdate (`_positionHistory`, `POS_TRACK_INTERVAL`, `UnitPosition` upvalue).
+  MonkeySpeed dropped from README "Supported Addons".
+- **`IsSwimming` deliberately not used:** swim state is true while treading
+  water motionless, which would falsely report `[moving]`.
 
 ---
 
