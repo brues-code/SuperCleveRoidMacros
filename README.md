@@ -8,14 +8,14 @@ Enhanced macro addon for World of Warcraft 1.12.1 (Vanilla/Turtle WoW) with dyna
 
 | Mod | Required | Purpose |
 |-----|:--------:|---------|
-| [Nampower](https://gitea.com/avitasia/nampower/releases) (v3.0.0+) | ✅ | Spell queueing, DBC data, auto-attack events |
+| [Nampower](https://github.com/brues-code/nampower/releases) (v3.0.0+) | ✅ | Spell queueing, DBC data, auto-attack events |
 | [UnitXP_SP3](https://codeberg.org/konaka/UnitXP_SP3/releases) | ✅ | Distance checks, `[multiscan]` enemy scanning |
 | [ClassicAPI](https://github.com/brues-code/ClassicAPI/releases) | Optional | Dispel-type conditionals (`[magic]`, `[curse]`, `[disease]`, `[poison]`, `[dispellable]`, `[magicbuff]`) |
 
 ## Installation
 
 1. Download and extract to `Interface/AddOns/SuperCleveRoidMacros`
-2. **Recommended pfUI:** Use [me0wg4ming/pfUI](https://github.com/me0wg4ming/pfUI/tree/master) for full compatibility with macro spell scanning and action bar features
+2. **Recommended pfUI:** Use [brues-code/pfUI](https://github.com/brues-code/pfUI) for full compatibility with macro spell scanning and action bar features
 
 ## Quick Start
 
@@ -63,13 +63,13 @@ See the **[Wiki](https://github.com/brues-code/SuperCleveRoidMacros/wiki)** for 
 
 ## Supported Addons
 
-**Unit Frames:** [pfUI](https://github.com/me0wg4ming/pfUI), LunaUnitFrames, XPerl, Grid, CT_UnitFrames, agUnitFrames, and more
+**Unit Frames:** [pfUI](https://github.com/brues-code/pfUI), LunaUnitFrames, XPerl, Grid, CT_UnitFrames, agUnitFrames, and more
 
-**Action Bars:** Blizzard, [pfUI](https://github.com/me0wg4ming/pfUI), Bongos, Discord Action Bars
+**Action Bars:** Blizzard, [pfUI](https://github.com/brues-code/pfUI), Bongos, Discord Action Bars
 
 **Integrations:** [SP_SwingTimer](https://github.com/jrc13245/SP_SwingTimer), [TWThreat](https://github.com/MarcelineVQ/TWThreat), [TimeToKill](https://github.com/jrc13245/TimeToKill), [QuickHeal](https://github.com/jrc13245/QuickHeal), [Cursive](https://github.com/pepopo978/Cursive), [ClassicFocus](https://github.com/wtfcolt/Addons-for-Vanilla-1.12.1-CFM/tree/master/ClassicFocus), [SuperMacro](https://github.com/jrc13245/SuperMacro-turtle-SuperWoW), [MonkeySpeed](https://github.com/jrc13245/MonkeySpeed)
 
-> **Note:** For pfUI users, the [me0wg4ming/pfUI fork](https://github.com/me0wg4ming/pfUI) includes native SuperCleveRoidMacros integration for proper cooldown, icon, and tooltip display on conditional macros.
+> **Note:** For pfUI users, the [brues-code/pfUI fork](https://github.com/brues-code/pfUI) includes native SuperCleveRoidMacros integration for proper cooldown, icon, and tooltip display on conditional macros.
 
 ## Credits
 
