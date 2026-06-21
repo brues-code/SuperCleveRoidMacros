@@ -2015,7 +2015,7 @@ function CleveRoids.GetCurrentShapeshiftIndex()
         return CleveRoids.ClassicAPI.IsStealthed() and 1 or 0
     end
     for i=1, GetNumShapeshiftForms() do
-        _, _, active = GetShapeshiftFormInfo(i)
+        local _, _, active = GetShapeshiftFormInfo(i)
         if active then
             return i
         end
