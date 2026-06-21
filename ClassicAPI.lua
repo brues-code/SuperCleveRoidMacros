@@ -120,6 +120,37 @@ function API.GetActionInfo(slot)
 end
 
 --------------------------------------------------------------------------------
+-- Container
+--------------------------------------------------------------------------------
+
+-- Base itemID in (bagID, slot), or nil for an empty/invalid slot. Same value
+-- the "item:(%d+)" parse of GetContainerItemLink yields, but resolved straight
+-- from the CGItem -- no link string built, no Lua pattern match.
+function API.GetContainerItemID(bagID, slot)
+    return C_Container.GetContainerItemID(bagID, slot)
+end
+
+-- Base itemID equipped in `unit`'s 1-based inventory `slot` (1-19), or nil for
+-- an empty slot / NPC unit. Same arg shape as GetInventoryItemLink and the same
+-- value its "item:(%d+)" parse yields, resolved straight from the item instance.
+function API.GetInventoryItemID(unit, slot)
+    return GetInventoryItemID(unit, slot)
+end
+
+--------------------------------------------------------------------------------
+-- Spell
+--------------------------------------------------------------------------------
+
+-- WoW SpellMechanic enum ID for a spell, read straight from Spell.dbc -- covers
+-- every spell the client knows, not just the spellbook (1=Charm, 5=Fear,
+-- 7=Root, 12=Stun, 17=Polymorph, ...). Returns (mechanicID, enUS name); the ID
+-- is 0 for a known spell with no mechanic, and the whole call is nil for an
+-- invalid spell ID. Replaces hand-maintained spellID -> mechanic tables.
+function API.GetSpellMechanicByID(spellID)
+    return C_Spell.GetSpellMechanicByID(spellID)
+end
+
+--------------------------------------------------------------------------------
 -- State
 --------------------------------------------------------------------------------
 
@@ -131,6 +162,28 @@ end
 -- True if the player is currently swimming.
 function API.IsSwimming()
     return IsSwimming() and true or false
+end
+
+--------------------------------------------------------------------------------
+-- Cursor
+--------------------------------------------------------------------------------
+
+function API.GetCursorInfo()
+    return GetCursorInfo()
+end
+
+-- Tri-state check of whether the cursor holds the item with `itemID`:
+--   true  -> cursor holds exactly that item
+--   false -> cursor holds a DIFFERENT item
+--   nil   -> can't tell (cursor empty / not an item / itemID unknown)
+-- Callers should only act on an explicit `false`, leaving the nil case to the
+-- existing CursorHasItem() behavior.
+function API.CursorHoldsItemID(itemID)
+    if not itemID then return nil end
+    local kind, id = GetCursorInfo()
+    if kind ~= "item" then return nil end
+    if not id then return nil end
+    return id == itemID
 end
 
 --------------------------------------------------------------------------------

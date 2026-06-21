@@ -1493,15 +1493,12 @@ function API.GetEquippedItems(unitToken)
 
     local items = {}
     for slot = 0, 18 do
-        local link = GetInventoryItemLink("player", slot + 1)
-        if link then
-            local _, _, itemId = string.find(link, "item:(%d+)")
-            if itemId then
-                items[slot] = {
-                    itemId = tonumber(itemId),
-                    -- Other fields not available without native API
-                }
-            end
+        local itemId = CleveRoids.ClassicAPI.GetInventoryItemID("player", slot + 1)
+        if itemId then
+            items[slot] = {
+                itemId = itemId,
+                -- Other fields not available without native API
+            }
         end
     end
 
@@ -1524,14 +1521,11 @@ function API.GetEquippedItem(unitToken, slot)
         return nil
     end
 
-    local link = GetInventoryItemLink("player", slot + 1)  -- 1-indexed
-    if link then
-        local _, _, itemId = string.find(link, "item:(%d+)")
-        if itemId then
-            return {
-                itemId = tonumber(itemId),
-            }
-        end
+    local itemId = CleveRoids.ClassicAPI.GetInventoryItemID("player", slot + 1)  -- 1-indexed
+    if itemId then
+        return {
+            itemId = itemId,
+        }
     end
 
     return nil
@@ -1560,16 +1554,13 @@ function API.GetBagItems(bagIndex)
         local bagContents = {}
         local numSlots = GetContainerNumSlots(bagIndex) or 0
         for slot = 1, numSlots do
-            local link = GetContainerItemLink(bagIndex, slot)
-            if link then
-                local _, _, itemId = string.find(link, "item:(%d+)")
+            local itemId = CleveRoids.ClassicAPI.GetContainerItemID(bagIndex, slot)
+            if itemId then
                 local _, count = GetContainerItemInfo(bagIndex, slot)
-                if itemId then
-                    bagContents[slot] = {
-                        itemId = tonumber(itemId),
-                        stackCount = count or 1,
-                    }
-                end
+                bagContents[slot] = {
+                    itemId = itemId,
+                    stackCount = count or 1,
+                }
             end
         end
         return bagContents
@@ -1582,16 +1573,13 @@ function API.GetBagItems(bagIndex)
         if numSlots > 0 then
             bags[bag] = {}
             for slot = 1, numSlots do
-                local link = GetContainerItemLink(bag, slot)
-                if link then
-                    local _, _, itemId = string.find(link, "item:(%d+)")
+                local itemId = CleveRoids.ClassicAPI.GetContainerItemID(bag, slot)
+                if itemId then
                     local _, count = GetContainerItemInfo(bag, slot)
-                    if itemId then
-                        bags[bag][slot] = {
-                            itemId = tonumber(itemId),
-                            stackCount = count or 1,
-                        }
-                    end
+                    bags[bag][slot] = {
+                        itemId = itemId,
+                        stackCount = count or 1,
+                    }
                 end
             end
         end
@@ -1609,16 +1597,13 @@ function API.GetBagItem(bagIndex, slot)
     end
 
     -- Fallback: manual lookup
-    local link = GetContainerItemLink(bagIndex, slot)
-    if link then
-        local _, _, itemId = string.find(link, "item:(%d+)")
+    local itemId = CleveRoids.ClassicAPI.GetContainerItemID(bagIndex, slot)
+    if itemId then
         local _, count = GetContainerItemInfo(bagIndex, slot)
-        if itemId then
-            return {
-                itemId = tonumber(itemId),
-                stackCount = count or 1,
-            }
-        end
+        return {
+            itemId = itemId,
+            stackCount = count or 1,
+        }
     end
 
     return nil
@@ -1779,14 +1764,13 @@ function API.FindBagItem(itemIdOrName)
     for bag = 0, 4 do
         local numSlots = GetContainerNumSlots(bag) or 0
         for slot = 1, numSlots do
-            local link = GetContainerItemLink(bag, slot)
-            if link then
-                if checkId then
-                    local _, _, currentId = string.find(link, "item:(%d+)")
-                    if currentId and tonumber(currentId) == checkId then
-                        return bag, slot
-                    end
-                elseif checkName then
+            if checkId then
+                if CleveRoids.ClassicAPI.GetContainerItemID(bag, slot) == checkId then
+                    return bag, slot
+                end
+            elseif checkName then
+                local link = GetContainerItemLink(bag, slot)
+                if link then
                     local _, _, currentName = string.find(link, "|h%[(.-)%]|h")
                     if currentName and string.lower(currentName) == checkName then
                         return bag, slot
@@ -2103,26 +2087,28 @@ function API.GetTrinkets(copy)
     for bag = 0, 4 do
         local numSlots = GetContainerNumSlots(bag) or 0
         for slot = 1, numSlots do
-            local link = GetContainerItemLink(bag, slot)
-            if link then
-                local _, _, itemId = string.find(link, "item:(%d+)")
-                if itemId then
-                    local numItemId = tonumber(itemId)
-                    local invType = API.GetItemInventoryType(numItemId)
-                    if invType == 12 then  -- Trinket
-                        local _, _, name = string.find(link, "|h%[(.-)%]|h")
-                        local texture = GetContainerItemInfo(bag, slot)
-                        local itemLevel = API.GetItemLevel(numItemId)
-                        trinkets[index] = {
-                            itemId = numItemId,
-                            trinketName = name or "Unknown",
-                            texture = texture,
-                            itemLevel = itemLevel,
-                            bagIndex = bag,
-                            slotIndex = slot,
-                        }
-                        index = index + 1
+            local numItemId = CleveRoids.ClassicAPI.GetContainerItemID(bag, slot)
+            if numItemId then
+                local invType = API.GetItemInventoryType(numItemId)
+                if invType == 12 then  -- Trinket
+                    -- Only build the link string for actual trinkets, to read the name.
+                    local link = GetContainerItemLink(bag, slot)
+                    local name
+                    if link then
+                        local _
+                        _, _, name = string.find(link, "|h%[(.-)%]|h")
                     end
+                    local texture = GetContainerItemInfo(bag, slot)
+                    local itemLevel = API.GetItemLevel(numItemId)
+                    trinkets[index] = {
+                        itemId = numItemId,
+                        trinketName = name or "Unknown",
+                        texture = texture,
+                        itemLevel = itemLevel,
+                        bagIndex = bag,
+                        slotIndex = slot,
+                    }
+                    index = index + 1
                 end
             end
         end
@@ -2183,18 +2169,13 @@ function API.GetTrinketCooldown(slot)
     end
 
     -- Get item ID from equipped slot
-    local link = GetInventoryItemLink("player", equipSlot)
-    if not link then
-        return -1
-    end
-
-    local _, _, itemId = string.find(link, "item:(%d+)")
+    local itemId = CleveRoids.ClassicAPI.GetInventoryItemID("player", equipSlot)
     if not itemId then
         return -1
     end
 
     -- Get cooldown info
-    return API.GetItemCooldownInfo(tonumber(itemId))
+    return API.GetItemCooldownInfo(itemId)
 end
 
 -- Use an equipped trinket

@@ -6892,11 +6892,7 @@ CleveRoids.equipmentModifiers[9904] = { slot = 18, modifier = ripRakeIdolModifie
 
 -- Function to get equipped item ID in a specific slot
 function CleveRoids.GetEquippedItemID(slotID)
-    local itemLink = GetInventoryItemLink("player", slotID)
-    if not itemLink then return nil end
-
-    local _, _, itemID = string.find(itemLink, "item:(%d+)")
-    return tonumber(itemID)
+    return CleveRoids.ClassicAPI.GetInventoryItemID("player", slotID)
 end
 
 -- Apply equipment modifiers to a debuff duration
@@ -7080,17 +7076,13 @@ function CleveRoids.CountEquippedSetItems(items)
     local count = 0
     -- Check all equipment slots (1-19)
     for slot = 1, 19 do
-        local itemLink = GetInventoryItemLink("player", slot)
-        if itemLink then
-            local _, _, itemID = string.find(itemLink, "item:(%d+)")
-            if itemID then
-                itemID = tonumber(itemID)
-                -- Check if this item is in the set
-                for _, setItemID in ipairs(items) do
-                    if itemID == setItemID then
-                        count = count + 1
-                        break
-                    end
+        local itemID = CleveRoids.GetEquippedItemID(slot)
+        if itemID then
+            -- Check if this item is in the set
+            for _, setItemID in ipairs(items) do
+                if itemID == setItemID then
+                    count = count + 1
+                    break
                 end
             end
         end
@@ -7108,14 +7100,11 @@ function CleveRoids.CountEquippedSetItemsBySetId(setId)
     if CleveRoids.NampowerAPI and CleveRoids.NampowerAPI.GetItemField then
         local count = 0
         for slot = 1, 19 do
-            local itemLink = GetInventoryItemLink("player", slot)
-            if itemLink then
-                local _, _, itemID = string.find(itemLink, "item:(%d+)")
-                if itemID then
-                    local itemSetId = CleveRoids.NampowerAPI.GetItemSetId(tonumber(itemID))
-                    if itemSetId == setId then
-                        count = count + 1
-                    end
+            local itemID = CleveRoids.GetEquippedItemID(slot)
+            if itemID then
+                local itemSetId = CleveRoids.NampowerAPI.GetItemSetId(itemID)
+                if itemSetId == setId then
+                    count = count + 1
                 end
             end
         end
@@ -7241,18 +7230,15 @@ function CleveRoids.GetEquippedSetPieceCount(nameOrId)
     local lowerName = string.lower(nameOrId)
 
     for slot = 1, 19 do
-        local itemLink = GetInventoryItemLink("player", slot)
-        if itemLink then
-            local _, _, itemID = string.find(itemLink, "item:(%d+)")
-            if itemID then
-                local setId = CleveRoids.NampowerAPI.GetItemSetId(tonumber(itemID))
-                if setId then
-                    local setData = CleveRoids.NampowerAPI.GetItemSet(setId)
-                    if setData then
-                        local dbcName = setData.name_enUS
-                        if dbcName and string.lower(dbcName) == lowerName then
-                            return CleveRoids.CountEquippedSetItemsBySetId(setId), setId
-                        end
+        local itemID = CleveRoids.GetEquippedItemID(slot)
+        if itemID then
+            local setId = CleveRoids.NampowerAPI.GetItemSetId(itemID)
+            if setId then
+                local setData = CleveRoids.NampowerAPI.GetItemSet(setId)
+                if setData then
+                    local dbcName = setData.name_enUS
+                    if dbcName and string.lower(dbcName) == lowerName then
+                        return CleveRoids.CountEquippedSetItemsBySetId(setId), setId
                     end
                 end
             end
@@ -7810,7 +7796,7 @@ end
 
 -- CC IMMUNITY TRACKING
 
--- Get CC type from a spell ID using the CCSpellMechanics table from Conditionals.lua
+-- Get CC type from a spell ID via DBC mechanic lookup (nampower, then ClassicAPI)
 -- Returns: CC type name (e.g., "stun", "fear") or nil if not a CC spell
 -- EffectApplyAuraName → CC type mapping (fallback when mechanics are unset)
 -- Uses vanilla 1.12.1 aura type enum values
@@ -7864,9 +7850,11 @@ local function GetSpellCCType(spellID)
         end
     end
 
-    -- Priority 2: Hardcoded table fallback (CCSpellMechanics in Conditionals.lua)
-    local mechanic = CleveRoids.CCSpellMechanics and CleveRoids.CCSpellMechanics[spellID]
-    if mechanic and MECHANIC_TO_CC_TYPE[mechanic] then
+    -- Priority 2: ClassicAPI Spell.dbc reader (always present; covers every spell).
+    -- A subset of Priority 1's per-effect/aura checks, used when nampower's
+    -- GetSpellRecField is unavailable.
+    local mechanic = CleveRoids.ClassicAPI.GetSpellMechanicByID(spellID)
+    if mechanic and mechanic > 0 and MECHANIC_TO_CC_TYPE[mechanic] then
         return MECHANIC_TO_CC_TYPE[mechanic]
     end
 

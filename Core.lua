@@ -3721,6 +3721,19 @@ function CleveRoids.EquipBagItem(msg, slotOrOffhand)
         return false
     end
 
+    -- Verify the cursor holds the item we meant to pick up. The bag can shift
+    -- between the lookup and the pickup (item consumed/moved/reorganized), in
+    -- which case we'd otherwise equip whatever landed on the cursor. Only abort
+    -- on a definitive mismatch (false); nil = can't tell -> trust CursorHasItem.
+    if item.id and CleveRoids.ClassicAPI.CursorHoldsItemID(item.id) == false then
+        if CleveRoids.equipDebugLog then
+            CleveRoids.Print("|cffff8800[EquipLog] Cursor holds wrong item after pickup; aborting equip|r")
+        end
+        ClearCursor()
+        CleveRoids.equipInProgress = false
+        return false
+    end
+
     EquipCursorItem(invslot)
     ClearCursor()
 
