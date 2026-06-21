@@ -138,6 +138,24 @@ function API.GetInventoryItemID(unit, slot)
 end
 
 --------------------------------------------------------------------------------
+-- Item Set
+--------------------------------------------------------------------------------
+
+-- ItemSet.dbc ID that `itemID` belongs to, or nil if it isn't part of a set
+-- (or isn't cached yet). Reads the item's m_itemSet field directly -- no
+-- Reliquary, no per-set ItemID[] scan.
+function API.GetItemSetIDByID(itemID)
+    return C_Item.GetItemSetIDByID(itemID)
+end
+
+-- Table describing an ItemSet.dbc row, or nil if `setID` doesn't resolve:
+--   { setID, name (localized), requiredSkill, requiredSkillRank,
+--     items = { itemID, ... }, bonuses = { { spellID, threshold }, ... } }
+function API.GetItemSetInfo(setID)
+    return C_Item.GetItemSetInfo(setID)
+end
+
+--------------------------------------------------------------------------------
 -- Spell
 --------------------------------------------------------------------------------
 

@@ -7038,28 +7038,30 @@ end
 
 -- Database of set bonus modifiers for debuff durations
 -- Structure: [spellID] = { items = {itemID1, itemID2, ...}, threshold = X, modifier = function(baseDuration) }
--- When Reliquary is available, items can be omitted and setId used instead (auto-resolves from DBC)
+-- When a setId is given, items can be omitted and resolved from ItemSet.dbc
 CleveRoids.setbonusModifiers = CleveRoids.setbonusModifiers or {}
 
--- Cache: setId -> { itemId1, itemId2, ... } (resolved from Reliquary or hardcoded)
+-- Cache: setId -> { itemId1, itemId2, ... } (resolved from ItemSet.dbc or hardcoded)
 local setItemCache = {}
 
--- Resolve set items: use Reliquary DBC if available, otherwise fall back to hardcoded list
+-- Resolve set items: use the ItemSet.dbc lookup when a setId is given, otherwise
+-- fall back to the hardcoded list on the modifier.
 local function ResolveSetItems(modifier)
     -- If items are already provided (hardcoded), use them directly
     if modifier.items and table.getn(modifier.items) > 0 then
         return modifier.items
     end
 
-    -- Try Reliquary DBC lookup by setId
-    if modifier.setId and CleveRoids.NampowerAPI then
+    -- DBC lookup by setId via ClassicAPI
+    if modifier.setId then
         -- Check cache first
         if setItemCache[modifier.setId] then
             return setItemCache[modifier.setId]
         end
 
-        local items = CleveRoids.NampowerAPI.GetItemSetItems(modifier.setId)
-        if items then
+        local info = CleveRoids.ClassicAPI.GetItemSetInfo(modifier.setId)
+        local items = info and info.items
+        if items and table.getn(items) > 0 then
             setItemCache[modifier.setId] = items
             return items
         end
@@ -7069,7 +7071,7 @@ local function ResolveSetItems(modifier)
 end
 
 -- Function to count how many items from a set are currently equipped
--- Accepts either a direct items table or a modifier entry with setId for Reliquary lookup
+-- Accepts either a direct items table or a modifier entry with setId for DBC lookup
 function CleveRoids.CountEquippedSetItems(items)
     if not items or type(items) ~= "table" then return 0 end
 
@@ -7091,37 +7093,19 @@ function CleveRoids.CountEquippedSetItems(items)
     return count
 end
 
--- Count equipped set items by set ID (uses Nampower to check each slot's itemSet field)
--- Falls back to CountEquippedSetItems with Reliquary item list if GetItemStatsField unavailable
+-- Count equipped set items by set ID, comparing each equipped slot's own set
+-- membership (ClassicAPI GetItemSetIDByID) against the target set.
 function CleveRoids.CountEquippedSetItemsBySetId(setId)
     if not setId then return 0 end
 
-    -- Fast path: use Nampower GetItemStatsField to check itemSet directly per slot
-    if CleveRoids.NampowerAPI and CleveRoids.NampowerAPI.GetItemField then
-        local count = 0
-        for slot = 1, 19 do
-            local itemID = CleveRoids.GetEquippedItemID(slot)
-            if itemID then
-                local itemSetId = CleveRoids.NampowerAPI.GetItemSetId(itemID)
-                if itemSetId == setId then
-                    count = count + 1
-                end
-            end
+    local count = 0
+    for slot = 1, 19 do
+        local itemID = CleveRoids.GetEquippedItemID(slot)
+        if itemID and CleveRoids.ClassicAPI.GetItemSetIDByID(itemID) == setId then
+            count = count + 1
         end
-        return count
     end
-
-    -- Fallback: resolve set item list and count matches
-    local items = setItemCache[setId]
-    if not items and CleveRoids.NampowerAPI then
-        items = CleveRoids.NampowerAPI.GetItemSetItems(setId)
-        if items then setItemCache[setId] = items end
-    end
-    if items then
-        return CleveRoids.CountEquippedSetItems(items)
-    end
-
-    return 0
+    return count
 end
 
 -- Apply set bonus modifiers to a debuff duration
@@ -7172,7 +7156,7 @@ end
 
 -- Helper function to register a set bonus modifier
 -- Usage: CleveRoids.RegisterSetBonusModifier(spellID, itemsTable, threshold, modifierFunction)
--- With Reliquary: CleveRoids.RegisterSetBonusModifier(spellID, nil, threshold, modifierFunction, setId)
+-- With a setId: CleveRoids.RegisterSetBonusModifier(spellID, nil, threshold, modifierFunction, setId)
 function CleveRoids.RegisterSetBonusModifier(spellID, items, threshold, modifierFunc, setId)
     if not spellID or not threshold or not modifierFunc then
         return false
@@ -7191,17 +7175,17 @@ function CleveRoids.RegisterSetBonusModifier(spellID, items, threshold, modifier
     return true
 end
 
--- Get info about an equipped item's set (combines Nampower + Reliquary)
+-- Get info about an equipped item's set (from ItemSet.dbc via ClassicAPI)
 -- Returns: setName, setId, equippedCount, totalPieces, items or nil
 function CleveRoids.GetEquippedItemSetInfo(itemId)
-    if not itemId or not CleveRoids.NampowerAPI then return nil end
+    if not itemId then return nil end
 
-    local setId = CleveRoids.NampowerAPI.GetItemSetId(itemId)
+    local setId = CleveRoids.ClassicAPI.GetItemSetIDByID(itemId)
     if not setId then return nil end
 
-    local setData = CleveRoids.NampowerAPI.GetItemSet(setId)
-    local setName = setData and setData.name_enUS or nil
-    local items = CleveRoids.NampowerAPI.GetItemSetItems(setId)
+    local info = CleveRoids.ClassicAPI.GetItemSetInfo(setId)
+    local setName = info and info.name or nil
+    local items = info and info.items or nil
     local totalPieces = items and table.getn(items) or 0
     local equippedCount = CleveRoids.CountEquippedSetItemsBySetId(setId)
 
@@ -7211,7 +7195,7 @@ end
 -- Count equipped pieces of a named or ID-referenced item set
 -- nameOrId: set name (string, e.g. "Judgement Battlegear") or set ID (number)
 -- Returns: equipped count (number), setId (number or nil)
--- Name lookup requires Reliquary; ID lookup requires Nampower
+-- Both name and ID lookups resolve from ItemSet.dbc via ClassicAPI
 function CleveRoids.GetEquippedSetPieceCount(nameOrId)
     if not nameOrId then return 0, nil end
 
@@ -7221,25 +7205,17 @@ function CleveRoids.GetEquippedSetPieceCount(nameOrId)
         return CleveRoids.CountEquippedSetItemsBySetId(numericId), numericId
     end
 
-    -- String: scan equipped items and match by set name from DBC
-    if not CleveRoids.NampowerAPI or not CleveRoids.NampowerAPI.GetItemSetId then
-        return 0, nil
-    end
-
-    -- Scan equipped items to resolve set name → set ID, then count via fast path
+    -- String: scan equipped items and match by set name from ItemSet.dbc
     local lowerName = string.lower(nameOrId)
 
     for slot = 1, 19 do
         local itemID = CleveRoids.GetEquippedItemID(slot)
         if itemID then
-            local setId = CleveRoids.NampowerAPI.GetItemSetId(itemID)
+            local setId = CleveRoids.ClassicAPI.GetItemSetIDByID(itemID)
             if setId then
-                local setData = CleveRoids.NampowerAPI.GetItemSet(setId)
-                if setData then
-                    local dbcName = setData.name_enUS
-                    if dbcName and string.lower(dbcName) == lowerName then
-                        return CleveRoids.CountEquippedSetItemsBySetId(setId), setId
-                    end
+                local info = CleveRoids.ClassicAPI.GetItemSetInfo(setId)
+                if info and info.name and string.lower(info.name) == lowerName then
+                    return CleveRoids.CountEquippedSetItemsBySetId(setId), setId
                 end
             end
         end
@@ -7248,18 +7224,9 @@ function CleveRoids.GetEquippedSetPieceCount(nameOrId)
     return 0, nil
 end
 
--- Get spell effect radius in yards (Nampower + Reliquary)
--- spellId: the spell to look up
--- effectIndex: 1, 2, or 3 (which effect slot, default 1)
--- Returns: radius in yards or nil
-function CleveRoids.GetSpellEffectRadius(spellId, effectIndex)
-    if not CleveRoids.NampowerAPI then return nil end
-    return CleveRoids.NampowerAPI.GetSpellEffectRadius(spellId, effectIndex)
-end
-
 -- DRUID set bonus modifiers
 -- Dreamwalker Regalia (4/9): Increases Moonfire duration by 3 seconds and Insect Swarm by 2 seconds
--- setId 536 = Dreamwalker Regalia; hardcoded items as fallback when Reliquary unavailable
+-- setId 536 = Dreamwalker Regalia; hardcoded items as fallback when DBC lookup unavailable
 local DREAMWALKER_SET_ID = 536
 local dreamwalkerItems = { 47372, 47373, 47374, 47375, 47376, 47377, 47378, 47379, 47380 }
 local dreamwalkerMoonfireModifier = function(base) return base + 3 end
@@ -7285,7 +7252,7 @@ CleveRoids.setbonusModifiers[24976] = { setId = DREAMWALKER_SET_ID, items = drea
 CleveRoids.setbonusModifiers[24977] = { setId = DREAMWALKER_SET_ID, items = dreamwalkerItems, threshold = 4, modifier = dreamwalkerInsectSwarmModifier }  -- Insect Swarm Rank 5
 
 -- Haruspex's Garb (3/5): Increases Faerie Fire duration by 5 seconds
--- setId 474 = Haruspex's Garb; hardcoded items as fallback when Reliquary unavailable
+-- setId 474 = Haruspex's Garb; hardcoded items as fallback when DBC lookup unavailable
 local HARUSPEX_SET_ID = 474
 local haruspexItems = { 19613, 19955, 19840, 19839, 19838 }
 local haruspexFaerieFireModifier = function(base) return base + 5 end

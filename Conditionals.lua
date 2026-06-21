@@ -5751,8 +5751,8 @@ CleveRoids.Keywords = {
 
     -- [set:SetName>=N] — true if equipped piece count of named set meets comparison
     -- [set:SetName] — true if any pieces of that set are equipped (count > 0)
-    -- [set:123>=3] — numeric IDs also supported (Nampower only, no Reliquary needed)
-    -- Name lookup requires Reliquary (for DBC set name); ID lookup requires Nampower
+    -- [set:123>=3] — numeric IDs also supported
+    -- Both name and ID lookups resolve from ItemSet.dbc via ClassicAPI
     set = function(conditionals)
         return Multi(conditionals.set, function(args)
             if type(args) == "table" and args.operator and args.amount then

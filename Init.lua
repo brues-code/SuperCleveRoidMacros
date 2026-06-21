@@ -22,7 +22,6 @@ CleveRoids.mouseOverUnit = nil
 -- Environment flags
 CleveRoids.hasSuperwow = SetAutoloot and true or false
 CleveRoids.hasTurtle   = (type(_G.TURTLE_WOW_VERSION) ~= "nil")
-CleveRoids.hasReliquary = (RQ_GetVersion ~= nil)
 CleveRoids.supported   = CleveRoids.hasTurtle
 
 CleveRoids.ParsedMsg = {}
@@ -291,14 +290,6 @@ local function PrintFeatures()
         end
     end
     if CleveRoids.hasUnitXP then table.insert(features, "UnitXP") end
-    if CleveRoids.hasReliquary then
-        local ok, major, minor, patch = pcall(RQ_GetVersion)
-        if ok and major then
-            table.insert(features, string.format("Reliquary v%d.%d.%d", major, minor, patch))
-        else
-            table.insert(features, "Reliquary")
-        end
-    end
     if CleveRoids.hasTurtle then table.insert(features, "Turtle") end
 
     if table.getn(features) > 0 then
