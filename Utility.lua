@@ -4218,21 +4218,14 @@ delayedTrackingFrame:SetScript("OnUpdate", function()
   end
 end)
 
--- UnitXP threaded timer for periodic cleanup (runs in separate thread, fires only when due)
--- Replaces piggyback on 20Hz OnUpdate — avoids function call overhead every 50ms
-if CleveRoids.hasUnitXP then
-  -- Global callback (UnitXP timers require global function name as string)
-  function CleveRoids_LibDebuffCleanupTimer()
-    if CleveRoids.isShuttingDown then return end
-    local libRef = CleveRoids.libdebuff
-    if libRef and libRef.CleanupStaleTrackingData then
-      libRef:CleanupStaleTrackingData()
-    end
+-- Periodic libdebuff cleanup via ClassicAPI's C_Timer (every 30s).
+CleveRoids._cleanupTicker = C_Timer.NewTicker(30, function()
+  if CleveRoids.isShuttingDown then return end
+  local libRef = CleveRoids.libdebuff
+  if libRef and libRef.CleanupStaleTrackingData then
+    libRef:CleanupStaleTrackingData()
   end
-
-  -- Arm timer: 30s initial delay, 30s repeat interval
-  CleveRoids._cleanupTimerId = UnitXP("timer", "arm", 30000, 30000, "CleveRoids_LibDebuffCleanupTimer")
-end
+end)
 
 local ev = CreateFrame("Frame", "CleveRoidsLibDebuffFrame", UIParent)
 ev:RegisterEvent("PLAYER_TARGET_CHANGED")

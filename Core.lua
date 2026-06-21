@@ -5158,14 +5158,12 @@ function CleveRoids.Frame:PLAYER_LOGOUT()
     this:UnregisterAllEvents()
     this:SetScript("OnUpdate", nil)
     this:SetScript("OnEvent", nil)
-    -- Disarm UnitXP timers (they run in a separate thread and survive /reload)
-    if CleveRoids.hasUnitXP then
-        if CleveRoids._cleanupTimerId then
-            pcall(UnitXP, "timer", "disarm", CleveRoids._cleanupTimerId)
-        end
-        if CleveRoids._auraCleanupTimerId then
-            pcall(UnitXP, "timer", "disarm", CleveRoids._auraCleanupTimerId)
-        end
+    -- Cancel periodic C_Timer tickers
+    if CleveRoids._cleanupTicker then
+        CleveRoids._cleanupTicker:Cancel()
+    end
+    if CleveRoids._auraCleanupTicker then
+        CleveRoids._auraCleanupTicker:Cancel()
     end
     -- Clear spell caches to prevent stale data
     if CleveRoids.spellIdCache then

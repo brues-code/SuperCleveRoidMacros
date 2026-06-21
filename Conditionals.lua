@@ -1364,14 +1364,7 @@ local function OnAuraCastOther(spellId, casterGuid, targetGuid, effect, effectAu
         entry.timestamp = now
     end
 
-    -- Cleanup moved to CleveRoids.CleanupAuraTracking(), called by UnitXP timer when available
-    -- Fallback: inline throttled cleanup when UnitXP is not present
-    if not CleveRoids.hasUnitXP then
-        if (now - CleveRoids.AuraCapStatus.lastCleanupTime) >= 5 then
-            CleveRoids.AuraCapStatus.lastCleanupTime = now
-            CleveRoids.CleanupAuraTracking(now)
-        end
-    end
+    -- Periodic cleanup runs on a C_Timer ticker (see CleanupAuraTracking below).
 end
 
 --- Periodic cleanup of AuraCapStatus and AllCasterAuraTracking tables
@@ -1431,16 +1424,11 @@ function CleveRoids.CleanupAuraTracking(now)
     end
 end
 
--- UnitXP threaded timer for aura tracking cleanup (5s interval)
--- Replaces inline cleanup that ran on every aura event
-if CleveRoids.hasUnitXP then
-    function CleveRoids_AuraTrackingCleanupTimer()
-        if CleveRoids.isShuttingDown then return end
-        CleveRoids.CleanupAuraTracking()
-    end
-
-    CleveRoids._auraCleanupTimerId = UnitXP("timer", "arm", 5000, 5000, "CleveRoids_AuraTrackingCleanupTimer")
-end
+-- Periodic aura-tracking cleanup via ClassicAPI's C_Timer (every 5s).
+CleveRoids._auraCleanupTicker = C_Timer.NewTicker(5, function()
+    if CleveRoids.isShuttingDown then return end
+    CleveRoids.CleanupAuraTracking()
+end)
 
 -- Create frame to listen for Nampower auto-attack and aura events
 local autoAttackFrame = CreateFrame("Frame", "CleveRoidsAutoAttackFrame")

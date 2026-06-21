@@ -786,30 +786,14 @@ function Extension.PLAYER_LOGIN()
     end
 end
 
--- Utility: Schedule a delayed function call (if not already defined)
+-- Utility: Schedule a delayed function call via ClassicAPI's C_Timer.
 if not CleveRoids.ScheduleTimer then
-    local timerFrame = CreateFrame("Frame")
-    local timers = {}
-
-    timerFrame:SetScript("OnUpdate", function()
-        -- Prevent SuperWoW API calls during shutdown (crash prevention)
-        if CleveRoids.isShuttingDown then return end
-
-        local time = GetTime()
-        for i = table.getn(timers), 1, -1 do
-            local timer = timers[i]
-            if time >= timer.time then
-                timer.func()
-                table.remove(timers, i)
-            end
-        end
-    end)
-
     CleveRoids.ScheduleTimer = function(func, delay)
-        table.insert(timers, {
-            func = func,
-            time = GetTime() + delay
-        })
+        C_Timer.After(delay, function()
+            -- Prevent SuperWoW API calls during shutdown (crash prevention)
+            if CleveRoids.isShuttingDown then return end
+            func()
+        end)
     end
 end
 
