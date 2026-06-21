@@ -5018,17 +5018,6 @@ if not CleveRoids.RunMacroHooked then
     CleveRoids.RunMacroHooked = true
 end
 
--- Create a hidden tooltip frame to read buff names
-if not AuraScanTooltip and not CleveRoids.hasSuperwow then
-    CreateFrame("GameTooltip", "AuraScanTooltip")
-    AuraScanTooltip:SetOwner(WorldFrame, "ANCHOR_NONE")
-    AuraScanTooltip:EnableMouse(false)
-    AuraScanTooltip:AddFontStrings(
-        AuraScanTooltip:CreateFontString("$parentTextLeft1", nil, "GameTooltipText"),
-        AuraScanTooltip:CreateFontString("$parentTextRight1", nil, "GameTooltipText")
-    )
-end
-
 -- Robust named tooltip for scanning spells/items
 if not CleveRoidsTooltipScan then
   -- Try to create with the standard template first
