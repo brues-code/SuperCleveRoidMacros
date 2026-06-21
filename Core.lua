@@ -2041,15 +2041,7 @@ function CleveRoids.ParseMsg(msg)
     local _, _, target = string.find(conditionBlock, "(@[^%s,]+)")
     if target then
         conditionBlock = CleveRoids.Trim(string.gsub(conditionBlock, target, ""))
-        local tok = string.sub(target, 2)
-        -- @cursor is a ground-target directive, not a unit. Flag it so the cast
-        -- routes through ClassicAPI's CastAtCursor / UseAtCursor, and leave the
-        -- target at its default (CastAtCursor places at the cursor regardless).
-        if string.lower(tok) == "cursor" then
-            conditionals.atCursor = true
-        else
-            conditionals.target = tok
-        end
+        conditionals.target = string.sub(target, 2)
     end
 
     if conditionBlock and conditionals.action then
@@ -2663,8 +2655,8 @@ function CleveRoids.DoWithConditionals(msg, hook, fixEmptyTargetFunc, targetBefo
                 castMsg = msg .. "(" .. rank .. ")"
             end
         end
-        if conditionals.atCursor then
-            -- @cursor: place a ground-target spell/item at the cursor via
+        if conditionals.cursor then
+            -- [cursor]: place a ground-target spell/item at the cursor via
             -- ClassicAPI (no AoE-reticle click). Both functions fall back to a
             -- normal cast/use for non-ground actions.
             if action == CastSpellByName then

@@ -188,6 +188,7 @@ CleveRoids.ignoreKeywords = {
     _groups       = true,  -- Grouped conditional values for AND/OR evaluation
     multiscan     = true,  -- Processed before Keywords loop (target resolution)
     mouseuse      = true,  -- Post-cast modifier: auto-click AOE targeting circle at cursor
+    cursor        = true,  -- Modifier: place ground-target spell/item at cursor (CastAtCursor)
     stopattack    = true,  -- Post-cast modifier: stop autoattack after cast (CheapShot pattern)
 }
 
