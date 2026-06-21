@@ -135,15 +135,58 @@ API references are line numbers into `C:\Git\ClassicAPI\docs\API.md`.
 
 ---
 
-## Cross-cutting requirement
+## Cross-cutting policy
 
-Gate **every** ClassicAPI path behind feature-detection with graceful fallback,
-mirroring the nampower `HasMinimumVersion` pattern (`Conditionals.lua:227`):
+ClassicAPI is a **hard requirement** (see policy at the top) — ClassicAPI-backed
+code calls the API directly, **no fallbacks**. Light `pcall`/nil guards for
+runtime safety are fine; do not maintain alternate non-ClassicAPI
+implementations. The load-time requirement check (`Core.lua`) warns when it's
+missing, the same as nampower/UnitXP.
 
-```lua
-if C_UnitAuras and C_UnitAuras.GetAuraDataBySpellName then
-    -- ClassicAPI path
-else
-    -- existing libdebuff/tooltip path
-end
-```
+---
+
+## Conditionals.lua audit — do NOT migrate (traps)
+
+Findings from the full Conditionals.lua audit. These look like ClassicAPI
+candidates but are **worse** than the current implementation — recorded so we
+don't re-investigate.
+
+- **Auras / `ValidateAura`** — `C_UnitAuras.expirationTime` is **player-only**
+  (`0` for every other unit). It cannot replace the nampower `GetUnitField`
+  batch read or the remote-duration tracking (libdebuff / overflow slots). The
+  dispel-*type* path already uses `C_UnitAuras` (that's the one thing it's good
+  for); aura *timing/stacks* on non-player units must stay on nampower/libdebuff.
+- **`GetCurrentShapeshiftIndex` form loop / `[stance]`·`[form]`** —
+  `GetShapeshiftFormID()` returns the **DBC form id** (Cat=1, Bear=5,
+  Shadowform=28…), NOT the 1-based **bar index** these conditionals compare
+  against. Swapping would silently break every `[stance:N]`/`[form:N]` macro.
+  (Only the Rogue *stealth* branch was migrated, via `IsStealthed`.)
+- **Cast-time scans** (Slam-clip, `GetSpellCastTime`) — ClassicAPI/DBC cast time
+  is **base only** (no haste/talents/buffs), which defeats the reason these scan
+  the tooltip.
+- **Range / distance / behind / facing** — UnitXP_SP3 gives precise yards +
+  facing; `UnitInRange` is a binary 40yd and has no facing/behind. Keep UnitXP.
+- **`FindItemLocation`** — nampower `FindPlayerItemSlot` finds an item by id/name
+  across bags in one call; ClassicAPI has no equivalent (would need a manual
+  `C_Container` bag scan). Keep nampower.
+- **`[known]`** (name+rank+talent logic richer than `IsSpellKnown`/`IsPlayerSpell`'s
+  current-rank/no-talent semantics) and **`[usable]`/reactive** (nampower
+  `IsSpellUsable` == `IsUsableSpell`). Keep.
+
+## Conditionals.lua audit — done
+
+- `GetItemCooldownCached` → ClassicAPI `GetItemCooldown(item)` (slots 1-19 still
+  inventory-based).
+- `[stealth]`/`[nostealth]`/`[stl]`/`[nostl]` + Rogue branch of
+  `GetCurrentShapeshiftIndex` → `IsStealthed()`.
+- `CountEnemiesMatching` nameplate scan → `C_NamePlate.GetNamePlateGUIDs()`.
+- Focus: `GetFocusUnitId`/`TryTargetFocus` use the native `"focus"` token;
+  added `[focus]`/`[nofocus]`. `/focus` is provided by ClassicAPI's companion
+  addon.
+
+## Marginal / optional follow-ups
+
+- **`[swimming]`** → `IsSwimming()` would drop the nampower-2.36 version gate +
+  warning (same semantics). `[rooted]` has no ClassicAPI equivalent — keep nampower.
+- **Weapon-imbue name match** (`[imbue:Mongoose]`) → `C_Item.GetWeaponEnchantInfo`
+  gives enchant **IDs**, so it needs an enchantID→name table we don't ship.
