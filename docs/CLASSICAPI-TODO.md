@@ -82,6 +82,22 @@ API references are line numbers into `C:\Git\ClassicAPI\docs\API.md`.
 
 ## Tier 2 — replace custom scanning / extra deps
 
+### `GetActionInfo(slot)` — action-slot → spell/macro/item mapping
+- **API:** `API.md:489` — returns `actionType, id, subType`.
+- **DONE:** `ClassicAPI.GetActionInfo` wrapper added; `GetActionButtonInfo`
+  (`Extensions/Tooltip/Generic.lua`) rewritten to use it and resolve names via
+  `GetSpellRecField` / `GetItem` / `GetMacroInfo`, replacing the per-slot
+  GameTooltip scan + texture heuristic (which couldn't tell spell from item and
+  never recognized macros). Powers reactive-ability slot detection
+  (`IndexActionSlot`). Deleted the dead SuperWoW-`GetActionText` copy of
+  `GetActionButtonInfo` in `Conditionals.lua`.
+- **Known limitation:** GetActionInfo returns `id = nil` for bag-instance items
+  (items dragged from bags rather than placed by itemID), so those slots get no
+  name. The consumers (`actionSlots` for `/startattack`·`/shoot`·auto-shot
+  proxies, reactive spells) only need spells, so this is acceptable.
+- **Follow-up (optional):** migrate the remaining `GetActionText` macro-slot
+  detection in `Core.lua` / `ComboPointTracker.lua` to `GetActionInfo` too.
+
 ### 4. `C_Spell.*` / `GetSpellInfo(spellID)`
 - **API:** `API.md:6649+` — `GetSpellCooldown`, `IsUsableSpell`, `IsSpellKnown`,
   `SpellHasRange`, `GetSpellSchool`, `FindSpellBookSlotByID`.

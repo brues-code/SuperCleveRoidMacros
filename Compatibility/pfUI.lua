@@ -440,10 +440,15 @@ function Extension.RegisterPfUIActionEventHandler()
                 ))
             end
 
-            -- For slot change events, do a full button update
+            -- For slot change events, do a full button update so the icon,
+            -- cooldown, and tooltip refresh through CleveRoids' hooked
+            -- GetActionTexture / GetActionCooldown / GameTooltip:SetAction.
+            -- pfUI's ButtonMacroScan defers to us for managed macros (leaves
+            -- spellslot nil), so its ButtonFullUpdate routes through those hooks
+            -- and follows the active conditional — no manual cooldown override
+            -- needed.
             if event == "ACTIONBAR_SLOT_CHANGED" then
-                -- Trigger pfUI's button update for this slot
-                -- Mark the slot for update in pfUI's cache, which will be processed on next OnUpdate
+                -- Mark the slot for update in pfUI's cache (processed next OnUpdate)
                 if pfUI.bars and pfUI.bars.update then
                     pfUI.bars.update[slot] = true
                 end
@@ -451,50 +456,6 @@ function Extension.RegisterPfUIActionEventHandler()
                 -- Also directly call ButtonFullUpdate if the button exists
                 if button and pfUI.bars.ButtonFullUpdate then
                     pfUI.bars.ButtonFullUpdate(button)
-                end
-            end
-
-            -- COOLDOWN FIX: Always update cooldowns explicitly
-            -- pfUI's macro scanner caches spell info and doesn't know about
-            -- CleveRoids' conditional spell changes. Manually update the cooldown
-            -- using the active spell from CleveRoids.
-            -- Note: pfUI uses button.cd for cooldown frame (not button.cooldown)
-            if button and button.cd then
-                local start, duration, enable
-                local spellSlot, bookType = CleveRoids.GetActionSpellSlot(slot)
-
-                if spellSlot and bookType then
-                    -- Active spell found - get its cooldown
-                    start, duration, enable = GetSpellCooldown(spellSlot, bookType)
-                else
-                    -- No active spell - check for item cooldown
-                    local actions = CleveRoids.GetAction(slot)
-                    local actionToCheck = actions and (actions.active or actions.tooltip)
-                    if actionToCheck and actionToCheck.item then
-                        local item = actionToCheck.item
-                        if item.bagID and item.slot then
-                            start, duration, enable = GetContainerItemCooldown(item.bagID, item.slot)
-                        elseif item.inventoryID then
-                            start, duration, enable = GetInventoryItemCooldown("player", item.inventoryID)
-                        end
-                    elseif actionToCheck then
-                        -- Check for equipment slot (e.g., trinket)
-                        local slotId = tonumber(actionToCheck.action)
-                        if slotId and slotId >= 1 and slotId <= 19 then
-                            start, duration, enable = GetInventoryItemCooldown("player", slotId)
-                        end
-                    end
-
-                    -- Fallback: use the hooked GetActionCooldown for non-CleveRoids actions
-                    if not start then
-                        start, duration, enable = GetActionCooldown(slot)
-                    end
-                end
-
-                -- Apply cooldown if we have valid data
-                -- Ensure enable is at least 1 (0 can hide the cooldown)
-                if start and duration then
-                    CooldownFrame_SetTimer(button.cd, start, duration, (enable and enable > 0) and enable or 1)
                 end
             end
         end)

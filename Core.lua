@@ -4366,15 +4366,10 @@ function GameTooltip.SetAction(self, slot)
         -- End new logic
 
         local current_spell_data = CleveRoids.GetSpell(action_name)
-        if current_spell_data then
-            GameTooltip:SetSpell(current_spell_data.spellSlot, current_spell_data.bookType)
-            local rank_info = current_spell_data.rank or (current_spell_data.highest and current_spell_data.highest.rank)
-            if rank_info and rank_info ~= "" then
-                GameTooltipTextRight1:SetText("|cff808080" .. rank_info .. "|r")
-            else
-                GameTooltipTextRight1:SetText("")
-            end
-            GameTooltipTextRight1:Show()
+        if current_spell_data and current_spell_data.id then
+            -- ClassicAPI: render by spellID (rank included) instead of routing
+            -- through the spellbook slot via SetSpell(spellSlot, bookType).
+            GameTooltip:SetSpellByID(current_spell_data.id)
             GameTooltip:Show()
             return
         end
@@ -4399,15 +4394,8 @@ function GameTooltip.SetAction(self, slot)
             local nested_action_name = nested_action_info.action
 
             current_spell_data = CleveRoids.GetSpell(nested_action_name)
-            if current_spell_data then
-                GameTooltip:SetSpell(current_spell_data.spellSlot, current_spell_data.bookType)
-                local rank_info = current_spell_data.rank or (current_spell_data.highest and current_spell_data.highest.rank)
-                if rank_info and rank_info ~= "" then
-                    GameTooltipTextRight1:SetText("|cff808080" .. rank_info .. "|r")
-                else
-                    GameTooltipTextRight1:SetText("")
-                end
-                GameTooltipTextRight1:Show()
+            if current_spell_data and current_spell_data.id then
+                GameTooltip:SetSpellByID(current_spell_data.id)
                 GameTooltip:Show()
                 return
             end

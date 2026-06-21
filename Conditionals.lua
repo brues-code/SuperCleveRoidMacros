@@ -5108,19 +5108,8 @@ function CleveRoids.IsReactive(name)
     return CleveRoids.reactiveSpells[spellName] ~= nil
 end
 
-function CleveRoids.GetActionButtonInfo(slot)
-    local macroName, actionType, id = GetActionText(slot)
-    if actionType == "MACRO" then
-        return actionType, id, macroName
-    elseif actionType == "SPELL" and id then
-        local spellName = GetSpellRecField(id, "name")
-        local rank = GetSpellRecField(id, "rank")
-        return actionType, id, spellName, rank
-    elseif actionType == "ITEM" and id then
-        local item = CleveRoids.GetItem(id)
-        return actionType, id, (item and item.name), (item and item.id)
-    end
-end
+-- NOTE: CleveRoids.GetActionButtonInfo is defined in Extensions/Tooltip/Generic.lua
+-- (ClassicAPI GetActionInfo-based) and loads after this file.
 
 function CleveRoids.IsReactiveUsable(spellName)
     -- For Overpower, Revenge, and Riposte: ONLY use combat log tracking

@@ -106,3 +106,15 @@ end
 function API.IsPlayerFalling()
     return IsFalling()
 end
+
+--------------------------------------------------------------------------------
+-- Action
+--------------------------------------------------------------------------------
+
+-- Action descriptor for a 1-based action-bar slot: actionType, id, subType.
+--   actionType: "spell" (id = spellID) | "macro" (id = macroSlot) |
+--               "item" (id = itemID, or nil for a bag-instance item)
+--   nil for an empty slot.
+function API.GetActionInfo(slot)
+    return GetActionInfo(slot)
+end

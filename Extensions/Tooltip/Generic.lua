@@ -14,8 +14,7 @@ local GetInventoryItemLink = GetInventoryItemLink
 local GetInventoryItemTexture = GetInventoryItemTexture
 local GetInventoryItemCount = GetInventoryItemCount
 local GetItemInfo = GetItemInfo
-local GetSpellName = GetSpellName
-local GetSpellTexture = GetSpellTexture
+local GetSpellInfo = GetSpellInfo
 local tonumber = tonumber
 local type = type
 local pairs = pairs
@@ -45,7 +44,10 @@ function CleveRoids.IndexSpells()
     while true do
         i = i + 1
 
-        local spellName, spellRank = GetSpellName(i, bookType)
+        -- ClassicAPI GetSpellInfo(slot, bookType) returns the spellID as the
+        -- 10th value, giving us slot -> spellID natively (plus name/rank/icon
+        -- in one call, replacing GetSpellName + GetSpellTexture).
+        local spellName, spellRank, texture, _, _, _, _, _, _, spellId = GetSpellInfo(i, bookType)
         if not spellName then
             i = 0
             book = book + 1
@@ -61,10 +63,10 @@ function CleveRoids.IndexSpells()
             if (not reagent or reagent == "") and CleveRoids.ReagentBySpell then
                 reagent = CleveRoids.ReagentBySpell[spellName]
             end
-            local texture = GetSpellTexture(i, bookType)
             if not spells[bookType][spellName] then
                 spells[bookType][spellName] = {
                     spellSlot = i,
+                    id = spellId,
                     name = spellName,
                     bookType = bookType,
                     texture = texture,
@@ -75,6 +77,7 @@ function CleveRoids.IndexSpells()
             if spellRank and not spells[bookType][spellName][spellRank] then
                 spells[bookType][spellName][spellRank] = {
                     spellSlot = i,
+                    id = spellId,
                     name = spellName,
                     rank = spellRank,
                     bookType = bookType,
@@ -371,34 +374,24 @@ function CleveRoids.ClearSlot(slots, slot)
     slots[slot] = nil
 end
 
--- Local helper for 1.12.1: safely get action button info via tooltip
+-- Map a 1-based action slot to (actionType, id, name, rank) via ClassicAPI's
+-- GetActionInfo, resolving spell/item/macro names from the id. actionType is
+-- "SPELL" | "ITEM" | "MACRO" to match existing callers; returns nil for an
+-- empty slot. Bag-instance items (no itemID from GetActionInfo) yield no name.
 function CleveRoids.GetActionButtonInfo(slot)
-    if not CleveRoidsActionTooltip then
-        CreateFrame("GameTooltip", "CleveRoidsActionTooltip", UIParent, "GameTooltipTemplate")
+    local actionType, id = CleveRoids.ClassicAPI.GetActionInfo(slot)
+    if not actionType then return end
+
+    if actionType == "spell" and id then
+        local rank = GetSpellRecField(id, "rank")
+        if rank == "" then rank = nil end
+        return "SPELL", id, GetSpellRecField(id, "name"), rank
+    elseif actionType == "item" and id then
+        local item = CleveRoids.GetItem(id)
+        return "ITEM", id, (item and item.name)
+    elseif actionType == "macro" and id then
+        return "MACRO", id, GetMacroInfo(id)
     end
-
-    local tooltip = CleveRoidsActionTooltip
-    tooltip:SetOwner(UIParent, "ANCHOR_NONE")
-    tooltip:ClearLines()
-    tooltip:SetAction(slot)
-
-    local name, rank
-    local text = _G["CleveRoidsActionTooltipTextLeft1"]
-    if text then name = text:GetText() end
-    local text2 = _G["CleveRoidsActionTooltipTextLeft2"]
-    if text2 then
-        local maybeRank = text2:GetText()
-        -- Rank lines usually start with "Rank"
-        if maybeRank and string.find(maybeRank, "Rank") then
-            rank = maybeRank
-        end
-    end
-
-    -- Determine if it's an item or spell based on texture (heuristic)
-    local tex = GetActionTexture(slot)
-    local actionType = tex and "SPELL" or "ITEM"
-
-    return actionType, tex, name, rank
 end
 
 function CleveRoids.IndexActionSlot(slot)
