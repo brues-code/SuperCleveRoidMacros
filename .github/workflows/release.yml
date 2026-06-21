@@ -20,6 +20,4 @@ jobs:
       - name: Package and release to GitHub
         uses: BigWigsMods/packager@v2
         env:
-          # Only GITHUB_OAUTH is set, so the packager attaches the zip to a
-          # GitHub Release and uploads nothing to CurseForge/WoWInterface/Wago.
           GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
