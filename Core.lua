@@ -150,6 +150,8 @@ local BOOLEAN_CONDITIONALS = {
     stopattack = true,
     pet = true,
     nopet = true,
+    focus = true,
+    nofocus = true,
     bg = true,
     nobg = true,
     -- Dispel-type conditionals (ClassicAPI C_UnitAuras)
@@ -1678,6 +1680,13 @@ end
 -- Attempts to target the focus target.
 -- returns: Whether or not it succeeded
 function CleveRoids.TryTargetFocus()
+    -- ClassicAPI native focus token: exact target switch, no name matching.
+    if UnitExists("focus") then
+        TargetUnit("focus")
+        return UnitExists("target")
+    end
+
+    -- Fallback: pfUI / name-based focus.
     local name = CleveRoids.GetFocusName()
 
     if not name then
@@ -1694,16 +1703,23 @@ function CleveRoids.TryTargetFocus()
     return true
 end
 
--- Resolves pfUI's emulated focus to a real unit token (e.g., "party2", "raid5")
--- Returns the resolved token or nil if focus is not available
--- warn: if true, prints a chat message when no focus addon is installed
+-- Resolves the player's focus to a usable unit token.
+-- Prefers pfUI's emulated focus (resolves to a real token like "party2"/"raid5")
+-- for pfUI users, then falls back to ClassicAPI's native "focus" token (which
+-- every UnitX function accepts) for everyone else.
+-- Returns the resolved token or nil if no focus is set.
+-- warn: if true, prints a chat message when no focus is set.
 function CleveRoids.GetFocusUnitId(warn)
     if pfUI and pfUI.uf and pfUI.uf.focus and pfUI.uf.focus.label and pfUI.uf.focus.id
        and UnitExists(pfUI.uf.focus.label .. pfUI.uf.focus.id) then
         return pfUI.uf.focus.label .. pfUI.uf.focus.id
     end
-    if warn and not pfUI and not ClassicFocus_CurrentFocus and not CURR_FOCUS_TARGET then
-        DEFAULT_CHAT_FRAME:AddMessage("|cffff6600SuperCleveRoidMacros:|r [focus] target requires pfUI or a compatible focus addon.", 1, 0.4, 0)
+    -- ClassicAPI native focus token (set via /focus or the FOCUSTARGET keybind)
+    if UnitExists("focus") then
+        return "focus"
+    end
+    if warn then
+        DEFAULT_CHAT_FRAME:AddMessage("|cffff6600SuperCleveRoidMacros:|r [focus] used but no focus is set. Use /focus or the FOCUSTARGET keybind.", 1, 0.4, 0)
     end
     return nil
 end

@@ -7452,6 +7452,16 @@ CleveRoids.Keywords = {
         end, conditionals, "nopet")
     end,
 
+    -- [focus] / [nofocus] - whether a focus is set. Covers pfUI's emulated focus
+    -- and ClassicAPI's native focus token (set via /focus or the FOCUSTARGET keybind).
+    focus = function(conditionals)
+        return CleveRoids.GetFocusUnitId() ~= nil
+    end,
+
+    nofocus = function(conditionals)
+        return CleveRoids.GetFocusUnitId() == nil
+    end,
+
     -- [swimming] - Player is currently swimming (Nampower v2.36+)
     swimming = function(conditionals)
         if not CleveRoids.NampowerAPI.features.hasPlayerIsSwimming then
