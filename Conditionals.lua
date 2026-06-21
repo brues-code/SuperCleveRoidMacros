@@ -7412,26 +7412,12 @@ CleveRoids.Keywords = {
 
     -- [swimming] - Player is currently swimming (Nampower v2.36+)
     swimming = function(conditionals)
-        if not CleveRoids.NampowerAPI.features.hasPlayerIsSwimming then
-            if not CleveRoids._swimmingErrorShown then
-                DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[SuperCleveRoidMacros]|r The [swimming] conditional requires Nampower v2.36.0 or newer.", 1, 0.5, 0.5)
-                CleveRoids._swimmingErrorShown = true
-            end
-            return false
-        end
-        return PlayerIsSwimming() == 1
+        return CleveRoids.ClassicAPI.IsSwimming()
     end,
 
-    -- [noswimming] - Player is NOT swimming (Nampower v2.36+)
+    -- [noswimming] - Player is NOT swimming
     noswimming = function(conditionals)
-        if not CleveRoids.NampowerAPI.features.hasPlayerIsSwimming then
-            if not CleveRoids._swimmingErrorShown then
-                DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[SuperCleveRoidMacros]|r The [swimming] conditional requires Nampower v2.36.0 or newer.", 1, 0.5, 0.5)
-                CleveRoids._swimmingErrorShown = true
-            end
-            return false
-        end
-        return PlayerIsSwimming() ~= 1
+        return not CleveRoids.ClassicAPI.IsSwimming()
     end,
 
     -- [rooted] - Player is currently rooted (Nampower v2.36+)
@@ -9235,24 +9221,10 @@ CleveRoids.Keywords = {
 
     -- swim / noswim → swimming / noswimming (saves 4/6 chars)
     swim = function(conditionals)
-        if not CleveRoids.NampowerAPI.features.hasPlayerIsSwimming then
-            if not CleveRoids._swimmingErrorShown then
-                DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[SuperCleveRoidMacros]|r The [swimming] conditional requires Nampower v2.36.0 or newer.", 1, 0.5, 0.5)
-                CleveRoids._swimmingErrorShown = true
-            end
-            return false
-        end
-        return PlayerIsSwimming() == 1
+        return CleveRoids.ClassicAPI.IsSwimming()
     end,
     noswim = function(conditionals)
-        if not CleveRoids.NampowerAPI.features.hasPlayerIsSwimming then
-            if not CleveRoids._swimmingErrorShown then
-                DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[SuperCleveRoidMacros]|r The [swimming] conditional requires Nampower v2.36.0 or newer.", 1, 0.5, 0.5)
-                CleveRoids._swimmingErrorShown = true
-            end
-            return false
-        end
-        return PlayerIsSwimming() ~= 1
+        return not CleveRoids.ClassicAPI.IsSwimming()
     end,
 
     -- osp / noosp → onswingpending / noonswingpending (saves 11/13 chars)

@@ -128,6 +128,11 @@ function API.IsStealthed()
     return IsStealthed()
 end
 
+-- True if the player is currently swimming.
+function API.IsSwimming()
+    return IsSwimming() and true or false
+end
+
 --------------------------------------------------------------------------------
 -- NamePlate
 --------------------------------------------------------------------------------
