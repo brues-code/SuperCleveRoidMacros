@@ -1072,100 +1072,12 @@ end
 -- Validation & Debounce
 -- ============================================================================
 
--- Build a set of player spell names (lowercase) for name conflict checks
-local function GetPlayerSpellNames()
-    local spellNames = {}
-    -- Primary source: CleveRoids.Spells indexed table
-    if CleveRoids.Spells then
-        for bookType, spells in CleveRoids.Spells do
-            if type(spells) == "table" then
-                for spellName, _ in pairs(spells) do
-                    if type(spellName) == "string" then
-                        spellNames[string.lower(spellName)] = true
-                    end
-                end
-            end
-        end
-    end
-    -- Fallback: iterate spellbook directly
-    if not next(spellNames) then
-        local i = 1
-        while true do
-            local name, rank = GetSpellName(i, "spell")
-            if not name then break end
-            spellNames[string.lower(name)] = true
-            i = i + 1
-        end
-    end
-    return spellNames
-end
-
--- Build a set of player item names (lowercase) for name conflict checks
-local function GetPlayerItemNames()
-    local itemNames = {}
-    if CleveRoids.Items then
-        for key, value in pairs(CleveRoids.Items) do
-            if type(key) == "string" and type(value) == "table" and value.name then
-                itemNames[string.lower(value.name)] = true
-            end
-        end
-    end
-    return itemNames
-end
-
--- Validate the current macro's name and return any name errors
+-- Macro names are no longer restricted: action-bar macros are identified by
+-- slot/index (ClassicAPI GetActionInfo), so blank, duplicate, and spell/item-name
+-- macros are all valid. (Name-based references like {MacroName}/runmacro still
+-- need a unique name, but that's not enforced here.)
 local function ValidateMacroName()
-    local nameErrors = {}
-    if not MacroFrame or not MacroFrame.selectedMacro then return nameErrors end
-
-    local selectedSlot = MacroFrame.selectedMacro
-    local nameOk, name = pcall(GetMacroInfo, selectedSlot)
-    if not nameOk or not name then return nameErrors end
-
-    -- Blank/whitespace name
-    local trimmedName = CleveRoids.Trim and CleveRoids.Trim(name) or name
-    if trimmedName == "" then
-        table.insert(nameErrors, {
-            type = "NAME_ERROR",
-            message = "Macro name is blank or only spaces"
-        })
-    end
-
-    -- Spell conflict
-    local lowerName = string.lower(name)
-    local spellNames = GetPlayerSpellNames()
-    if spellNames[lowerName] then
-        table.insert(nameErrors, {
-            type = "NAME_ERROR",
-            message = "Name '" .. name .. "' conflicts with a spell/ability"
-        })
-    end
-
-    -- Item conflict
-    local itemNames = GetPlayerItemNames()
-    if itemNames[lowerName] then
-        table.insert(nameErrors, {
-            type = "NAME_ERROR",
-            message = "Name '" .. name .. "' conflicts with an item"
-        })
-    end
-
-    -- Duplicate name check
-    local dupeCount = 0
-    for i = 1, 36 do
-        local ok, otherName = pcall(GetMacroInfo, i)
-        if ok and otherName and string.lower(otherName) == lowerName then
-            dupeCount = dupeCount + 1
-        end
-    end
-    if dupeCount > 1 then
-        table.insert(nameErrors, {
-            type = "NAME_ERROR",
-            message = "Duplicate name '" .. name .. "' (used " .. dupeCount .. " times)"
-        })
-    end
-
-    return nameErrors
+    return {}
 end
 
 local function RunValidation()
@@ -1249,12 +1161,9 @@ end
 local function ReportAllMacroErrors()
     local accountEntries = {} -- { {name=, slot=, errors=}, ... }
     local characterEntries = {}
-    local nameCount = {} -- lowercase name -> count (for duplicate detection)
-    local nameSlots = {} -- lowercase name -> { slot1, slot2, ... }
-    local spellNames = GetPlayerSpellNames()
-    local itemNames = GetPlayerItemNames()
 
-    -- First pass: collect all macro names and body errors
+    -- Collect body (syntax) errors per macro. Macro names are no longer
+    -- restricted (slot/index-based identification), so no name checks here.
     for i = 1, 36 do
         local nameOk, name = pcall(GetMacroInfo, i)
         if nameOk and name and name ~= "" then
@@ -1271,63 +1180,11 @@ local function ReportAllMacroErrors()
                 end
             end
 
-            -- Check blank/whitespace name
-            local trimmedName = CleveRoids.Trim and CleveRoids.Trim(name) or name
-            if trimmedName == "" then
-                table.insert(errors, {
-                    type = "NAME_ERROR",
-                    message = "Macro name is blank or only spaces"
-                })
-            end
-
-            -- Check if name matches a player spell
-            local lowerNameCheck = string.lower(name)
-            if spellNames[lowerNameCheck] then
-                table.insert(errors, {
-                    type = "NAME_ERROR",
-                    message = "Name '" .. name .. "' conflicts with a known spell/ability"
-                })
-            end
-
-            -- Check if name matches a player item
-            if itemNames[lowerNameCheck] then
-                table.insert(errors, {
-                    type = "NAME_ERROR",
-                    message = "Name '" .. name .. "' conflicts with an inventory item"
-                })
-            end
-
-            -- Track name for duplicate detection
-            local lowerName = string.lower(name)
-            nameCount[lowerName] = (nameCount[lowerName] or 0) + 1
-            if not nameSlots[lowerName] then nameSlots[lowerName] = {} end
-            table.insert(nameSlots[lowerName], i)
-
             local entry = { name = name, slot = i, errors = errors }
             if i <= 18 then
                 table.insert(accountEntries, entry)
             else
                 table.insert(characterEntries, entry)
-            end
-        end
-    end
-
-    -- Second pass: inject duplicate name errors
-    for lowerName, count in pairs(nameCount) do
-        if count > 1 then
-            local slots = nameSlots[lowerName]
-            for _, slot in ipairs(slots) do
-                -- Find the entry for this slot and add the error
-                local list = slot <= 18 and accountEntries or characterEntries
-                for _, entry in ipairs(list) do
-                    if entry.slot == slot then
-                        table.insert(entry.errors, 1, {
-                            type = "NAME_ERROR",
-                            message = "Duplicate name '" .. entry.name .. "' (used " .. count .. " times)"
-                        })
-                        break
-                    end
-                end
             end
         end
     end

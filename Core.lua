@@ -1265,18 +1265,30 @@ function CleveRoids.GetAction(slot)
     local actions = CleveRoids.Actions[slot]
     if actions then return actions end
 
-    local text = GetActionText(slot)
+    -- Identify the macro by its index via ClassicAPI's GetActionInfo so the
+    -- slot is mapped without going through the macro name (no unique-name
+    -- requirement for action-bar macros).
+    local macro
+    local kind, macroID = CleveRoids.ClassicAPI.GetActionInfo(slot)
+    if kind == "macro" and macroID then
+        macro = CleveRoids.GetMacroByIndex(macroID)
+    end
 
-    if text then
-        local macro = CleveRoids.GetMacro(text)
-        if macro then
-            actions = macro.actions
-
-            CleveRoids.TestForActiveAction(actions)
-            CleveRoids.Actions[slot] = actions
-            CleveRoids.SendEventForAction(slot, "ACTIONBAR_SLOT_CHANGED", slot)
-            return actions
+    -- Fallback for SuperMacro (and anything GetActionInfo doesn't tag as a
+    -- macro): resolve by name.
+    if not macro then
+        local text = GetActionText(slot)
+        if text then
+            macro = CleveRoids.GetMacro(text)
         end
+    end
+
+    if macro then
+        actions = macro.actions
+        CleveRoids.TestForActiveAction(actions)
+        CleveRoids.Actions[slot] = actions
+        CleveRoids.SendEventForAction(slot, "ACTIONBAR_SLOT_CHANGED", slot)
+        return actions
     end
 end
 
@@ -1831,22 +1843,11 @@ function CleveRoids.ParseSequence(text)
     return sequence
 end
 
-function CleveRoids.ParseMacro(name)
-    if not name then return end
-
-    local macroID = GetMacroIndexByName(name)
-
-    local _, texture, body
-    if macroID and macroID ~= 0 then
-        _, texture, body = GetMacroInfo(macroID)
-    end
-
-    if (not body) and GetSuperMacroInfo then
-        _, texture, body = GetSuperMacroInfo(name)
-    end
-
-    if not texture or not body then return end
-
+-- Shared: build, parse, and cache a macro under `cacheKey`. For action-bar
+-- macros the key is the Blizzard macro index (unique), so duplicate or blank
+-- macro names no longer collide; SuperMacro macros (no index) are keyed by name.
+-- macroID is the Blizzard index if known, else nil.
+local function BuildMacro(cacheKey, macroID, name, texture, body)
     local macro = {
         id      = macroID,
         name    = name,
@@ -1918,8 +1919,38 @@ function CleveRoids.ParseMacro(name)
     -- Store whether #showtooltip had an explicit argument (for icon fallback logic)
     macro.actions.explicitTooltip = showTooltipHasArg
 
-    CleveRoids.Macros[name] = macro
+    CleveRoids.Macros[cacheKey] = macro
     return macro
+end
+
+-- Parse a macro by its Blizzard macro index (1-36), caching by index. This is
+-- the action-bar path: a slot's macro is identified by index via ClassicAPI's
+-- GetActionInfo, so duplicate/blank macro names no longer collide.
+function CleveRoids.ParseMacroByIndex(macroID)
+    if not macroID or macroID == 0 then return end
+    local name, texture, body = GetMacroInfo(macroID)
+    if not texture or not body then return end
+    return BuildMacro(macroID, macroID, name, texture, body)
+end
+
+-- Parse a macro by name (explicit {MacroName} / runmacro references, and
+-- SuperMacro macros that have no Blizzard index). Resolves to the index path
+-- when possible so the cache stays index-keyed.
+function CleveRoids.ParseMacro(name)
+    if not name then return end
+
+    local macroID = GetMacroIndexByName(name)
+    if macroID and macroID ~= 0 then
+        return CleveRoids.ParseMacroByIndex(macroID)
+    end
+
+    -- SuperMacro has no Blizzard macro index; cache by name.
+    if GetSuperMacroInfo then
+        local _, texture, body = GetSuperMacroInfo(name)
+        if texture and body then
+            return BuildMacro(name, nil, name, texture, body)
+        end
+    end
 end
 
 function CleveRoids.ParseMsg(msg)
@@ -2240,6 +2271,13 @@ end
 
 function CleveRoids.GetMacro(name)
     return CleveRoids.Macros[name] or CleveRoids.ParseMacro(name)
+end
+
+-- Get a parsed macro by its Blizzard macro index (1-36). Used by the action-bar
+-- path so macros are identified by slot/index rather than name.
+function CleveRoids.GetMacroByIndex(macroID)
+    if not macroID then return end
+    return CleveRoids.Macros[macroID] or CleveRoids.ParseMacroByIndex(macroID)
 end
 
 function CleveRoids.GetSequence(args)

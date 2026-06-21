@@ -56,7 +56,7 @@ See the **[Wiki](https://github.com/brues-code/SuperCleveRoidMacros/wiki)** for 
 
 ## Known Issues
 
-- Unique macro names required (no blanks, duplicates, or spell names)
+- Action-bar macros are identified by slot, so blank or duplicate macro names are fine. Only macros referenced *by name* (`{MacroName}` nesting, `/runmacro "Name"`) still need a unique name to disambiguate.
 - Reactive abilities must be on action bars for detection
 - Debuff time-left conditionals only work on own debuffs unless pfUI libdebuff or Cursive has data
 - Macro line length: 261 characters max (MacroLengthWarn extension prevents crashes)
