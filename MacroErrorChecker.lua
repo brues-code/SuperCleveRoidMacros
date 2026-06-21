@@ -37,62 +37,19 @@ end
 
 -- Known valid commands
 local VALID_COMMANDS = {
-    -- Core addon commands
+    -- Core commands NOT registered via SlashCmdList (so not auto-discoverable):
+    -- Blizzard builtins (/cast, /target, /run, ...) handled by FrameXML/C, and
+    -- /focus (a pfUI command, only discoverable when pfUI is loaded).
     ["/cast"] = true,
-    ["/castpet"] = true,
-    ["/cancelaura"] = true,
-    ["/castsequence"] = true,
-    ["/equip"] = true,
-    ["/equipmh"] = true,
-    ["/equipoh"] = true,
-    ["/equip11"] = true,
-    ["/equip12"] = true,
-    ["/equip13"] = true,
-    ["/equip14"] = true,
     ["/focus"] = true,
-    ["/petattack"] = true,
-    ["/petfollow"] = true,
-    ["/petwait"] = true,
-    ["/petpassive"] = true,
-    ["/petaggressive"] = true,
-    ["/petdefensive"] = true,
     ["/print"] = true,
     ["/run"] = true,
-    ["/runmacro"] = true,
     ["/script"] = true,
-    ["/startattack"] = true,
-    ["/stopattack"] = true,
-    ["/stopcasting"] = true,
-    ["/stopmacro"] = true,
-    ["/skipmacro"] = true,
     ["/target"] = true,
-    ["/cleartarget"] = true,
-    ["/unqueue"] = true,
-    ["/use"] = true,
-    ["/unbuff"] = true,
-    ["/unshift"] = true,
-    ["/retarget"] = true,
-    ["/firstaction"] = true,
-    ["/nofirstaction"] = true,
-    ["/applymain"] = true,
-    ["/applyoff"] = true,
-    ["/clearequipqueue"] = true,
-    ["/equipqueuestatus"] = true,
-    ["/quickheal"] = true,
-    ["/qh"] = true,
-    ["/rl"] = true,
-    ["/combotrack"] = true,
-    ["/cleveroid"] = true,
-    ["/cleveroidmacros"] = true,
-    ["/macrocheck"] = true,
-    -- Turtle WoW / third-party addon commands
-    ["/db"] = true,
-    ["/rinse"] = true,
-    ["/am"] = true,
-    ["/aux"] = true,
-    ["/instancetimers"] = true,
-    ["/umacro"] = true,
-    ["/cursive"] = true,
+    -- NOTE: This addon's own commands (/cast pets, /equip*, /quickheal, /cleveroid,
+    -- /macrocheck, ...) and third-party addon commands (/aux, /rinse, /cursive, ...)
+    -- are no longer hardcoded here. They self-register via SlashCmdList and are
+    -- picked up automatically by CleveRoids.IsRegisteredCommand (see discovery below).
 
     --------------------------------------------------------------------------
     -- Standard WoW 1.12.1 Commands
@@ -476,6 +433,52 @@ function CleveRoids.GetWhitelistedCommandsList()
     return list
 end
 
+-- ============================================================================
+-- Registered Slash Command Discovery (auto-covers addon & client commands)
+-- ============================================================================
+-- Builtin chat/social/emote commands and macro pseudo-commands are NOT in
+-- SlashCmdList (FrameXML handles them internally), so VALID_COMMANDS above
+-- still covers those. This scan covers everything registered the addon way:
+-- any "/foo" exposed via SLASH_<KEY>N globals, including this addon's own
+-- commands, third-party addons (/aux, /rinse, ...), and client commands like
+-- /dump. Rebuilt on PLAYER_ENTERING_WORLD so addons that load or lazily
+-- register after us are still picked up.
+
+local registeredCommands = nil
+
+local function BuildRegisteredCommandCache()
+    local cache = {}
+    if type(SlashCmdList) == "table" then
+        for key, _ in pairs(SlashCmdList) do
+            -- Each handler key maps to one or more SLASH_<KEY>N "/string" globals
+            local i = 1
+            while true do
+                local slash = _G["SLASH_" .. key .. i]
+                if not slash then break end
+                if type(slash) == "string" and slash ~= "" then
+                    cache[string.lower(slash)] = true
+                end
+                i = i + 1
+            end
+        end
+    end
+    registeredCommands = cache
+    return cache
+end
+
+function CleveRoids.IsRegisteredCommand(cmd)
+    if not cmd or cmd == "" then return false end
+    local cache = registeredCommands or BuildRegisteredCommandCache()
+    return cache[string.lower(cmd)] == true
+end
+
+-- Invalidate the cache when the world loads so post-load registrations count.
+local registeredCmdFrame = CreateFrame("Frame")
+registeredCmdFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+registeredCmdFrame:SetScript("OnEvent", function()
+    BuildRegisteredCommandCache()
+end)
+
 -- Commands that can have conditionals without actions
 -- e.g., /petattack [harm] or /target [exists,hp:<=20]
 local COMMANDS_NO_ACTION_NEEDED = {
@@ -734,7 +737,9 @@ local function validateLine(line, lineNum)
         local _, _, cmd = safeStringFind(line, "^(/[a-z]+%d*)")
         if cmd then
             local lowerCmd = string.lower(cmd)
-            if not VALID_COMMANDS[lowerCmd] and not CleveRoids.IsWhitelistedCommand(lowerCmd) then
+            if not VALID_COMMANDS[lowerCmd]
+                and not CleveRoids.IsRegisteredCommand(lowerCmd)
+                and not CleveRoids.IsWhitelistedCommand(lowerCmd) then
                 table.insert(localErrors, {
                     type = ERROR_TYPES.INVALID_COMMAND,
                     line = lineNum,
