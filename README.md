@@ -2,7 +2,7 @@
 
 Enhanced macro addon for World of Warcraft 1.12.1 (Vanilla/Turtle WoW) with dynamic tooltips, conditional execution, and extended syntax.
 
-**[Full Documentation on the Wiki](https://github.com/jrc13245/SuperCleveRoidMacros/wiki)**
+**[Full Documentation on the Wiki](https://github.com/brues-code/SuperCleveRoidMacros/wiki)**
 
 ## Requirements
 
@@ -41,17 +41,17 @@ Enhanced macro addon for World of Warcraft 1.12.1 (Vanilla/Turtle WoW) with dyna
 
 ## Wiki
 
-See the **[Wiki](https://github.com/jrc13245/SuperCleveRoidMacros/wiki)** for complete documentation:
+See the **[Wiki](https://github.com/brues-code/SuperCleveRoidMacros/wiki)** for complete documentation:
 
-- **[Quick Start](https://github.com/jrc13245/SuperCleveRoidMacros/wiki/Quick-Start)** — Syntax, multi-value logic, comparisons, special prefixes
-- **[Slash Commands](https://github.com/jrc13245/SuperCleveRoidMacros/wiki/Slash-Commands)** — All 35+ commands, priority macros, UnitXP scanning
-- **[Conditionals](https://github.com/jrc13245/SuperCleveRoidMacros/wiki/Conditionals)** — 70+ conditionals (player & target), extended unit tokens, multiscan
-- **[Reference Tables](https://github.com/jrc13245/SuperCleveRoidMacros/wiki/Reference-Tables)** — CC types, damage schools, stat types, swing types
-- **[Features](https://github.com/jrc13245/SuperCleveRoidMacros/wiki/Features)** — Debuff timers, combo tracking, talent modifiers, TWoW mechanics
-- **[Overflow Buff Frame](https://github.com/jrc13245/SuperCleveRoidMacros/wiki/Overflow-Buff-Frame)** — Hidden buff display for 32+ buffs
-- **[Immunity Tracking](https://github.com/jrc13245/SuperCleveRoidMacros/wiki/Immunity-Tracking)** — Auto-learned NPC immunities
-- **[Settings](https://github.com/jrc13245/SuperCleveRoidMacros/wiki/Settings)** — Configuration and console commands
-- **[Supported Addons](https://github.com/jrc13245/SuperCleveRoidMacros/wiki/Supported-Addons)** — Compatible addons and integrations
+- **[Quick Start](https://github.com/brues-code/SuperCleveRoidMacros/wiki/Quick-Start)** — Syntax, multi-value logic, comparisons, special prefixes
+- **[Slash Commands](https://github.com/brues-code/SuperCleveRoidMacros/wiki/Slash-Commands)** — All 35+ commands, priority macros, UnitXP scanning
+- **[Conditionals](https://github.com/brues-code/SuperCleveRoidMacros/wiki/Conditionals)** — 70+ conditionals (player & target), extended unit tokens, multiscan
+- **[Reference Tables](https://github.com/brues-code/SuperCleveRoidMacros/wiki/Reference-Tables)** — CC types, damage schools, stat types, swing types
+- **[Features](https://github.com/brues-code/SuperCleveRoidMacros/wiki/Features)** — Debuff timers, combo tracking, talent modifiers, TWoW mechanics
+- **[Overflow Buff Frame](https://github.com/brues-code/SuperCleveRoidMacros/wiki/Overflow-Buff-Frame)** — Hidden buff display for 32+ buffs
+- **[Immunity Tracking](https://github.com/brues-code/SuperCleveRoidMacros/wiki/Immunity-Tracking)** — Auto-learned NPC immunities
+- **[Settings](https://github.com/brues-code/SuperCleveRoidMacros/wiki/Settings)** — Configuration and console commands
+- **[Supported Addons](https://github.com/brues-code/SuperCleveRoidMacros/wiki/Supported-Addons)** — Compatible addons and integrations
 
 ## Known Issues
 
