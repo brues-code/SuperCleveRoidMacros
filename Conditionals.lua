@@ -2094,34 +2094,21 @@ end
 -- weaponType: The name of the weapon's type (e.g. Axe, Shield, etc.)
 -- returns: True when equipped, otherwhise false
 function CleveRoids.HasWeaponEquipped(weaponType)
-    if not CleveRoids.WeaponTypeNames[weaponType] then
+    local def = CleveRoids.WeaponTypeNames[weaponType]
+    if not def then
         return false
     end
 
-    local slotName = CleveRoids.WeaponTypeNames[weaponType].slot
-    local localizedName = CleveRoids.WeaponTypeNames[weaponType].name
-    local slotId = GetInventorySlotInfo(slotName)
-    local slotLink = GetInventoryItemLink("player",slotId)
-
-    if not slotLink then
+    local slotId = GetInventorySlotInfo(def.slot)
+    local itemId = CleveRoids.ClassicAPI.GetInventoryItemID("player", slotId)
+    if not itemId then
         return false
     end
 
-    local _,_,itemId = string.find(slotLink,"item:(%d+)")
-    if not itemId then -- Also good to check if itemId was found
-        return false
-    end
-    local _name,_link,_,_lvl,_type,subtype = GetItemInfo(itemId)
-    -- just had to be special huh?
-    local fist = string.find(subtype,"^Fist")
-    -- drops things like the One-Handed prefix
-    local _,_,subtype = string.find(subtype,"%s?(%S+)$")
-
-    if subtype == localizedName or (fist and (CleveRoids.WeaponTypeNames[weaponType].name == CleveRoids.Localized.FistWeapon)) then
-        return true
-    end
-
-    return false
+    -- Compare locale-independent item class/subclass instead of matching the
+    -- localized subtype string (GetItemInfoInstant: ..., classID, subClassID).
+    local _, _, _, _, _, classID, subClassID = C_Item.GetItemInfoInstant(itemId)
+    return classID == def.class and def.subClass[subClassID] == true
 end
 
 -- Checks whether or not the given UnitId is in your party or your raid

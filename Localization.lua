@@ -8,20 +8,6 @@ CleveRoids.Locale = GetLocale()
 CleveRoids.Localized = {}
 
 if CleveRoids.Locale == "enUS" or CleveRoids.Locale == "enGB" then
-    CleveRoids.Localized.Shield     = "Shields"
-    CleveRoids.Localized.Bow        = "Bows"
-    CleveRoids.Localized.Crossbow   = "Crossbows"
-    CleveRoids.Localized.Gun        = "Guns"
-    CleveRoids.Localized.Thrown     = "Thrown"
-    CleveRoids.Localized.Wand       = "Wands"
-    CleveRoids.Localized.Sword      = "Swords"
-    CleveRoids.Localized.Staff      = "Staves"
-    CleveRoids.Localized.Polearm    = "Polearms"
-    CleveRoids.Localized.Mace       = "Maces"
-    CleveRoids.Localized.FistWeapon = "Fist Weapons"
-    CleveRoids.Localized.Dagger     = "Daggers"
-    CleveRoids.Localized.Axe        = "Axes"
-
     CleveRoids.Localized.Attack    = "Attack"
     CleveRoids.Localized.AutoShot  = "Auto Shot"
     CleveRoids.Localized.Shoot     = "Shoot"
@@ -49,20 +35,6 @@ if CleveRoids.Locale == "enUS" or CleveRoids.Locale == "enGB" then
         ["Shadowmeld"]      = "Shadowmeld",
     }
 elseif CleveRoids.Locale == "deDE" then
-    CleveRoids.Localized.Shield     = "Schilde"
-    CleveRoids.Localized.Bow        = "Bögen"
-    CleveRoids.Localized.Crossbow   = "Armbrüste"
-    CleveRoids.Localized.Gun        = "Waffen"
-    CleveRoids.Localized.Thrown     = "Geworfen"
-    CleveRoids.Localized.Wand       = "Zauberstäbe"
-    CleveRoids.Localized.Sword      = "Schwerter"
-    CleveRoids.Localized.Staff      = "Dauben"
-    CleveRoids.Localized.Polearm    = "Stangenwaffen"
-    CleveRoids.Localized.Mace       = "Streitkolben"
-    CleveRoids.Localized.FistWeapon = "Faustwaffen"
-    CleveRoids.Localized.Dagger     = "Dolche"
-
-    CleveRoids.Localized.Axe       = "Äxte"
     CleveRoids.Localized.Attack    = "Angriff"
     CleveRoids.Localized.AutoShot  = "Automatischer Schuss"
     CleveRoids.Localized.Shoot     = "Schießen"
@@ -89,20 +61,6 @@ elseif CleveRoids.Locale == "deDE" then
         ["Shadowmeld"]      = "Schattenmimik",
     }
 elseif CleveRoids.Locale == "frFR" then
-    CleveRoids.Localized.Shield     = "Boucliers"
-    CleveRoids.Localized.Bow        = "Arcs"
-    CleveRoids.Localized.Crossbow   = "Arbalètes"
-    CleveRoids.Localized.Gun        = "Armes à feu"
-    CleveRoids.Localized.Thrown     = "Thrown"
-    CleveRoids.Localized.Wand       = "Wands"
-    CleveRoids.Localized.Sword      = "Swords"
-    CleveRoids.Localized.Staff      = "Staves"
-    CleveRoids.Localized.Polearm    = "Polearms"
-    CleveRoids.Localized.Mace       = "Maces"
-    CleveRoids.Localized.FistWeapon = "Fist Weapons"
-    CleveRoids.Localized.Dagger     = "Daggers"
-    CleveRoids.Localized.Axe        = "Axes"
-
     CleveRoids.Localized.Attack    = "Attack"
     CleveRoids.Localized.AutoShot  = "Auto Shot"
     CleveRoids.Localized.Shoot     = "Shoot"
@@ -128,20 +86,6 @@ elseif CleveRoids.Locale == "frFR" then
         ["Shadowmeld"]      = "Camouflage dans l'ombre",
     }
 elseif CleveRoids.Locale == "koKR" then
-    CleveRoids.Localized.Shield     = "Shields"
-    CleveRoids.Localized.Bow        = "Bows"
-    CleveRoids.Localized.Crossbow   = "Crossbows"
-    CleveRoids.Localized.Gun        = "Guns"
-    CleveRoids.Localized.Thrown     = "Thrown"
-    CleveRoids.Localized.Wand       = "Wands"
-    CleveRoids.Localized.Sword      = "Swords"
-    CleveRoids.Localized.Staff      = "Staves"
-    CleveRoids.Localized.Polearm    = "Polearms"
-    CleveRoids.Localized.Mace       = "Maces"
-    CleveRoids.Localized.FistWeapon = "Fist Weapons"
-    CleveRoids.Localized.Dagger     = "Daggers"
-    CleveRoids.Localized.Axe        = "Axes"
-
     CleveRoids.Localized.Attack    = "Attack"
     CleveRoids.Localized.AutoShot  = "Auto Shot"
     CleveRoids.Localized.Shoot     = "Shoot"
@@ -167,20 +111,6 @@ elseif CleveRoids.Locale == "koKR" then
         ["Shadowmeld"]      = "그림자 숨기",
     }
 elseif CleveRoids.Locale == "zhCN" then
-    CleveRoids.Localized.Shield     = "盾牌"
-    CleveRoids.Localized.Bow        = "弓"
-    CleveRoids.Localized.Crossbow   = "弩"
-    CleveRoids.Localized.Gun        = "枪械"
-    CleveRoids.Localized.Thrown     = "投掷武器"
-    CleveRoids.Localized.Wand       = "魔杖"
-    CleveRoids.Localized.Sword      = "剑"
-    CleveRoids.Localized.Staff      = "法杖"
-    CleveRoids.Localized.Polearm    = "长柄武器"
-    CleveRoids.Localized.Mace       = "锤"
-    CleveRoids.Localized.FistWeapon = "拳套"
-    CleveRoids.Localized.Dagger     = "匕首"
-    CleveRoids.Localized.Axe        = "斧"
-
     CleveRoids.Localized.Attack    = "攻击"
     CleveRoids.Localized.AutoShot  = "自动射击"
     CleveRoids.Localized.Shoot     = "射击"
@@ -206,20 +136,6 @@ elseif CleveRoids.Locale == "zhCN" then
         ["Shadowmeld"]      = "影遁",
     }
 elseif CleveRoids.Locale == "zhTW" then
-    CleveRoids.Localized.Shield     = "盾牌"
-    CleveRoids.Localized.Bow        = "長弓"
-    CleveRoids.Localized.Crossbow   = "弩"
-    CleveRoids.Localized.Gun        = "槍械"
-    CleveRoids.Localized.Thrown     = "投擲武器"
-    CleveRoids.Localized.Wand       = "魔杖"
-    CleveRoids.Localized.Sword      = "劍"
-    CleveRoids.Localized.Staff      = "法杖"
-    CleveRoids.Localized.Polearm    = "長柄武器"
-    CleveRoids.Localized.Mace       = "錘"
-    CleveRoids.Localized.FistWeapon = "拳套"
-    CleveRoids.Localized.Dagger     = "匕首"
-    CleveRoids.Localized.Axe        = "斧"
-
     CleveRoids.Localized.Attack    = "攻擊"
     CleveRoids.Localized.AutoShot  = "自動射擊"
     CleveRoids.Localized.Shoot     = "射擊"
@@ -245,20 +161,6 @@ elseif CleveRoids.Locale == "zhTW" then
         ["Shadowmeld"]      = "影遁",
     }
 elseif CleveRoids.Locale == "ruRU" then
-    CleveRoids.Localized.Shield     = "Shields"
-    CleveRoids.Localized.Bow        = "Bows"
-    CleveRoids.Localized.Crossbow   = "Crossbows"
-    CleveRoids.Localized.Gun        = "Guns"
-    CleveRoids.Localized.Thrown     = "Thrown"
-    CleveRoids.Localized.Wand       = "Wands"
-    CleveRoids.Localized.Sword      = "Swords"
-    CleveRoids.Localized.Staff      = "Staves"
-    CleveRoids.Localized.Polearm    = "Polearms"
-    CleveRoids.Localized.Mace       = "Maces"
-    CleveRoids.Localized.FistWeapon = "Fist Weapons"
-    CleveRoids.Localized.Dagger     = "Daggers"
-    CleveRoids.Localized.Axe        = "Axes"
-
     CleveRoids.Localized.Attack    = "Attack"
     CleveRoids.Localized.AutoShot  = "Auto Shot"
     CleveRoids.Localized.Shoot     = "Shoot"
@@ -284,20 +186,6 @@ elseif CleveRoids.Locale == "ruRU" then
         ["Shadowmeld"]      = "Слияние с тенью",
     }
 elseif CleveRoids.Locale == "esES" then
-    CleveRoids.Localized.Shield     = "Shields"
-    CleveRoids.Localized.Bow        = "Bows"
-    CleveRoids.Localized.Crossbow   = "Crossbows"
-    CleveRoids.Localized.Gun        = "Guns"
-    CleveRoids.Localized.Thrown     = "Thrown"
-    CleveRoids.Localized.Wand       = "Wands"
-    CleveRoids.Localized.Sword      = "Swords"
-    CleveRoids.Localized.Staff      = "Staves"
-    CleveRoids.Localized.Polearm    = "Polearms"
-    CleveRoids.Localized.Mace       = "Maces"
-    CleveRoids.Localized.FistWeapon = "Fist Weapons"
-    CleveRoids.Localized.Dagger     = "Daggers"
-    CleveRoids.Localized.Axe        = "Axes"
-
     CleveRoids.Localized.Attack    = "Attack"
     CleveRoids.Localized.AutoShot  = "Auto Shot"
     CleveRoids.Localized.Shoot     = "Shoot"

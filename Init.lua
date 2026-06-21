@@ -242,28 +242,32 @@ CleveRoids.auraTextures = {
 
 
 -- I need to make a 2h modifier
--- Maps easy to use weapon type names (e.g. Axes, Shields) to their inventory slot name and their localized tooltip name
+-- Maps easy-to-use weapon type names (e.g. Axes, Shields) to their inventory
+-- slot plus the locale-independent item class/subclass IDs that identify them
+-- (read via C_Item.GetItemInfoInstant). class 2 = Weapon, 4 = Armor (shields).
+-- subClass is a set because the logical "Axes"/"Swords"/"Maces" types span both
+-- the one-handed and two-handed weapon subclasses.
 CleveRoids.WeaponTypeNames = {
-    Daggers   = { slot = "MainHandSlot", name = CleveRoids.Localized.Dagger },
-    Fists     = { slot = "MainHandSlot", name = CleveRoids.Localized.FistWeapon },
-    Axes      = { slot = "MainHandSlot", name = CleveRoids.Localized.Axe },
-    Swords    = { slot = "MainHandSlot", name = CleveRoids.Localized.Sword },
-    Staves    = { slot = "MainHandSlot", name = CleveRoids.Localized.Staff },
-    Maces     = { slot = "MainHandSlot", name = CleveRoids.Localized.Mace },
-    Polearms  = { slot = "MainHandSlot", name = CleveRoids.Localized.Polearm },
+    Daggers   = { slot = "MainHandSlot",      class = 2, subClass = { [15] = true } },
+    Fists     = { slot = "MainHandSlot",      class = 2, subClass = { [13] = true } },
+    Axes      = { slot = "MainHandSlot",      class = 2, subClass = { [0] = true, [1] = true } },
+    Swords    = { slot = "MainHandSlot",      class = 2, subClass = { [7] = true, [8] = true } },
+    Staves    = { slot = "MainHandSlot",      class = 2, subClass = { [10] = true } },
+    Maces     = { slot = "MainHandSlot",      class = 2, subClass = { [4] = true, [5] = true } },
+    Polearms  = { slot = "MainHandSlot",      class = 2, subClass = { [6] = true } },
     -- OH
-    Daggers2  = { slot = "SecondaryHandSlot", name = CleveRoids.Localized.Dagger },
-    Fists2    = { slot = "SecondaryHandSlot", name = CleveRoids.Localized.FistWeapon },
-    Axes2     = { slot = "SecondaryHandSlot", name = CleveRoids.Localized.Axe },
-    Swords2   = { slot = "SecondaryHandSlot", name = CleveRoids.Localized.Sword },
-    Maces2    = { slot = "SecondaryHandSlot", name = CleveRoids.Localized.Mace },
-    Shields   = { slot = "SecondaryHandSlot", name = CleveRoids.Localized.Shield },
+    Daggers2  = { slot = "SecondaryHandSlot", class = 2, subClass = { [15] = true } },
+    Fists2    = { slot = "SecondaryHandSlot", class = 2, subClass = { [13] = true } },
+    Axes2     = { slot = "SecondaryHandSlot", class = 2, subClass = { [0] = true, [1] = true } },
+    Swords2   = { slot = "SecondaryHandSlot", class = 2, subClass = { [7] = true, [8] = true } },
+    Maces2    = { slot = "SecondaryHandSlot", class = 2, subClass = { [4] = true, [5] = true } },
+    Shields   = { slot = "SecondaryHandSlot", class = 4, subClass = { [6] = true } },
     -- ranged
-    Guns      = { slot = "RangedSlot", name = CleveRoids.Localized.Gun },
-    Crossbows = { slot = "RangedSlot", name = CleveRoids.Localized.Crossbow },
-    Bows      = { slot = "RangedSlot", name = CleveRoids.Localized.Bow },
-    Thrown    = { slot = "RangedSlot", name = CleveRoids.Localized.Thrown },
-    Wands     = { slot = "RangedSlot", name = CleveRoids.Localized.Wand },
+    Guns      = { slot = "RangedSlot",        class = 2, subClass = { [3] = true } },
+    Crossbows = { slot = "RangedSlot",        class = 2, subClass = { [18] = true } },
+    Bows      = { slot = "RangedSlot",        class = 2, subClass = { [2] = true } },
+    Thrown    = { slot = "RangedSlot",        class = 2, subClass = { [16] = true } },
+    Wands     = { slot = "RangedSlot",        class = 2, subClass = { [19] = true } },
 }
 
 -- Detect available features
