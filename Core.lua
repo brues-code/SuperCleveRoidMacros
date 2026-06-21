@@ -2007,15 +2007,9 @@ function CleveRoids.ParseMsg(msg)
         local hasFlag = (noSpam and noSpam ~= "") or (cancelAura and cancelAura ~= "")
         if hasFlag and action ~= "" then
             if noSpam ~= "" then
-                local spamCond = CleveRoids.GetSpammableConditional(action)
-                if spamCond then
-                    conditionals[spamCond] = { action }
-                    -- Also create _groups entry for consistency with Multi()
-                    if not conditionals._groups then
-                        conditionals._groups = {}
-                    end
-                    conditionals._groups[spamCond] = { { values = { action }, operator = "OR" } }
-                end
+                -- ! prefix: handled at execution time via CastSpellNoToggle
+                -- (see DoWithConditionals), no gate conditional needed.
+                conditionals.noSpam = true
             end
             if cancelAura ~= "" then
                 conditionals.cancelaura = action
@@ -2674,43 +2668,25 @@ function CleveRoids.DoWithConditionals(msg, hook, fixEmptyTargetFunc, targetBefo
                 C_Item.UseAtCursor(msg)
             end
         elseif action == CastSpellByName then
-            -- ! prefix anti-toggle: prevent CastSpellByName from toggling off active spells.
-            -- For Attack/AutoShot/Shoot, use the non-toggling AttackTarget() API.
-            -- For self-buffs/shapeshifts, skip if already active on the player.
-            if conditionals.noSpam then
-                local spamType = CleveRoids.spamConditions[msg]
-                if spamType == "checkchanneled" then
-                    -- Attack/AutoShot/Shoot: use non-toggling API
-                    if msg == CleveRoids.Localized.Attack then
-                        AttackTarget()
-                        if needRetarget then TargetLastTarget() end
-                        conditionals.target = origTarget
-                        return true
-                    end
-                    -- AutoShot/Shoot: skip cast if already active to prevent toggle-off
-                    if not CleveRoids.CheckChanneled(msg) then
-                        if needRetarget then TargetLastTarget() end
-                        conditionals.target = origTarget
-                        return false
-                    end
-                else
-                    -- Self-buff/shapeshift: skip if already active on player
-                    if CleveRoids.ValidatePlayerBuff(msg) then
-                        if needRetarget then TargetLastTarget() end
-                        conditionals.target = origTarget
-                        return false
-                    end
-                end
-            end
-            -- Legacy path: !Attack without explicit conditionals (checkchanneled injected)
-            if msg == CleveRoids.Localized.Attack and conditionals.checkchanneled then
+            if msg == CleveRoids.Localized.Attack and (conditionals.noSpam or conditionals.checkchanneled) then
+                -- Melee Attack toggle: use the non-toggling AttackTarget (CastSpellNoToggle
+                -- covers auto-repeat + self-auras, not the melee swing).
                 AttackTarget()
-            else
-                if (CleveRoids.hasSuperwow or CleveRoids.hasCastSpellByNameUnitToken) and conditionals.target and origTarget then
-                    CastSpellByName(castMsg, conditionals.target)
+            elseif conditionals.noSpam then
+                -- ! prefix anti-spam. CastSpellNoToggle handles engine toggles
+                -- (auto-repeat Shoot/Auto Shot/Wand, forms/stances/aspects/seals):
+                -- it no-ops when already active instead of toggling off. It only
+                -- covers true toggle auras, though, so also skip re-applying an
+                -- already-active regular self-buff (e.g. Mark of the Wild, Renew).
+                if CleveRoids.ValidatePlayerBuff(msg) then
+                    result = false
                 else
-                    CastSpellByName(castMsg)
+                    CastSpellNoToggle(castMsg)
                 end
+            elseif (CleveRoids.hasSuperwow or CleveRoids.hasCastSpellByNameUnitToken) and conditionals.target and origTarget then
+                CastSpellByName(castMsg, conditionals.target)
+            else
+                CastSpellByName(castMsg)
             end
         else
             -- For other actions like UseContainerItem etc.

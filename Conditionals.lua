@@ -2140,10 +2140,6 @@ function CleveRoids.IsTargetInGroupType(target, groupType)
     return false
 end
 
-function CleveRoids.GetSpammableConditional(name)
-    return CleveRoids.spamConditions[name] or "nomybuff"
-end
-
 -- PERFORMANCE: Cache for stripped spell names (removes rank suffix)
 local _strippedNameCache = {}
 local _strippedCacheSize = 0

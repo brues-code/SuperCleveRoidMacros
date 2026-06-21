@@ -216,11 +216,6 @@ CleveRoids.reactiveSpells = {
     ["Aquatic Form"]    = true,
 }
 
-CleveRoids.spamConditions = {
-    [CleveRoids.Localized.Attack]   = "checkchanneled",
-    [CleveRoids.Localized.AutoShot] = "checkchanneled",
-    [CleveRoids.Localized.Shoot]    = "checkchanneled",
-}
 
 -- PERFORMANCE: Static lookup for toggled buff abilities (built once, used per-frame)
 CleveRoids._toggledBuffAbilities = {
