@@ -8,8 +8,6 @@ CleveRoids.Locale = GetLocale()
 CleveRoids.Localized = {}
 
 if CleveRoids.Locale == "enUS" or CleveRoids.Locale == "enGB" then
-    -- place item in backpack slot 1 and run:
-    -- /script local l=GetContainerItemLink(0,1);local _,_,id=string.find(l,"item:(%d+)");local n,_,_,_,t,st=GetItemInfo(id);DEFAULT_CHAT_FRAME:AddMessage("\n\nID: ["..id.."]\nName: ["..n.."]\nType: ["..t.."]\nSub Type: ["..st.."]\n\n");
     CleveRoids.Localized.Shield     = "Shields"
     CleveRoids.Localized.Bow        = "Bows"
     CleveRoids.Localized.Crossbow   = "Crossbows"
@@ -27,7 +25,6 @@ if CleveRoids.Locale == "enUS" or CleveRoids.Locale == "enGB" then
     CleveRoids.Localized.Attack    = "Attack"
     CleveRoids.Localized.AutoShot  = "Auto Shot"
     CleveRoids.Localized.Shoot     = "Shoot"
-    CleveRoids.Localized.SpellRank = "%(Rank %d+%)"
 
     -- target creature and run:
     -- /script local ct, uc = UnitCreatureType("target"),UnitClassification("target"); DEFAULT_CHAT_FRAME:AddMessage("\n\nUnitCreatureType: ["..ct.."]\nUnitClassificationType: ["..uc.."]\n\n");
@@ -50,23 +47,6 @@ if CleveRoids.Locale == "enUS" or CleveRoids.Locale == "enGB" then
         ["Stealth"]         = "Stealth",
         ["Prowl"]           = "Prowl",
         ["Shadowmeld"]      = "Shadowmeld",
-        ["Revenge"]         = "Revenge",
-        ["Overpower"]       = "Overpower",
-        ["Riposte"]         = "Riposte",
-        ["Surprise Attack"] = "Surprise Attack",
-        ["Lacerate"]        = "Lacerate",
-        ["Baited Shot"]     = "Baited Shot",
-        ["Counterattack"]   = "Counterattack",
-        ["Arcane Surge"]    = "Arcane Surge",
-    }
-
-    -- place item in backpack slot 1 and run:
-    -- /script local l=GetContainerItemLink(0,1);local _,_,id=string.find(l,"item:(%d+)");local n,_,_,_,t,st=GetItemInfo(id);DEFAULT_CHAT_FRAME:AddMessage("\n\nID: ["..id.."]\nName: ["..n.."]\nType: ["..t.."]\nSub Type: ["..st.."]\n\n");
-    CleveRoids.Localized.ItemTypes = {
-        ["Consumable"]  = "Consumable",
-        ["Reagent"]     = "Reagent",
-        ["Projectile"]  = "Projectile",
-        ["Trade Goods"] = "Trade Goods",
     }
 elseif CleveRoids.Locale == "deDE" then
     CleveRoids.Localized.Shield     = "Schilde"
@@ -86,7 +66,6 @@ elseif CleveRoids.Locale == "deDE" then
     CleveRoids.Localized.Attack    = "Angriff"
     CleveRoids.Localized.AutoShot  = "Automatischer Schuss"
     CleveRoids.Localized.Shoot     = "Schießen"
-    CleveRoids.Localized.SpellRank = "%(Rank %d+%)"
 
     CleveRoids.Localized.CreatureTypes = {
         ["Beast"]         = "Wildtier",
@@ -108,22 +87,6 @@ elseif CleveRoids.Locale == "deDE" then
         ["Stealth"]         = "Verstohlenheit",
         ["Prowl"]           = "Schleichen",
         ["Shadowmeld"]      = "Schattenmimik",
-        ["Revenge"]         = "Rache",
-        ["Overpower"]       = "Überwältigen",
-        ["Riposte"]         = "Riposte",
-        ["Surprise Attack"] = "Überraschungsangriff",
-        ["Lacerate"]        = "Zerfleischen",
-        ["Baited Shot"]     = "Köderschuss",
-        ["Counterattack"]   = "Gegenangriff",
-        ["Arcane Surge"]    = "Arkane Woge",
-    }
-
-
-    CleveRoids.Localized.ItemTypes = {
-        ["Consumable"]  = "Verbrauchsmaterial",
-        ["Reagent"]     = "Reagens",
-        ["Projectile"]  = "Projektil",
-        ["Trade Goods"] = "Handwerkswaren",
     }
 elseif CleveRoids.Locale == "frFR" then
     CleveRoids.Localized.Shield     = "Boucliers"
@@ -143,7 +106,6 @@ elseif CleveRoids.Locale == "frFR" then
     CleveRoids.Localized.Attack    = "Attack"
     CleveRoids.Localized.AutoShot  = "Auto Shot"
     CleveRoids.Localized.Shoot     = "Shoot"
-    CleveRoids.Localized.SpellRank = "%(Rank %d+%)"
 
     CleveRoids.Localized.CreatureTypes = {
         ["Beast"]         = "Bête",
@@ -164,21 +126,6 @@ elseif CleveRoids.Locale == "frFR" then
         ["Stealth"]         = "Camouflage",
         ["Prowl"]           = "Rôder",
         ["Shadowmeld"]      = "Camouflage dans l'ombre",
-        ["Revenge"]         = "Vengeance",
-        ["Overpower"]       = "Fulgurance",
-        ["Riposte"]         = "Riposte",
-        ["Surprise Attack"] = "Attaque surprise",
-        ["Lacerate"]        = "Lacérer",
-        ["Baited Shot"]     = "Tir appâté",
-        ["Counterattack"]   = "Contre-attaque",
-        ["Arcane Surge"]    = "Éruption d’arcanes",
-    }
-
-    CleveRoids.Localized.ItemTypes = {
-        ["Consumable"]  = "Consommable",
-        ["Reagent"]     = "Reagent",
-        ["Projectile"]  = "Projectile",
-        ["Trade Goods"] = "Artisanat",
     }
 elseif CleveRoids.Locale == "koKR" then
     CleveRoids.Localized.Shield     = "Shields"
@@ -198,7 +145,6 @@ elseif CleveRoids.Locale == "koKR" then
     CleveRoids.Localized.Attack    = "Attack"
     CleveRoids.Localized.AutoShot  = "Auto Shot"
     CleveRoids.Localized.Shoot     = "Shoot"
-    CleveRoids.Localized.SpellRank = "%(Rank %d+%)"
 
     CleveRoids.Localized.CreatureTypes = {
         ["Beast"]         = "야수",
@@ -219,21 +165,6 @@ elseif CleveRoids.Locale == "koKR" then
         ["Stealth"]         = "은신",
         ["Prowl"]           = "숨기",
         ["Shadowmeld"]      = "그림자 숨기",
-        ["Revenge"]         = "복수",
-        ["Overpower"]       = "제압",
-        ["Riposte"]         = "반격",
-        ["Surprise Attack"] = "기습",
-        ["Lacerate"]        = "괴롭히다",
-        ["Baited Shot"]     = "베이티드 샷",
-        ["Counterattack"]   = "역습",
-        ["Arcane Surge"]    = "비전 쇄도",
-    }
-
-    CleveRoids.Localized.ItemTypes = {
-        ["Consumable"]  = "소모품",
-        ["Reagent"]     = "재료",
-        ["Projectile"]  = "발사체",
-        ["Trade Goods"] = "거래 용품",
     }
 elseif CleveRoids.Locale == "zhCN" then
     CleveRoids.Localized.Shield     = "盾牌"
@@ -253,7 +184,6 @@ elseif CleveRoids.Locale == "zhCN" then
     CleveRoids.Localized.Attack    = "攻击"
     CleveRoids.Localized.AutoShot  = "自动射击"
     CleveRoids.Localized.Shoot     = "射击"
-    CleveRoids.Localized.SpellRank = "%(等级 %d+%)"
 
     CleveRoids.Localized.CreatureTypes = {
         ["Beast"]         = "野兽",
@@ -274,21 +204,6 @@ elseif CleveRoids.Locale == "zhCN" then
         ["Stealth"]         = "潜行",
         ["Prowl"]           = "潜行",
         ["Shadowmeld"]      = "影遁",
-        ["Revenge"]         = "复仇",
-        ["Overpower"]       = "压制",
-        ["Riposte"]         = "还击",
-        ["Surprise Attack"] = "偷袭",
-        ["Lacerate"]        = "划破",
-        ["Baited Shot"]     = "诱饵射击",
-        ["Counterattack"]   = "反击",
-        ["Arcane Surge"]    = "奥术涌动",
-    }
-
-    CleveRoids.Localized.ItemTypes = {
-        ["Consumable"]  = "消耗品",
-        ["Reagent"]    = "材料",
-        ["Projectile"] = "弹药",
-        ["Trade Goods"] = "商品",
     }
 elseif CleveRoids.Locale == "zhTW" then
     CleveRoids.Localized.Shield     = "盾牌"
@@ -308,7 +223,6 @@ elseif CleveRoids.Locale == "zhTW" then
     CleveRoids.Localized.Attack    = "攻擊"
     CleveRoids.Localized.AutoShot  = "自動射擊"
     CleveRoids.Localized.Shoot     = "射擊"
-    CleveRoids.Localized.SpellRank = "%(等級 %d+%)"
 
     CleveRoids.Localized.CreatureTypes = {
         ["Beast"]         = "野獸",
@@ -329,21 +243,6 @@ elseif CleveRoids.Locale == "zhTW" then
         ["Stealth"]         = "隱形",
         ["Prowl"]           = "徘徊",
         ["Shadowmeld"]      = "影遁",
-        ["Revenge"]         = "復仇",
-        ["Overpower"]       = "壓倒",
-        ["Riposte"]         = "還擊",
-        ["Surprise Attack"] = "偷襲",
-        ["Lacerate"]        = "劃破",
-        ["Baited Shot"]     = "誘餌射擊",
-        ["Counterattack"]   = "反擊",
-        ["Arcane Surge"]    = "奧術湧動",
-    }
-
-    CleveRoids.Localized.ItemTypes = {
-        ["Consumable"]  = "消耗品",
-        ["Reagent"]     = "材料",
-        ["Projectile"]  = "彈藥",
-        ["Trade Goods"] = "貿易貨物",
     }
 elseif CleveRoids.Locale == "ruRU" then
     CleveRoids.Localized.Shield     = "Shields"
@@ -363,7 +262,6 @@ elseif CleveRoids.Locale == "ruRU" then
     CleveRoids.Localized.Attack    = "Attack"
     CleveRoids.Localized.AutoShot  = "Auto Shot"
     CleveRoids.Localized.Shoot     = "Shoot"
-    CleveRoids.Localized.SpellRank = "%(Rank %d+%)"
 
     CleveRoids.Localized.CreatureTypes = {
         ["Beast"]         = "Животное",
@@ -384,21 +282,6 @@ elseif CleveRoids.Locale == "ruRU" then
         ["Stealth"]         = "Незаметность",
         ["Prowl"]           = "Крадущийся зверь",
         ["Shadowmeld"]      = "Слияние с тенью",
-        ["Revenge"]         = "Реванш",
-        ["Overpower"]       = "Превосходство",
-        ["Riposte"]         = "Ответный удар",
-        ["Surprise Attack"] = "Внезапная атака",
-        ["Lacerate"]        = "Разрыв",
-        ["Baited Shot"]     = "Выстрел с наживкой",
-        ["Counterattack"]   = "Контратака",
-        ["Arcane Surge"]    = "Чародейский выброс",
-    }
-
-    CleveRoids.Localized.ItemTypes = {
-        ["Consumable"]  = "Расходный материал",
-        ["Reagent"]     = "Reagent",
-        ["Projectile"]  = "Projectile",
-        ["Trade Goods"] = "Хозяйственные товары",
     }
 elseif CleveRoids.Locale == "esES" then
     CleveRoids.Localized.Shield     = "Shields"
@@ -418,7 +301,6 @@ elseif CleveRoids.Locale == "esES" then
     CleveRoids.Localized.Attack    = "Attack"
     CleveRoids.Localized.AutoShot  = "Auto Shot"
     CleveRoids.Localized.Shoot     = "Shoot"
-    CleveRoids.Localized.SpellRank = "%(Rank %d+%)"
 
     CleveRoids.Localized.CreatureTypes = {
         ["Beast"]         = "Bestia",
@@ -439,21 +321,6 @@ elseif CleveRoids.Locale == "esES" then
         ["Stealth"]         = "Sigilo",
         ["Prowl"]           = "Acechar",
         ["Shadowmeld"]      = "Fusión con las sombras",
-        ["Revenge"]         = "Revancha",
-        ["Overpower"]       = "Abrumar",
-        ["Riposte"]         = "Estocada",
-        ["Surprise Attack"] = "Ataque sorpresa",
-        ["Lacerate"]        = "Lacerar",
-        ["Baited Shot"]     = "Disparo con cebo",
-        ["Counterattack"]   = "Contraataque",
-        ["Arcane Surge"]    = "Oleada Arcana",
-    }
-
-    CleveRoids.Localized.ItemTypes = {
-        ["Consumable"]  = "Consumible",
-        ["Reagent"]     = "Reagent",
-        ["Projectile"]  = "Projectile",
-        ["Trade Goods"] = "Objetos comerciables",
     }
 end
 
