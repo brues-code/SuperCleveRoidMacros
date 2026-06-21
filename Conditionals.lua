@@ -2013,98 +2013,58 @@ function CleveRoids.GetCurrentShapeshiftIndex()
 end
 
 function CleveRoids.CancelAura(auraName)
-	local ix = 0
-    auraName = string.lower(string.gsub(auraName, "_"," "))
+    auraName = string.lower(string.gsub(auraName, "_", " "))
 
-    -- v2.34+ path: cancel by spell ID (works for buff-capped overflow auras too)
-    local API = CleveRoids.NampowerAPI
-    if API and API.features.hasCancelPlayerAuraSpellId then
-        -- First scan visible buffs via GetPlayerBuff
-        if CleveRoids.hasSuperwow then
-            -- SuperWoW path: GetPlayerBuffID provides spell ID directly
-            while true do
-                local aura_ix = GetPlayerBuff(ix, "HELPFUL")
-                ix = ix + 1
-                if aura_ix == -1 then break end
-                local bid = GetPlayerBuffID(aura_ix)
-                bid = (bid < -1) and (bid + 65536) or bid
-                if string.lower(GetSpellRecField(bid, "name")) == auraName then
-                    _G.CancelPlayerAuraSpellId(bid, 1)
-                    return true
-                end
-            end
-        elseif API.features.hasGetPlayerAuraDuration and _G.GetPlayerAuraDuration then
-            -- Nampower path: scan buff aura slots 0-31 for spell IDs
-            for slot = 0, 31 do
-                local spellId = _G.GetPlayerAuraDuration(slot)
-                if spellId and spellId > 0 then
-                    local name = GetSpellRecField(spellId, "name")
-                    if name and string.lower(name) == auraName then
-                        _G.CancelPlayerAuraSpellId(spellId, 1)
-                        return true
-                    end
-                end
+    -- Find the matching player buff's spell ID, then cancel it via ClassicAPI's
+    -- C_Spell.CancelSpellByID. SuperWoW exposes buff spell IDs directly;
+    -- otherwise use Nampower's raw aura-slot read (sees slots the UI filters out).
+    if CleveRoids.hasSuperwow then
+        local ix = 0
+        while true do
+            local aura_ix = GetPlayerBuff(ix, "HELPFUL")
+            ix = ix + 1
+            if aura_ix == -1 then break end
+            local bid = GetPlayerBuffID(aura_ix)
+            bid = (bid < -1) and (bid + 65536) or bid
+            if string.lower(GetSpellRecField(bid, "name") or "") == auraName then
+                C_Spell.CancelSpellByID(bid)
+                return true
             end
         end
-
-        -- Not found in visible buffs - scan all 32 raw aura slots
-        -- GetPlayerAuraDuration reads unit data fields directly (same 32 slots but bypasses UI filtering)
-        if API.features.hasGetPlayerAuraDuration and _G.GetPlayerAuraDuration then
-            for slot = 0, 31 do
-                local spellId = _G.GetPlayerAuraDuration(slot)
-                if spellId and spellId > 0 then
-                    local name = GetSpellRecField(spellId, "name")
-                    if name and string.lower(name) == auraName then
-                        _G.CancelPlayerAuraSpellId(spellId, 1)
-                        return true
-                    end
-                end
-            end
-        end
-
-        -- Final fallback: check overflow buff tracking (buffs applied while buff-capped
-        -- that have NO client aura slot - tracked via AURA_CAST_ON_SELF events)
-        for spellId, entry in pairs(CleveRoids.OverflowBuffs) do
-            -- Skip expired overflow entries
-            local elapsed = GetTime() - (entry.timestamp or 0)
-            if entry.durationSec and entry.durationSec > 0 and elapsed > entry.durationSec then
-                CleveRoids.OverflowBuffs[spellId] = nil
-            else
-                local name = GetSpellRecField(spellId, "name")
-                if name and string.lower(name) == auraName then
-                    _G.CancelPlayerAuraSpellId(spellId, 1)
-                    CleveRoids.OverflowBuffs[spellId] = nil
-                    return true
-                end
-            end
-        end
-        return false
     end
 
-    -- Legacy path for older Nampower versions
-	while true do
-		local aura_ix = GetPlayerBuff(ix,"HELPFUL")
-		ix = ix + 1
-		if aura_ix == -1 then break end
+    -- Nampower raw aura-slot read (sees slots the UI filters out; also the
+    -- non-SuperWoW path). Runs after the SuperWoW visible scan above.
+    if _G.GetPlayerAuraDuration then
+        for slot = 0, 31 do
+            local spellId = _G.GetPlayerAuraDuration(slot)
+            if spellId and spellId > 0 then
+                local name = GetSpellRecField(spellId, "name")
+                if name and string.lower(name) == auraName then
+                    C_Spell.CancelSpellByID(spellId)
+                    return true
+                end
+            end
+        end
+    end
 
-		if CleveRoids.hasSuperwow then
-			local bid = GetPlayerBuffID(aura_ix)
-			bid = (bid < -1) and (bid + 65536) or bid
-			if string.lower(GetSpellRecField(bid, "name")) == auraName then
-				CancelPlayerBuff(aura_ix)
-				return true
-			end
-		else
-			AuraScanTooltip:SetPlayerBuff(aura_ix)
-			local name = string.lower(getglobal("AuraScanTooltipTextLeft1"):GetText())
-			if name == auraName then
-				CancelPlayerBuff(aura_ix)
-				break
-			end
-		end
+    -- Overflow buffs: applied while buff-capped, no client aura slot - tracked
+    -- via AURA_CAST_ON_SELF events. Cancel by spell ID.
+    for spellId, entry in pairs(CleveRoids.OverflowBuffs) do
+        local elapsed = GetTime() - (entry.timestamp or 0)
+        if entry.durationSec and entry.durationSec > 0 and elapsed > entry.durationSec then
+            CleveRoids.OverflowBuffs[spellId] = nil
+        else
+            local name = GetSpellRecField(spellId, "name")
+            if name and string.lower(name) == auraName then
+                C_Spell.CancelSpellByID(spellId)
+                CleveRoids.OverflowBuffs[spellId] = nil
+                return true
+            end
+        end
+    end
 
-	end
-	return false
+    return false
 end
 
 function CleveRoids.HasGearEquipped(gearId)

@@ -1707,9 +1707,9 @@ end
 -- Prefers pfUI's emulated focus (resolves to a real token like "party2"/"raid5")
 -- for pfUI users, then falls back to ClassicAPI's native "focus" token (which
 -- every UnitX function accepts) for everyone else.
--- Returns the resolved token or nil if no focus is set.
--- warn: if true, prints a chat message when no focus is set.
-function CleveRoids.GetFocusUnitId(warn)
+-- Returns the resolved token, or nil when no focus is set so @focus clauses
+-- silently fall through to the next macro alternative (no warning spam).
+function CleveRoids.GetFocusUnitId()
     if pfUI and pfUI.uf and pfUI.uf.focus and pfUI.uf.focus.label and pfUI.uf.focus.id
        and UnitExists(pfUI.uf.focus.label .. pfUI.uf.focus.id) then
         return pfUI.uf.focus.label .. pfUI.uf.focus.id
@@ -1717,9 +1717,6 @@ function CleveRoids.GetFocusUnitId(warn)
     -- ClassicAPI native focus token (set via /focus or the FOCUSTARGET keybind)
     if UnitExists("focus") then
         return "focus"
-    end
-    if warn then
-        DEFAULT_CHAT_FRAME:AddMessage("|cffff6600SuperCleveRoidMacros:|r [focus] used but no focus is set. Use /focus or the FOCUSTARGET keybind.", 1, 0.4, 0)
     end
     return nil
 end
@@ -2518,7 +2515,7 @@ function CleveRoids.DoWithConditionals(msg, hook, fixEmptyTargetFunc, targetBefo
 
     if conditionals.target == "focus" or conditionals.target == "focustarget" then
         local isFocusTarget = conditionals.target == "focustarget"
-        local focusUnitId = CleveRoids.GetFocusUnitId(true)
+        local focusUnitId = CleveRoids.GetFocusUnitId()
 
         if focusUnitId then
             -- Use the resolved pfUI unit token directly (avoids changing the player's target)
@@ -2897,7 +2894,7 @@ function CleveRoids.DoTarget(msg)
 
         if unitTok == "focus" or unitTok == "focustarget" then
             local isFocusTarget = unitTok == "focustarget"
-            local fTok = CleveRoids.GetFocusUnitId(true)
+            local fTok = CleveRoids.GetFocusUnitId()
             if fTok then
                 unitTok = fTok .. (isFocusTarget and "target" or "")
                 if not UnitExists(unitTok) then unitTok = nil end
