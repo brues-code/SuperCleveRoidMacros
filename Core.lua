@@ -4634,6 +4634,18 @@ function IsCurrentAction(slot)
     end
 end
 
+-- Macro icon for an action slot, via ClassicAPI's GetActionInfo (macro slot
+-- directly, no GetActionText -> GetMacroIndexByName name round-trip).
+-- Returns the macro texture, or nil if the slot isn't a macro / has no icon.
+local function GetSlotMacroTexture(slot)
+    local kind, macroId = CleveRoids.ClassicAPI.GetActionInfo(slot)
+    if kind == "macro" and macroId then
+        local _, texture = GetMacroInfo(macroId)
+        return texture
+    end
+    return nil
+end
+
 CleveRoids.Hooks.GetActionTexture = GetActionTexture
 function GetActionTexture(slot)
     if not slot then return nil end
@@ -4646,15 +4658,7 @@ function GetActionTexture(slot)
         -- #showtooltip was set. It defaults to the macro's chosen icon.
         if not actions.active and not actions.explicitTooltip and actions.list and table.getn(actions.list) > 0 then
             -- Get the macro's own icon as fallback
-            local macroTexture = nil
-            local macroName = GetActionText(slot)
-            if macroName then
-                local macroID = GetMacroIndexByName(macroName)
-                if macroID and macroID > 0 then
-                    local _, texture = GetMacroInfo(macroID)
-                    macroTexture = texture
-                end
-            end
+            local macroTexture = GetSlotMacroTexture(slot)
 
             -- When no conditionals pass, use macro icon (not first action's icon)
             -- The actions.tooltip is just the first action which didn't pass conditionals
@@ -4678,15 +4682,9 @@ function GetActionTexture(slot)
             end
 
             -- Slot is empty, fall back to macro icon
-            local macroName = GetActionText(slot)
-            if macroName then
-                local macroID = GetMacroIndexByName(macroName)
-                if macroID and macroID > 0 then
-                    local _, macroTexture = GetMacroInfo(macroID)
-                    if macroTexture then
-                        return macroTexture
-                    end
-                end
+            local macroTexture = GetSlotMacroTexture(slot)
+            if macroTexture then
+                return macroTexture
             end
             return CleveRoids.unknownTexture
         end
@@ -4741,15 +4739,9 @@ function GetActionTexture(slot)
         end
 
         -- Final fallback: get the macro's icon
-        local macroName = GetActionText(slot)
-        if macroName then
-            local macroID = GetMacroIndexByName(macroName)
-            if macroID and macroID > 0 then
-                local _, macroTexture = GetMacroInfo(macroID)
-                if macroTexture then
-                    return macroTexture
-                end
-            end
+        local macroTexture = GetSlotMacroTexture(slot)
+        if macroTexture then
+            return macroTexture
         end
 
         -- Should never reach here
