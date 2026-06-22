@@ -1274,6 +1274,56 @@ end
 -- Hook Installation
 -- ============================================================================
 
+-- ============================================================================
+-- Dynamic macro-list icons
+-- Blizzard shows the default question-mark icon for macros with no chosen icon
+-- (e.g. "#showtooltip Shoot"). Replace it with the icon the action bar would
+-- show -- resolved from the macro's #showtooltip/first action -- but ONLY when
+-- the saved icon is the question mark, so user-chosen icons are never touched.
+-- Purely cosmetic: Blizzard repaints from GetMacroInfo on the next update, so
+-- if resolution fails or the macro changes, the default simply returns.
+-- ============================================================================
+
+local QUESTION_MARK = string.lower(CleveRoids.unknownTexture or "Interface\\Icons\\INV_Misc_QuestionMark")
+
+local function IsQuestionMark(iconTexture)
+    local tex = iconTexture and iconTexture:GetTexture()
+    return type(tex) == "string" and string.lower(tex) == QUESTION_MARK
+end
+
+-- Resolved tooltip texture for a Blizzard macro index, or nil when it resolves
+-- to nothing better than the question mark (no #showtooltip, unresolved spell).
+local function ResolveMacroIcon(macroIndex)
+    if not macroIndex or macroIndex < 1 then return nil end
+    local ok, macro = pcall(CleveRoids.GetMacroByIndex, macroIndex)
+    if not ok or not macro or not macro.actions or not macro.actions.tooltip then return nil end
+    local tex = macro.actions.tooltip.texture
+    if type(tex) == "string" and string.lower(tex) ~= QUESTION_MARK then
+        return tex
+    end
+    return nil
+end
+
+local function FixMacroListIcons()
+    if not MacroFrame or not MacroFrame:IsVisible() then return end
+
+    local base = MacroFrame.macroBase or 0
+    for i = 1, (MAX_MACROS or 18) do
+        local icon = getglobal("MacroButton" .. i .. "Icon")
+        if icon and IsQuestionMark(icon) then
+            local tex = ResolveMacroIcon(base + i)
+            if tex then icon:SetTexture(tex) end
+        end
+    end
+
+    -- Large icon for the currently-selected macro (details pane).
+    if MacroFrame.selectedMacro and MacroFrameSelectedMacroButtonIcon
+        and IsQuestionMark(MacroFrameSelectedMacroButtonIcon) then
+        local tex = ResolveMacroIcon(MacroFrame.selectedMacro)
+        if tex then MacroFrameSelectedMacroButtonIcon:SetTexture(tex) end
+    end
+end
+
 local function InstallHooks()
     if hooked then return end
     if not MacroFrameText or not MacroFrame then return end
@@ -1324,6 +1374,15 @@ local function InstallHooks()
             pendingValidation = false
         end
     end)
+
+    -- After every Blizzard macro-list refresh, swap question-mark icons for the
+    -- dynamically-resolved ones. Post-hook so Blizzard has already set the
+    -- default texture we test against.
+    if hooksecurefunc and type(MacroFrame_Update) == "function" then
+        hooksecurefunc("MacroFrame_Update", function()
+            pcall(FixMacroListIcons)
+        end)
+    end
 
     hooked = true
 end
