@@ -5088,6 +5088,15 @@ CleveRoids.Frame:RegisterEvent("PLAYER_REGEN_DISABLED") -- Entered actual combat
 CleveRoids.Frame:RegisterEvent("PLAYER_REGEN_ENABLED")  -- Left actual combat (no threat)
 CleveRoids.Frame:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
 CleveRoids.Frame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
+-- ClassicAPI fires PLAYER_STARTED_MOVING (edge-detected off the WASD/autorun
+-- key state). We DON'T trust PLAYER_STOPPED_MOVING -- it's key-release based and
+-- misses real stops (geometry, click-to-move, roots, knockback) -- and instead
+-- poll for the actual stop after STARTED (see the handler below). pcall-guarded:
+-- older ClassicAPI builds may not have reserved the event name, and
+-- RegisterEvent errors on an unknown event in 1.12.
+pcall(function()
+    CleveRoids.Frame:RegisterEvent("PLAYER_STARTED_MOVING")
+end)
 -- Use GUID events when available (v2.39+), fall back to standard per-token events
 if CleveRoids.NampowerAPI.features.hasUnitGuidEvents then
     CleveRoids.Frame:RegisterEvent("UNIT_AURA_GUID")
@@ -5802,6 +5811,48 @@ function CleveRoids.Frame:PLAYER_REGEN_ENABLED()
     if CleveRoidMacros.realtime == 0 then
         CleveRoids.QueueActionUpdate()
     end
+end
+
+-- Movement -> [moving]/[nomoving] icon refresh.
+-- PLAYER_STARTED_MOVING is reliable; PLAYER_STOPPED_MOVING is not (key-release
+-- based, misses geometry/click-to-move/root/knockback stops). So STARTED flips
+-- the icon to "moving" and starts a bounded poll; the poll detects the real
+-- stop from IsPlayerMoving() (the signal [moving] uses), refreshes once, and
+-- shuts itself off. Only runs while actually moving, so no idle cost.
+local MOVE_POLL_INTERVAL = 0.1
+local moveTicker = nil
+
+local function StopMovePoll()
+    if moveTicker then
+        moveTicker:Cancel()
+        moveTicker = nil
+    end
+end
+
+local function StartMovePoll()
+    if moveTicker then return end  -- already polling this movement
+    moveTicker = C_Timer.NewTicker(MOVE_POLL_INTERVAL, function()
+        if CleveRoids.isShuttingDown then
+            StopMovePoll()
+            return
+        end
+        if not CleveRoids.IsPlayerMoving() then
+            -- Movement actually ended -- repaint [moving]/[nomoving] icons, stop polling.
+            StopMovePoll()
+            if CleveRoidMacros.realtime == 0 then
+                CleveRoids.QueueActionUpdate()
+            end
+        end
+    end)
+end
+
+function CleveRoids.Frame:PLAYER_STARTED_MOVING()
+    -- Started moving: flip to the [moving] icon now...
+    if CleveRoidMacros.realtime == 0 then
+        CleveRoids.QueueActionUpdate()
+    end
+    -- ...and watch for the (unreliable-event) stop ourselves.
+    StartMovePoll()
 end
 
 function CleveRoids.Frame:PLAYER_TARGET_CHANGED()
