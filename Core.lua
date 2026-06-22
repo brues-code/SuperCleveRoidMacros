@@ -5088,15 +5088,7 @@ CleveRoids.Frame:RegisterEvent("PLAYER_REGEN_DISABLED") -- Entered actual combat
 CleveRoids.Frame:RegisterEvent("PLAYER_REGEN_ENABLED")  -- Left actual combat (no threat)
 CleveRoids.Frame:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
 CleveRoids.Frame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
--- ClassicAPI fires PLAYER_STARTED_MOVING (edge-detected off the WASD/autorun
--- key state). We DON'T trust PLAYER_STOPPED_MOVING -- it's key-release based and
--- misses real stops (geometry, click-to-move, roots, knockback) -- and instead
--- poll for the actual stop after STARTED (see the handler below). pcall-guarded:
--- older ClassicAPI builds may not have reserved the event name, and
--- RegisterEvent errors on an unknown event in 1.12.
-pcall(function()
-    CleveRoids.Frame:RegisterEvent("PLAYER_STARTED_MOVING")
-end)
+CleveRoids.Frame:RegisterEvent("PLAYER_STARTED_MOVING")
 -- Use GUID events when available (v2.39+), fall back to standard per-token events
 if CleveRoids.NampowerAPI.features.hasUnitGuidEvents then
     CleveRoids.Frame:RegisterEvent("UNIT_AURA_GUID")
