@@ -4425,9 +4425,11 @@ function GameTooltip.SetAction(self, slot)
 
         local current_spell_data = CleveRoids.GetSpell(action_name)
         if current_spell_data and current_spell_data.id then
-            -- ClassicAPI: render by spellID (rank included) instead of routing
-            -- through the spellbook slot via SetSpell(spellSlot, bookType).
-            GameTooltip:SetSpellByID(current_spell_data.id)
+            if current_spell_data.spellSlot and current_spell_data.bookType then
+                GameTooltip:SetSpell(current_spell_data.spellSlot, current_spell_data.bookType)
+            else
+                GameTooltip:SetSpellByID(current_spell_data.id)
+            end
             GameTooltip:Show()
             return
         end
@@ -4453,7 +4455,11 @@ function GameTooltip.SetAction(self, slot)
 
             current_spell_data = CleveRoids.GetSpell(nested_action_name)
             if current_spell_data and current_spell_data.id then
-                GameTooltip:SetSpellByID(current_spell_data.id)
+                if current_spell_data.spellSlot and current_spell_data.bookType then
+                    GameTooltip:SetSpell(current_spell_data.spellSlot, current_spell_data.bookType)
+                else
+                    GameTooltip:SetSpellByID(current_spell_data.id)
+                end
                 GameTooltip:Show()
                 return
             end
