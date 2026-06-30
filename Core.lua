@@ -4656,6 +4656,10 @@ function IsCurrentAction(slot)
     else
         local name
         if actionToCheck.spell then
+            if CleveRoids.IsAutoAttackSpell(actionToCheck.spell) then
+                return CleveRoids.CurrentSpell.autoAttack and 1 or nil
+            end
+
             local rank = actionToCheck.spell.rank or actionToCheck.spell.highest.rank
             name = actionToCheck.spell.name..(rank and ("("..rank..")"))
 
@@ -4698,9 +4702,6 @@ function IsCurrentAction(slot)
     end
 end
 
--- Macro icon for an action slot, via ClassicAPI's GetActionInfo (macro slot
--- directly, no GetActionText -> GetMacroIndexByName name round-trip).
--- Returns the macro texture, or nil if the slot isn't a macro / has no icon.
 local function GetSlotMacroTexture(slot)
     local kind, macroId = CleveRoids.ClassicAPI.GetActionInfo(slot)
     if kind == "macro" and macroId then
@@ -4709,6 +4710,18 @@ local function GetSlotMacroTexture(slot)
     end
     return nil
 end
+
+local function IsAutoAttackSpell(spell)
+    if not spell then return false end
+    if C_Spell and C_Spell.IsAutoAttackSpell and spell.id then
+        return C_Spell.IsAutoAttackSpell(spell.id)
+    end
+    if C_SpellBook and C_SpellBook.IsAutoAttackSpellBookItem and spell.spellSlot then
+        return C_SpellBook.IsAutoAttackSpellBookItem(spell.spellSlot, spell.bookType)
+    end
+    return false
+end
+CleveRoids.IsAutoAttackSpell = IsAutoAttackSpell
 
 CleveRoids.Hooks.GetActionTexture = GetActionTexture
 function GetActionTexture(slot)
@@ -4795,6 +4808,13 @@ function GetActionTexture(slot)
                         texture = activeTexture
                     end
                 end
+            end
+        end
+
+        if a and a.spell and CleveRoids.IsAutoAttackSpell(a.spell) then
+            local mainHandTexture = GetInventoryItemTexture("player", 16)
+            if mainHandTexture then
+                texture = mainHandTexture
             end
         end
 
