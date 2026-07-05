@@ -3100,15 +3100,17 @@ end
 -- PERFORMANCE: Module-level action to avoid closure allocation per call
 local function _startAttackAction()
     if not UnitExists("target") or CleveRoids.IsUnitDead("target") then TargetNearestEnemy() end
-    -- Check both event-based flag AND action bar state for reliable detection
+    -- Ground truth is the real action-bar state, NOT the cached autoAttack flag.
+    -- The flag can drift stale-true (e.g. set optimistically after AttackTarget below,
+    -- or a target dying without PLAYER_LEAVE_COMBAT firing), which would make us wrongly
+    -- believe we're already swinging and skip the attack. Use the ORIGINAL API here:
+    -- the overridden global IsCurrentAction just echoes the cached flag for the attack
+    -- slot, so it can't detect drift. Fall back to the flag only if the slot is unknown.
     local isAttacking = CleveRoids.CurrentSpell.autoAttack
-    if not isAttacking then
-        -- Fallback: check action bar state via IsCurrentAction
-        local slot = CleveRoids.GetProxyActionSlot(CleveRoids.Localized.Attack)
-        if slot and IsCurrentAction(slot) then
-            CleveRoids.CurrentSpell.autoAttack = true
-            isAttacking = true
-        end
+    local slot = CleveRoids.GetProxyActionSlot(CleveRoids.Localized.Attack)
+    if slot then
+        isAttacking = CleveRoids.Hooks.IsCurrentAction(slot) and true or false
+        CleveRoids.CurrentSpell.autoAttack = isAttacking
     end
     if not isAttacking and not CleveRoids.CurrentSpell.autoAttackLock and UnitExists("target") and UnitCanAttack("player", "target") then
         CleveRoids.CurrentSpell.autoAttackLock = true
