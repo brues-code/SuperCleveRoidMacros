@@ -156,10 +156,9 @@ end
 function CleveRoids.IndexEquippedItems()
     local items = CleveRoids.Items or {}
 
-    for inventoryID = 0, 19 do
-        local link = GetInventoryItemLink("player", inventoryID)
-        if link then
-            local _, _, itemID = string.find(link, "item:(%d+)")
+    for inventoryID = 1, 19 do
+        local itemID = GetInventoryItemID("player", inventoryID)
+        if itemID then
             local name, link, _, _, itemType, itemSubType, _, _, texture = GetItemInfo(itemID)
             if name then
                 local count = GetInventoryItemCount("player", inventoryID)
@@ -199,10 +198,9 @@ function CleveRoids.IndexEquipSlot(inventoryID)
     if not inventoryID then return end
 
     local items = CleveRoids.Items or {}
-    local link = GetInventoryItemLink("player", inventoryID)
+    local itemID = GetInventoryItemID("player", inventoryID)
 
-    if link then
-        local _, _, itemID = string.find(link, "item:(%d+)")
+    if itemID then
         local name, itemLink, _, _, itemType, itemSubType, _, _, texture = GetItemInfo(itemID)
         if name then
             local count = GetInventoryItemCount("player", inventoryID)
@@ -265,21 +263,17 @@ function CleveRoids.IndexItems()
 
     -- PERFORMANCE: Local function references
     local GetContainerNumSlots = GetContainerNumSlots
-    local GetContainerItemLink = GetContainerItemLink
     local GetContainerItemInfo = GetContainerItemInfo
-    local GetInventoryItemLink = GetInventoryItemLink
     local GetInventoryItemCount = GetInventoryItemCount
 
     -- Scan bags (reverse order to prefer first stack)
     for bagID = 0, NUM_BAG_SLOTS do
         local numSlots = GetContainerNumSlots(bagID)
         for slot = numSlots, 1, -1 do
-            local link = GetContainerItemLink(bagID, slot)
-            if link then
-                local _, _, itemID = string_find(link, "item:(%d+)")
-
-                -- PERFORMANCE: Try to extract name from link first to check for duplicates
-                local _, _, linkName = string_find(link, "%[(.+)%]")
+            local itemID = C_Container.GetContainerItemID(bagID, slot)
+            if itemID then
+                -- Decorated name for the duplicate fast-path (no link string built)
+                local linkName = C_Item.GetItemName({ bagID = bagID, slotIndex = slot })
                 local existing = linkName and items[linkName]
 
                 if existing then
@@ -317,13 +311,11 @@ function CleveRoids.IndexItems()
     end
 
     -- Scan equipped items
-    for inventoryID = 0, 19 do
-        local link = GetInventoryItemLink("player", inventoryID)
-        if link then
-            local _, _, itemID = string_find(link, "item:(%d+)")
-
-            -- PERFORMANCE: Try to extract name from link first
-            local _, _, linkName = string_find(link, "%[(.+)%]")
+    for inventoryID = 1, 19 do
+        local itemID = GetInventoryItemID("player", inventoryID)
+        if itemID then
+            -- Decorated name for the duplicate fast-path (no link string built)
+            local linkName = C_Item.GetItemName({ equipmentSlotIndex = inventoryID })
             local existing = linkName and items[linkName]
 
             if existing then
@@ -720,18 +712,16 @@ function CleveRoids.FindItemQuick(text)
     if cached then
         -- Validate: check if item is actually at the cached location
         if cached.inventoryID then
-            local link = GetInventoryItemLink("player", cached.inventoryID)
-            if link then
-                local nm = GetNameFromLink(link)
+            if qid then
+                if GetInventoryItemID("player", cached.inventoryID) == qid then
+                    cached._validated = true
+                    return cached  -- Cache is valid
+                end
+            else
+                local nm = C_Item.GetItemName({ equipmentSlotIndex = cached.inventoryID })
                 if nm and qname and string_lower(nm) == qname then
                     cached._validated = true
                     return cached  -- Cache is valid
-                elseif qid then
-                    local _, _, itemID = string_find(link, "item:(%d+)")
-                    if itemID and tonumber(itemID) == qid then
-                        cached._validated = true
-                        return cached  -- Cache is valid
-                    end
                 end
             end
             -- Cache is stale - item not at cached equipped slot, invalidate
@@ -740,18 +730,16 @@ function CleveRoids.FindItemQuick(text)
                 Items[string_lower(cached.name)] = nil
             end
         elseif cached.bagID and cached.slot then
-            local link = GetContainerItemLink(cached.bagID, cached.slot)
-            if link then
-                local nm = GetNameFromLink(link)
+            if qid then
+                if C_Container.GetContainerItemID(cached.bagID, cached.slot) == qid then
+                    cached._validated = true
+                    return cached  -- Cache is valid
+                end
+            else
+                local nm = C_Item.GetItemName({ bagID = cached.bagID, slotIndex = cached.slot })
                 if nm and qname and string_lower(nm) == qname then
                     cached._validated = true
                     return cached  -- Cache is valid
-                elseif qid then
-                    local _, _, itemID = string_find(link, "item:(%d+)")
-                    if itemID and tonumber(itemID) == qid then
-                        cached._validated = true
-                        return cached  -- Cache is valid
-                    end
                 end
             end
             -- Cache is stale - item not at cached bag slot, invalidate
@@ -818,25 +806,19 @@ end
 function CleveRoids.IsItemEquipped(text, inventoryId)
     if not text or not inventoryId then return false end
 
-    local link = GetInventoryItemLink("player", inventoryId)
-    if not link then return false end
-
-    local _, _, currentID = string_find(link, "item:(%d+)")
+    local currentID = GetInventoryItemID("player", inventoryId)
     if not currentID then return false end
 
     -- Check by ID (fast path)
     local textId = tonumber(text)
-    if textId and textId == tonumber(currentID) then
+    if textId and textId == currentID then
         return true
     end
 
-    -- Check by name - extract from link instead of GetItemInfo for performance
-    local currentName = GetNameFromLink(link)
-    if currentName then
-        local textLower = string_lower(text)
-        if string_lower(currentName) == textLower then
-            return true
-        end
+    -- Check by name (decorated, so suffixed gear still matches)
+    local currentName = C_Item.GetItemName({ equipmentSlotIndex = inventoryId })
+    if currentName and string_lower(currentName) == string_lower(text) then
+        return true
     end
 
     return false
