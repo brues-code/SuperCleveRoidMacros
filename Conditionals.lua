@@ -273,24 +273,17 @@ local function BuildEquipmentCache()
         end
     end
 
-    -- Fallback: manual slot enumeration
+    -- Fallback: manual slot enumeration via ClassicAPI (id + decorated name),
+    -- no link string built. C_Item.GetItemName carries random-suffix decoration
+    -- and falls back to the base name internally, so it replaces the old
+    -- bracket-name / GetItemInfo two-step in a single call.
     for slot = 1, 19 do
-        local link = GetInventoryItemLink("player", slot)
-        if link then
-            local _, _, id = string_find(link, "item:(%d+)")
-            local _, _, nameInBrackets = string_find(link, "%[(.+)%]")
-
-            if id then
-                _equippedItemIDs[slot] = tonumber(id)
-            end
-            if nameInBrackets then
-                _equippedItemNames[slot] = string_lower(nameInBrackets)
-            elseif id then
-                -- Fallback: resolve via GetItemInfo
-                local itemName = GetItemInfo(tonumber(id))
-                if itemName then
-                    _equippedItemNames[slot] = string_lower(itemName)
-                end
+        local id = GetInventoryItemID("player", slot)
+        if id then
+            _equippedItemIDs[slot] = id
+            local name = C_Item.GetItemName({ equipmentSlotIndex = slot })
+            if name then
+                _equippedItemNames[slot] = string_lower(name)
             end
         end
     end
@@ -350,8 +343,7 @@ function CleveRoids.FindItemLocation(item)
     if numericItem then
         -- Check if it's an equipment slot (1-19)
         if numericItem >= 1 and numericItem <= 19 then
-            local link = GetInventoryItemLink("player", numericItem)
-            if link then
+            if GetInventoryItemID("player", numericItem) then
                 return { type = "inventory", inventoryID = numericItem }
             end
             return nil
@@ -3466,11 +3458,8 @@ function CleveRoids.ValidateCooldown(args, ignoreGCD)
         -- If this is a numeric slot (1-19), resolve to the equipped item's name
         local slotNum = tonumber(name)
         if slotNum and slotNum >= 1 and slotNum <= 19 then
-            local link = GetInventoryItemLink("player", slotNum)
-            if link then
-                local _, _, itemName = string.find(link, "%[(.+)%]")
-                if itemName then name = itemName end
-            end
+            local itemName = C_Item.GetItemName({ equipmentSlotIndex = slotNum })
+            if itemName then name = itemName end
         end
         args = {name = name}
     else
@@ -3481,11 +3470,8 @@ function CleveRoids.ValidateCooldown(args, ignoreGCD)
             -- If this is a numeric slot (1-19), resolve to the equipped item's name
             local slotNum = tonumber(name)
             if slotNum and slotNum >= 1 and slotNum <= 19 then
-                local link = GetInventoryItemLink("player", slotNum)
-                if link then
-                    local _, _, itemName = string.find(link, "%[(.+)%]")
-                    if itemName then name = itemName end
-                end
+                local itemName = C_Item.GetItemName({ equipmentSlotIndex = slotNum })
+                if itemName then name = itemName end
             end
             args.name = name
         else
@@ -4869,13 +4855,11 @@ function CleveRoids.HasItem(item)
   if type(item) == "string" and item ~= "" then
     local itemLower = string.lower(item)
 
-    -- Check equipped slots for substring match
-    for slot = 0, 19 do
-      local link = GetInventoryItemLink("player", slot)
-      if link then
-        if string.find(string.lower(link), itemLower, 1, true) then
-          return true
-        end
+    -- Check equipped slots for substring match (decorated name, no link build)
+    for slot = 1, 19 do
+      local name = C_Item.GetItemName({ equipmentSlotIndex = slot })
+      if name and string.find(string.lower(name), itemLower, 1, true) then
+        return true
       end
     end
 
@@ -4884,11 +4868,9 @@ function CleveRoids.HasItem(item)
       local size = GetContainerNumSlots(bag)
       if size and size > 0 then
         for slotIndex = 1, size do
-          local link = GetContainerItemLink(bag, slotIndex)
-          if link then
-            if string.find(string.lower(link), itemLower, 1, true) then
-              return true
-            end
+          local name = C_Item.GetItemName({ bagID = bag, slotIndex = slotIndex })
+          if name and string.find(string.lower(name), itemLower, 1, true) then
+            return true
           end
         end
       end
@@ -4933,14 +4915,12 @@ function CleveRoids.GetItemCooldown(item)
     local itemLower = string.lower(item)
     local start, dur, en
 
-    -- Check equipped slots for substring match
-    for slot = 0, 19 do
-      local link = GetInventoryItemLink("player", slot)
-      if link then
-        if string.find(string.lower(link), itemLower, 1, true) then
-          start, dur, en = GetInventoryItemCooldown("player", slot)
-          return _norm(start, dur, en)
-        end
+    -- Check equipped slots for substring match (decorated name, no link build)
+    for slot = 1, 19 do
+      local name = C_Item.GetItemName({ equipmentSlotIndex = slot })
+      if name and string.find(string.lower(name), itemLower, 1, true) then
+        start, dur, en = GetInventoryItemCooldown("player", slot)
+        return _norm(start, dur, en)
       end
     end
 
@@ -4949,12 +4929,10 @@ function CleveRoids.GetItemCooldown(item)
       local size = GetContainerNumSlots(bag)
       if size and size > 0 then
         for slotIndex = 1, size do
-          local link = GetContainerItemLink(bag, slotIndex)
-          if link then
-            if string.find(string.lower(link), itemLower, 1, true) then
-              start, dur, en = GetContainerItemCooldown(bag, slotIndex)
-              return _norm(start, dur, en)
-            end
+          local name = C_Item.GetItemName({ bagID = bag, slotIndex = slotIndex })
+          if name and string.find(string.lower(name), itemLower, 1, true) then
+            start, dur, en = GetContainerItemCooldown(bag, slotIndex)
+            return _norm(start, dur, en)
           end
         end
       end
@@ -5887,13 +5865,10 @@ CleveRoids.Keywords = {
             local itemName = name
             local slotNum = tonumber(name)
             if slotNum and slotNum >= 1 and slotNum <= 19 then
-                -- Resolve slot number to item name
-                local link = GetInventoryItemLink("player", slotNum)
-                if link then
-                    local _, _, extractedName = string.find(link, "%[(.+)%]")
-                    if extractedName then
-                        itemName = extractedName
-                    end
+                -- Resolve slot number to item name (decorated, no link build)
+                local extractedName = C_Item.GetItemName({ equipmentSlotIndex = slotNum })
+                if extractedName then
+                    itemName = extractedName
                 end
             end
 
@@ -5925,13 +5900,10 @@ CleveRoids.Keywords = {
             local itemName = name
             local slotNum = tonumber(name)
             if slotNum and slotNum >= 1 and slotNum <= 19 then
-                -- Resolve slot number to item name
-                local link = GetInventoryItemLink("player", slotNum)
-                if link then
-                    local _, _, extractedName = string.find(link, "%[(.+)%]")
-                    if extractedName then
-                        itemName = extractedName
-                    end
+                -- Resolve slot number to item name (decorated, no link build)
+                local extractedName = C_Item.GetItemName({ equipmentSlotIndex = slotNum })
+                if extractedName then
+                    itemName = extractedName
                 end
             end
 
