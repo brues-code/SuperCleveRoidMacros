@@ -469,10 +469,8 @@ local function makeInventoryItem(inventoryID, link, Items)
     if not link then link = GetInventoryItemLink("player", inventoryID) end
     if not link then return end
 
-    local _, _, itemID = string_find(link, "item:(%d+)")
-    itemID = itemID and tonumber(itemID) or nil
-
-    local name = itemID and GetItemInfo(itemID) or nil
+    local itemID = GetInventoryItemID("player", inventoryID)
+    local name = C_Item.GetItemName({ equipmentSlotIndex = inventoryID })
     local texture = GetInventoryItemTexture("player", inventoryID)
     local count = GetInventoryItemCount("player", inventoryID)
 
@@ -501,14 +499,12 @@ local function makeBagItem(bagID, slot, link, Items)
     end
     if not link then return end
 
-    local _, _, itemID = string_find(link, "item:(%d+)")
-    itemID = itemID and tonumber(itemID) or nil
+    local itemID = C_Container.GetContainerItemID(bagID, slot)
 
-    local name, _, _, _, _, _, _, _, texture = GetItemInfo(itemID)
+    local name = C_Item.GetItemName(ItemLocation:CreateFromBagAndSlot(bagID, slot))
     local count = 0
-    local tex, itemCount = GetContainerItemInfo(bagID, slot)
+    local texture, itemCount = GetContainerItemInfo(bagID, slot)
     if itemCount then count = itemCount end
-    if not texture then texture = tex end
 
     local it = {
         bagID = bagID,
@@ -566,9 +562,7 @@ function CleveRoids.GetItem(text)
     for inv = 1, 19 do
         local link = GetInventoryItemLink("player", inv)
         if link then
-            local _, _, itemID = string_find(link, "item:(%d+)")
-            itemID = itemID and tonumber(itemID) or nil
-
+            local itemID = GetInventoryItemID("player", inv)
             if qid and itemID and qid == itemID then
                 return makeInventoryItem(inv, link, Items)
             elseif qname then
@@ -587,9 +581,7 @@ function CleveRoids.GetItem(text)
         for slot = 1, slots do
             local link = GetContainerItemLink(bag, slot)
             if link then
-                local _, _, itemID = string_find(link, "item:(%d+)")
-                itemID = itemID and tonumber(itemID) or nil
-
+                local itemID =  C_Container.GetContainerItemID(bag, slot)
                 if qid and itemID and qid == itemID then
                     return makeBagItem(bag, slot, link, Items)
                 elseif qname then
@@ -779,19 +771,16 @@ function CleveRoids.FindItemQuick(text)
         for slot = 1, slots do
             local link = GetContainerItemLink(bag, slot)
             if link then
-                local _, _, itemID = string_find(link, "item:(%d+)")
-                if itemID then
-                    itemID = tonumber(itemID)
-                    -- ID match: fast path
-                    if qid and qid == itemID then
+                local itemID = C_Container.GetContainerItemID(bag, slot)
+                -- ID match: fast path
+                if qid and qid == itemID then
+                    return makeBagItem(bag, slot, link, Items)
+                end
+                -- Name match: extract name from link (faster than GetItemInfo)
+                if qname then
+                    local nm = GetNameFromLink(link)
+                    if nm and string_lower(nm) == qname then
                         return makeBagItem(bag, slot, link, Items)
-                    end
-                    -- Name match: extract name from link (faster than GetItemInfo)
-                    if qname then
-                        local nm = GetNameFromLink(link)
-                        if nm and string_lower(nm) == qname then
-                            return makeBagItem(bag, slot, link, Items)
-                        end
                     end
                 end
             end
