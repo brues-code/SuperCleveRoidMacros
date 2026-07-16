@@ -6918,12 +6918,7 @@ function CleveRoids.ApplyEquipmentModifier(spellID, baseDuration)
     local modifiedDuration = modifier.modifier(baseDuration, itemID)
 
     if modifiedDuration ~= baseDuration and CleveRoids.debug then
-        local itemName = "Unknown"
-        local itemLink = GetInventoryItemLink("player", modifier.slot)
-        if itemLink then
-            local _, _, _n = string.find(itemLink, "%[(.-)%]")
-            itemName = _n or "Unknown"
-        end
+        local itemName = C_Item.GetItemName({ equipmentSlotIndex = modifier.slot }) or "Unknown"
 
         DEFAULT_CHAT_FRAME:AddMessage(
             string.format("|cffff00ff[Equipment Modifier]|r %s (ID:%d): %ds -> %ds (item: %s [%d])",
