@@ -46,10 +46,8 @@ CleveRoids.spellNameCache = {}
 local GetTime = GetTime
 local UnitExists = UnitExists
 local UnitAffectingCombat = UnitAffectingCombat
-local GetContainerItemLink = GetContainerItemLink
 local GetContainerItemInfo = GetContainerItemInfo
 local GetContainerNumSlots = GetContainerNumSlots
-local GetInventoryItemLink = GetInventoryItemLink
 local GetItemInfo = GetItemInfo
 local PickupContainerItem = PickupContainerItem
 local PickupInventoryItem = PickupInventoryItem
@@ -63,7 +61,6 @@ local ipairs = ipairs
 local type = type
 local tonumber = tonumber
 local tostring = tostring
-local string_find = string.find
 local string_lower = string.lower
 local string_gsub = string.gsub
 local table_insert = table.insert
@@ -672,21 +669,27 @@ function CleveRoids.GetReagentCount(reagentName)
     for slot = 1, slots do
       local _, count = GetContainerItemInfo(bag, slot)
       count = count or 0
-      local link = GetContainerItemLink and GetContainerItemLink(bag, slot)
-      if link then
-        local _, _, idstr = string.find(link, "item:(%d+)")
-        local id = idstr and tonumber(idstr) or nil
-        if (wantId and id == wantId) or (not wantId and string.find(link, "%["..reagentName.."%]")) then
-          total = total + count
+      -- Base itemID straight off the slot (no link string, no regex).
+      local id = C_Container.GetContainerItemID(bag, slot)
+      if id then
+        local match
+        if wantId then
+          match = (id == wantId)
+        else
+          local name = C_Item.GetItemNameByID(id)
+          if name then
+            match = (name == reagentName)
+          else
+            -- Name not cached yet: fall back to a tooltip scan (expensive, rare)
+            local tip = CRM_GetBagScanTip()
+            tip:ClearLines()
+            tip:SetBagItem(bag, slot)
+            local left1 = _G[tip:GetName().."TextLeft1"]
+            local tname = left1 and left1:GetText()
+            match = (tname == reagentName)
+          end
         end
-      else
-        -- Fallback: scan bag slot tooltip for the name (expensive, only when no link)
-        local tip = CRM_GetBagScanTip()
-        tip:ClearLines()
-        tip:SetBagItem(bag, slot)
-        local left1 = _G[tip:GetName().."TextLeft1"]
-        local name = left1 and left1:GetText()
-        if name and name == reagentName then
+        if match then
           total = total + count
         end
       end
@@ -701,17 +704,18 @@ end
 function CleveRoids.GetLiveItemCount(itemName)
   if not itemName or itemName == "" then return 0 end
   -- Escape Lua pattern special chars in item name to avoid crashes
-  local escaped = string.gsub(itemName, "([%(%)%.%%%+%-%*%?%[%]%^%$])", "%%%1")
-  local pattern = "%[" .. escaped .. "%]"
-  local lowerPattern = string.lower(pattern)
+  local wantLower = string.lower(itemName)
   local total = 0
   for bag = 0, 4 do
     local slots = GetContainerNumSlots(bag) or 0
     for slot = 1, slots do
-      local link = GetContainerItemLink and GetContainerItemLink(bag, slot)
-      if link and string.find(string.lower(link), lowerPattern) then
-        local _, count = GetContainerItemInfo(bag, slot)
-        total = total + (count or 0)
+      local id = C_Container.GetContainerItemID(bag, slot)
+      if id then
+        local name = C_Item.GetItemNameByID(id)
+        if name and string.lower(name) == wantLower then
+          local _, count = GetContainerItemInfo(bag, slot)
+          total = total + (count or 0)
+        end
       end
     end
   end
@@ -2689,11 +2693,13 @@ function CleveRoids.DoWithConditionals(msg, hook, fixEmptyTargetFunc, targetBefo
                 CastSpellByName(castMsg)
             end
         else
-            -- For other actions like UseContainerItem etc.
+            -- For other actions like item use etc. Pass the resolved unit token so
+            -- item-use can target it directly (DoUse -> C_Item.UseItemByName); action
+            -- closures that only take (msg) simply ignore the extra arg.
             if CleveRoids.equipDebugLog then
                 CleveRoids.Print("|cff00ff00[EquipLog] Calling action('" .. tostring(msg) .. "')|r")
             end
-            action(msg)
+            action(msg, conditionals.target)
         end
     end
 
@@ -3196,6 +3202,36 @@ function CleveRoids.DoConditionalClearTarget(msg)
     return false
 end
 
+-- Resolve an EQUIPPED inventory slot (1-19) holding the item, or nil.
+-- C_Item.UseItemByName only searches bags, so equipped-only items (trinkets,
+-- weapons) must be fired via their slot. Prefer nampower's fast lookup; fall
+-- back to a manual scan for clients without FindPlayerItemSlot (< v2.18).
+local function FindEquippedItemSlot(msg, itemId)
+    local API = CleveRoids.NampowerAPI
+    if type(API) == "table" and API.FindItemFast then
+        local info = API.FindItemFast(itemId or msg)
+        if info and info.inventoryID then return info.inventoryID end
+        -- Found only in bags (or not at all) -> not an equipped-only item.
+        if info then return nil end
+    end
+    -- Fallback scan of equipped slots by ID or name, read straight from each
+    -- slot via ClassicAPI (GetInventoryItemID / C_Item.GetItemNameByID) -- no
+    -- link string built, no "item:"/"|h[..]|h" parse. Slots are 1-19.
+    local wantLower = (not itemId) and string_lower(msg) or nil
+    for slot = 1, 19 do
+        local id = GetInventoryItemID("player", slot)
+        if id then
+            if itemId then
+                if id == itemId then return slot end
+            else
+                local nm = C_Item.GetItemNameByID(id)
+                if nm and string_lower(nm) == wantLower then return slot end
+            end
+        end
+    end
+    return nil
+end
+
 -- Attempts to use or equip an item by a set of conditionals
 -- Also checks if a condition is a spell so that you can mix item and spell use
 -- msg: The raw message intercepted from a /use or /equip command
@@ -3207,184 +3243,42 @@ function CleveRoids.DoUse(msg)
 
     local handled = false
 
-    local action = function(msg)
+    local action = function(msg, unit)
         -- Defensive: make sure we are not in "split stack" mode and nothing is on the cursor
         if type(CloseStackSplitFrame) == "function" then CloseStackSplitFrame() end
         if CursorHasItem and CursorHasItem() then ClearCursor() end
 
-        -- Try to interpret the message as a direct inventory slot ID first.
+        -- Only pass a cast target when it actually exists, so a stale @unit doesn't
+        -- waste a consumable. Self-use items (potions/food/hearth) ignore it anyway.
+        local useUnit = (unit and UnitExists(unit)) and unit or nil
+
+        -- Direct equipped inventory slot ID (1-19): use it in place.
         local slotId = tonumber(msg)
-        if slotId and slotId >= 1 and slotId <= 19 then -- Character slots are 1-19
+        if slotId and slotId >= 1 and slotId <= 19 then
             ClearCursor() -- extra safety before using equipped items
             UseInventoryItem(slotId)
             return
         end
 
-        -- Try to interpret as item ID (numbers > 19)
-        -- v2.18+: Use FindPlayerItemSlot directly for item IDs (no name resolution needed)
-        if slotId and slotId > 19 then
-            local API = CleveRoids.NampowerAPI
-            -- v2.18+: Native lookup can find item directly by ID
-            if API and API.features and API.features.hasFindPlayerItemSlot then
-                local itemInfo = API.FindItemFast(slotId)
-                if itemInfo then
-                    ClearCursor()
-                    if itemInfo.inventoryID then
-                        if CleveRoids.equipDebugLog then
-                            CleveRoids.Print("|cff888888[UseLog] /use " .. slotId .. " via UseInventoryItem(" .. itemInfo.inventoryID .. ") [v2.18 ID lookup]|r")
-                        end
-                        UseInventoryItem(itemInfo.inventoryID)
-                        return
-                    elseif itemInfo.bagID and itemInfo.slot then
-                        if CleveRoids.equipDebugLog then
-                            CleveRoids.Print("|cff888888[UseLog] /use " .. slotId .. " via UseContainerItem(" .. itemInfo.bagID .. "," .. itemInfo.slot .. ") [v2.18 ID lookup]|r")
-                        end
-                        UseContainerItem(itemInfo.bagID, itemInfo.slot)
-                        return
-                    end
-                end
-                -- Item not found by ID - fail
-                if CleveRoids.equipDebugLog then
-                    CleveRoids.Print("|cffff8800[UseLog] Item ID " .. slotId .. " not found in inventory [v2.18]|r")
-                end
-                return
+        -- Equipped items (trinkets, weapons) live outside bags, so C_Item.UseItemByName
+        -- can't reach them. Fire an equipped match through its slot first.
+        local invSlot = FindEquippedItemSlot(msg, slotId)
+        if invSlot then
+            ClearCursor()
+            if CleveRoids.equipDebugLog then
+                CleveRoids.Print("|cff888888[UseLog] /use " .. msg .. " via UseInventoryItem(" .. invSlot .. ")|r")
             end
-
-            -- Fallback: Resolve item ID to name for legacy lookup
-            local itemName = nil
-            if API and API.GetItemName then
-                itemName = API.GetItemName(slotId)
-            end
-            -- Fall back to GetItemInfo
-            if not itemName and GetItemInfo then
-                itemName = GetItemInfo(slotId)
-            end
-            if itemName then
-                if CleveRoids.equipDebugLog then
-                    CleveRoids.Print("|cff888888[UseLog] Resolved item ID " .. slotId .. " to '" .. itemName .. "'|r")
-                end
-                msg = itemName  -- Replace ID with name for subsequent lookups
-            else
-                if CleveRoids.equipDebugLog then
-                    CleveRoids.Print("|cffff8800[UseLog] Could not resolve item ID " .. slotId .. " - item not in cache|r")
-                end
-                -- Item not in client cache - can't resolve without seeing it first
-                return
-            end
+            UseInventoryItem(invSlot)
+            return
         end
 
-        -- v2.18+: Use native fast lookup (much faster than Lua cache + scan)
-        local API = CleveRoids.NampowerAPI
-        if API and API.features and API.features.hasFindPlayerItemSlot then
-            local itemInfo = API.FindItemFast(msg)
-            if itemInfo then
-                ClearCursor()
-                if itemInfo.inventoryID then
-                    if CleveRoids.equipDebugLog then
-                        CleveRoids.Print("|cff888888[UseLog] /use " .. msg .. " via UseInventoryItem(" .. itemInfo.inventoryID .. ") [v2.18 native]|r")
-                    end
-                    UseInventoryItem(itemInfo.inventoryID)
-                    return
-                elseif itemInfo.bagID and itemInfo.slot then
-                    if CleveRoids.equipDebugLog then
-                        CleveRoids.Print("|cff888888[UseLog] /use " .. msg .. " via UseContainerItem(" .. itemInfo.bagID .. "," .. itemInfo.slot .. ") [v2.18 native]|r")
-                    end
-                    UseContainerItem(itemInfo.bagID, itemInfo.slot)
-                    return
-                end
-            end
-            -- v2.18 lookup didn't find item - fall through to legacy path
-            -- (might be partial match or different case that native doesn't handle)
-        end
-
-        -- PERFORMANCE: Try cache lookup first (O(1) instead of O(n) scan)
-        -- IMPORTANT: Validate cache hits to prevent stale data during combat
-        -- (IndexItems() is skipped during combat, so cache may have old bag/slot locations)
-        local location = CleveRoids.FindItemLocation(msg)
-        if location then
-            local cacheValid = false
-            local qname = string_lower(msg)
-
-            if location.type == "inventory" then
-                -- Validate: check if this slot actually contains the item we want
-                local link = GetInventoryItemLink("player", location.inventoryID)
-                if link then
-                    local _, _, nm = string_find(link, "|h%[(.-)%]|h")
-                    if nm and string_lower(nm) == qname then
-                        cacheValid = true
-                    end
-                end
-            else
-                -- Validate: check if this bag slot actually contains the item we want
-                local link = GetContainerItemLink(location.bag, location.slot)
-                if link then
-                    local _, _, nm = string_find(link, "|h%[(.-)%]|h")
-                    if nm and string_lower(nm) == qname then
-                        cacheValid = true
-                    end
-                end
-            end
-
-            if cacheValid then
-                ClearCursor()
-                if location.type == "inventory" then
-                    if CleveRoids.equipDebugLog then
-                        CleveRoids.Print("|cff888888[UseLog] /use " .. msg .. " via UseInventoryItem(" .. location.inventoryID .. ") [cached]|r")
-                    end
-                    UseInventoryItem(location.inventoryID)
-                else
-                    if CleveRoids.equipDebugLog then
-                        CleveRoids.Print("|cff888888[UseLog] /use " .. msg .. " via UseContainerItem(" .. location.bag .. "," .. location.slot .. ") [cached]|r")
-                    end
-                    UseContainerItem(location.bag, location.slot)
-                end
-                return
-            elseif CleveRoids.equipDebugLog then
-                CleveRoids.Print("|cff888888[UseLog] /use " .. msg .. " - cache STALE, falling back to scan|r")
-            end
-        end
-
-        -- Slow path fallback: full scan for substring matches or cache miss
-        local qname = string_lower(msg)
-
-        -- Search equipped inventory slots first (for trinkets, etc.)
-        for slot = 0, 19 do
-            local link = GetInventoryItemLink("player", slot)
-            if link then
-                local _, _, nm = string_find(link, "|h%[(.-)%]|h")
-                if nm and string_lower(nm) == qname then
-                    if CleveRoids.equipDebugLog then
-                        CleveRoids.Print("|cff888888[UseLog] /use " .. msg .. " via UseInventoryItem(" .. slot .. ")|r")
-                    end
-                    ClearCursor()
-                    UseInventoryItem(slot)
-                    return
-                end
-            end
-        end
-
-        -- Then search bags
-        for bag = 0, 4 do
-            local numSlots = GetContainerNumSlots(bag) or 0
-            for bagSlot = 1, numSlots do
-                local link = GetContainerItemLink(bag, bagSlot)
-                if link then
-                    local _, _, nm = string_find(link, "|h%[(.-)%]|h")
-                    if nm and string_lower(nm) == qname then
-                        if CleveRoids.equipDebugLog then
-                            CleveRoids.Print("|cff888888[UseLog] /use " .. msg .. " via UseContainerItem(" .. bag .. "," .. bagSlot .. ")|r")
-                        end
-                        ClearCursor()
-                        UseContainerItem(bag, bagSlot)
-                        return
-                    end
-                end
-            end
-        end
-
+        -- Bag path: one ClassicAPI call finds the item in bags and dispatches by
+        -- type (potion/food/scroll/on-use), honoring `useUnit` for targeted-spell
+        -- items. itemIDs pass as numbers; names/links pass through unchanged.
         if CleveRoids.equipDebugLog then
-            CleveRoids.Print("|cff888888[UseLog] /use " .. msg .. " - not found in equipped slots or bags|r")
+            CleveRoids.Print("|cff888888[UseLog] /use " .. msg .. " via C_Item.UseItemByName(" .. tostring(slotId or msg) .. ", " .. tostring(useUnit) .. ")|r")
         end
+        C_Item.UseItemByName(slotId or msg, useUnit)
     end
 
     -- PERFORMANCE: Use numeric iteration to avoid pairs() iterator allocation
@@ -3410,12 +3304,9 @@ local function FindItemInBagsByName(itemName)
     for bag = 0, 4 do
         local numSlots = GetContainerNumSlots(bag) or 0
         for slot = 1, numSlots do
-            local link = GetContainerItemLink(bag, slot)
-            if link then
-                local _, _, name = string_find(link, "|h%[(.-)%]|h")
-                if name and string_lower(name) == lowerName then
-                    return bag, slot
-                end
+            local name = C_Item.GetItemName({ bagID = bag, slotIndex = slot })
+            if name and string_lower(name) == lowerName then
+                return bag, slot
             end
         end
     end
@@ -3552,12 +3443,7 @@ function CleveRoids.EquipBagItem(msg, slotOrOffhand)
     end
 
     -- Note what's currently in the target slot so we can invalidate its cache
-    local oldSlotLink = GetInventoryItemLink("player", invslot)
-    local oldSlotName = nil
-    if oldSlotLink then
-        local _, _, name = string_find(oldSlotLink, "|h%[(.-)%]|h")
-        oldSlotName = name
-    end
+    local oldSlotName = C_Item.GetItemName({ equipmentSlotIndex = invslot })
 
     -- Helper to invalidate displaced item's cache
     local function InvalidateDisplacedItem()
@@ -3574,10 +3460,9 @@ function CleveRoids.EquipBagItem(msg, slotOrOffhand)
     local pairedSlots = {[13] = 14, [14] = 13, [16] = 17, [17] = 16, [11] = 12, [12] = 11}
     local checkSlot = pairedSlots[invslot]
     if checkSlot then
-        local link = GetInventoryItemLink("player", checkSlot)
-        if link then
-            local _, _, slotItemName = string_find(link, "|h%[(.-)%]|h")
-            if slotItemName and string_lower(slotItemName) == string_lower(msg) then
+        local slotItemName = C_Item.GetItemName({ equipmentSlotIndex = checkSlot })
+        if slotItemName then
+            if string_lower(slotItemName) == string_lower(msg) then
                 -- Item found in paired slot - but prefer a bag copy if one exists
                 local bagCopyBag, bagCopySlot = FindItemInBagsByName(msg)
                 if bagCopyBag then
@@ -3629,17 +3514,14 @@ function CleveRoids.EquipBagItem(msg, slotOrOffhand)
             -- Verify the item actually landed in the target slot
             -- EquipItemByName may silently no-op for same-named items in paired slots
             -- (e.g., dual-wielding Scimitar: MH copy found first, "equipped" to same slot)
-            local newLink = GetInventoryItemLink("player", invslot)
-            if newLink then
-                local _, _, newName = string_find(newLink, "|h%[(.-)%]|h")
-                if newName and string_lower(newName) == string_lower(msg) then
-                    if CleveRoids.Items then
-                        CleveRoids.Items[msg] = nil
-                        CleveRoids.Items[string_lower(msg)] = nil
-                    end
-                    InvalidateDisplacedItem()
-                    return true
+            local newName = C_Item.GetItemName({ equipmentSlotIndex = invslot })
+            if newName and string_lower(newName) == string_lower(msg) then
+                if CleveRoids.Items then
+                    CleveRoids.Items[msg] = nil
+                    CleveRoids.Items[string_lower(msg)] = nil
                 end
+                InvalidateDisplacedItem()
+                return true
             end
             -- Verification failed - EquipItemByName didn't place item in target slot
             if CleveRoids.equipDebugLog then
@@ -3681,10 +3563,9 @@ function CleveRoids.EquipBagItem(msg, slotOrOffhand)
         local ok = pcall(EquipItemByName, item.name, invslot)
         if ok then
             -- Verify the item actually landed in the target slot (same guard as above)
-            local newLink = GetInventoryItemLink("player", invslot)
-            if newLink then
-                local _, _, newName = string_find(newLink, "|h%[(.-)%]|h")
-                if newName and string_lower(newName) == string_lower(item.name) then
+            local newName = C_Item.GetItemName({ equipmentSlotIndex = invslot })
+            if newName then
+                if string_lower(newName) == string_lower(item.name) then
                     if CleveRoids.Items then
                         CleveRoids.Items[item.name] = nil
                         CleveRoids.Items[string_lower(item.name)] = nil
@@ -5263,8 +5144,7 @@ function CleveRoids.DoWDBWarmup()
     for bag = 0, 4 do
         local slots = GetContainerNumSlots(bag) or 0
         for slot = 1, slots do
-            local link = GetContainerItemLink(bag, slot)
-            if link then
+            if C_Container.GetContainerItemID(bag, slot) then
                 -- Tooltip scan loads the item into WDB
                 tip:ClearLines()
                 tip:SetBagItem(bag, slot)
@@ -5274,9 +5154,8 @@ function CleveRoids.DoWDBWarmup()
     end
 
     -- Scan equipped items
-    for slot = 0, 19 do
-        local link = GetInventoryItemLink("player", slot)
-        if link then
+    for slot = 1, 19 do
+        if GetInventoryItemID("player", slot) then
             tip:ClearLines()
             tip:SetInventoryItem("player", slot)
             scanned = scanned + 1
@@ -7329,9 +7208,9 @@ local function FindItemInBags(itemName)
     local searchName = string.lower(itemName)
     for bag = 0, 4 do
         for slot = 1, GetContainerNumSlots(bag) do
-            local link = GetContainerItemLink(bag, slot)
-            if link then
-                local _, _, foundName = string.find(link, "%[(.+)%]")
+            local id = C_Container.GetContainerItemID(bag, slot)
+            if id then
+                local foundName = C_Item.GetItemNameByID(id)
                 if foundName and string.find(string.lower(foundName), searchName, 1, true) then
                     return bag, slot, foundName
                 end
