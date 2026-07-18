@@ -747,19 +747,16 @@ function CleveRoids.FindItemQuick(text)
     for inv = 1, 19 do
         local link = GetInventoryItemLink("player", inv)
         if link then
-            local _, _, itemID = string_find(link, "item:(%d+)")
-            if itemID then
-                itemID = tonumber(itemID)
-                -- ID match: fast path
-                if qid and qid == itemID then
+            local itemID = GetInventoryItemID("player", inv)
+            -- ID match: fast path
+            if qid and qid == itemID then
+                return makeInventoryItem(inv, link, Items)
+            end
+            -- Name match: extract name from link (faster than GetItemInfo)
+            if qname then
+                local nm = GetNameFromLink(link)
+                if nm and string_lower(nm) == qname then
                     return makeInventoryItem(inv, link, Items)
-                end
-                -- Name match: extract name from link (faster than GetItemInfo)
-                if qname then
-                    local nm = GetNameFromLink(link)
-                    if nm and string_lower(nm) == qname then
-                        return makeInventoryItem(inv, link, Items)
-                    end
                 end
             end
         end
