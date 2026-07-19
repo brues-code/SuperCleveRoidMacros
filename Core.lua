@@ -3654,11 +3654,8 @@ local function _equipRing2Action(msg)
     return CleveRoids.EquipBagItem(msg, 12)
 end
 
-local function _unshiftAction()
-    local currentShapeshiftIndex = CleveRoids.GetCurrentShapeshiftIndex()
-    if currentShapeshiftIndex ~= 0 then
-        CastShapeshiftForm(currentShapeshiftIndex)
-    end
+local function _cancelFormAction()
+    CancelShapeshiftForm()
 end
 
 function CleveRoids.DoEquipMainhand(msg)
@@ -3729,27 +3726,29 @@ function CleveRoids.DoEquipRing2(msg)
     return false
 end
 
-function CleveRoids.DoUnshift(msg)
+function CleveRoids.DoCancelForm(msg)
     local handled
     -- PERFORMANCE: Use numeric iteration to avoid pairs() iterator allocation
     local parts = CleveRoids.splitStringIgnoringQuotes(msg)
     for i = 1, table.getn(parts) do
         handled = false
-        if CleveRoids.DoWithConditionals(parts[i], _unshiftAction, CleveRoids.FixEmptyTarget, false, _unshiftAction) then
+        if CleveRoids.DoWithConditionals(parts[i], _cancelFormAction, CleveRoids.FixEmptyTarget, false, _cancelFormAction) then
             handled = true
             break
         end
     end
 
     if handled == nil then
-        _unshiftAction()
+        _cancelFormAction()
     end
 
     return handled
 end
 
+CleveRoids.DoUnshift = CleveRoids.DoCancelForm
+
 function CleveRoids.DoRetarget()
-    if GetUnitName("target") == nil
+    if UnitName("target") == nil
         or UnitHealth("target") == 0
         or not UnitCanAttack("player", "target")
     then

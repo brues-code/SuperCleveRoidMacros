@@ -67,6 +67,10 @@ SLASH_UNSHIFT1 = "/unshift"
 
 SlashCmdList.UNSHIFT = CleveRoids.DoUnshift
 
+SLASH_CANCELFORM1 = "/cancelform"
+
+SlashCmdList.CANCELFORM = CleveRoids.DoCancelForm
+
 SLASH_UNQUEUE1 = "/unqueue"
 SlashCmdList.UNQUEUE = SpellStopCasting
 
