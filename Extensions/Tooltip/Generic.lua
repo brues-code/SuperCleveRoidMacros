@@ -58,11 +58,7 @@ function CleveRoids.IndexSpells()
             bookType = CleveRoids.bookTypes[book]
             spells[bookType] = {}
         else
-            local cost, reagent = CleveRoids.GetSpellCost(i, bookType)
-            -- Fallback for known reagent spells if tooltip scan failed
-            if (not reagent or reagent == "") and CleveRoids.ReagentBySpell then
-                reagent = CleveRoids.ReagentBySpell[spellName]
-            end
+            local cost, reagent, reagentId = CleveRoids.GetSpellCost(i, bookType, spellId)
             if not spells[bookType][spellName] then
                 spells[bookType][spellName] = {
                     spellSlot = i,
@@ -71,7 +67,7 @@ function CleveRoids.IndexSpells()
                     bookType = bookType,
                     texture = texture,
                     cost = cost,
-                    reagent = reagent,
+                    reagentId = reagentId,
                 }
             end
             if spellRank and not spells[bookType][spellName][spellRank] then
@@ -83,7 +79,7 @@ function CleveRoids.IndexSpells()
                     bookType = bookType,
                     texture = texture,
                     cost = cost,
-                    reagent = reagent
+                    reagentId = reagentId,
                 }
                 spells[bookType][spellName].highest = spells[bookType][spellName][spellRank]
             end
@@ -94,6 +90,13 @@ function CleveRoids.IndexSpells()
 
             if reagent then
                 CleveRoids.countedItemTypes[reagent] = true
+            elseif reagentId and Item then
+                Item:CreateFromItemID(reagentId):ContinueOnItemLoad(function()
+                    local loadedName = C_Item.GetItemNameByID(reagentId)
+                    if loadedName and loadedName ~= "" then
+                        CleveRoids.countedItemTypes[loadedName] = true
+                    end
+                end)
             end
         end
     end

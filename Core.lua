@@ -574,124 +574,34 @@ function CleveRoids.QueueActionUpdate()
     end
 end
 
-local function _StripColor(s)
-  if not s then return s end
-  if string.sub(s,1,2) == "|c" then return string.sub(s,11,-3) end
-  return s
-end
+-- Count of `itemId` in *bags only* (not bank), matched by itemID throughout --
+-- locale-independent, no hardcoded item names.
+-- PERFORMANCE: uses the CleveRoids.Items cache (itemId -> name -> data) for an
+-- O(1) lookup when available, falling back to a bag scan on a cache miss.
+function CleveRoids.GetReagentCount(itemId)
+  if not itemId then return 0 end
 
-local _ReagentBySpell = {
-  ["Vanish"] = "Flash Powder",    -- 5140
-  ["Blind"]  = "Blinding Powder", -- 5530
-}
-
--- Expose for use in Generic.lua (IndexSpells fallback)
-CleveRoids.ReagentBySpell = _ReagentBySpell
-
--- Minimal map for rogue reagents; extend as needed
-local _ReagentIdByName = {
-    ["Flash Powder"]   = 5140, -- Vanish
-    ["Blinding Powder"] = 5530, -- Blind
-}
-
--- Lazy bag-scan tooltip (only if we need to scan a bag slot by name)
-local function CRM_GetBagScanTip()
-  local tip = _G.CleveRoidsBagScanTip
-  if tip then return tip end
-  local ok, created = pcall(CreateFrame, "GameTooltip", "CleveRoidsBagScanTip", UIParent, "GameTooltipTemplate")
-  if ok and created then
-    tip = created
-  else
-    tip = CreateFrame("GameTooltip", "CleveRoidsBagScanTip", UIParent)
-    local L1 = tip:CreateFontString("$parentTextLeft1",  nil, "GameTooltipText")
-    local R1 = tip:CreateFontString("$parentTextRight1", nil, "GameTooltipText")
-    tip:AddFontStrings(L1, R1)
-    for i=2,10 do
-      tip:CreateFontString("$parentTextLeft"..i,  nil, "GameTooltipText")
-      tip:CreateFontString("$parentTextRight"..i, nil, "GameTooltipText")
-    end
-  end
-  tip:SetOwner(WorldFrame, "ANCHOR_NONE")
-  _G.CleveRoidsBagScanTip = tip
-  return tip
-end
-
--- Return total in *bags only* (not bank), by id when possible; fallback to name
--- PERFORMANCE: Uses CleveRoids.Items cache for O(1) lookup when available
-function CleveRoids.GetReagentCount(reagentName)
-  if not reagentName or reagentName == "" then return 0 end
-
-  -- Fast path: check cache first
   local Items = CleveRoids.Items
   if Items then
-    local wantId = _ReagentIdByName[reagentName]
-
-    -- Try by ID first if we have a mapping
-    if wantId then
-      local itemName = Items[wantId]
-      if itemName then
-        local itemData = Items[itemName]
-        if itemData and itemData.count and not itemData.inventoryID then
-          -- Item is in bags (not equipped), return cached count
-          return itemData.count
-        end
+    local itemName = Items[itemId]
+    if itemName then
+      local itemData = Items[itemName]
+      if itemData and itemData.count and not itemData.inventoryID then
+        -- Item is in bags (not equipped), return cached count
+        return itemData.count
       end
-    end
-
-    -- Try by name
-    local itemData = Items[reagentName]
-    if type(itemData) == "string" then
-      itemData = Items[itemData]  -- Resolve indirection
-    end
-    if itemData and type(itemData) == "table" and itemData.count and not itemData.inventoryID then
-      return itemData.count
-    end
-
-    -- Try lowercase
-    local lowerName = string.lower(reagentName)
-    local resolved = Items[lowerName]
-    if type(resolved) == "string" then
-      itemData = Items[resolved]
-    elseif type(resolved) == "table" then
-      itemData = resolved
-    end
-    if itemData and type(itemData) == "table" and itemData.count and not itemData.inventoryID then
-      return itemData.count
     end
   end
 
-  -- Slow path fallback: full bag scan (only when cache miss)
-  local wantId = _ReagentIdByName[reagentName]
+  -- Slow path: scan bags by itemID (only on a cache miss)
   local total = 0
-
   for bag = 0, 4 do
     local slots = GetContainerNumSlots(bag) or 0
     for slot = 1, slots do
-      local _, count = GetContainerItemInfo(bag, slot)
-      count = count or 0
       -- Base itemID straight off the slot (no link string, no regex).
-      local id = C_Container.GetContainerItemID(bag, slot)
-      if id then
-        local match
-        if wantId then
-          match = (id == wantId)
-        else
-          local name = C_Item.GetItemNameByID(id)
-          if name then
-            match = (name == reagentName)
-          else
-            -- Name not cached yet: fall back to a tooltip scan (expensive, rare)
-            local tip = CRM_GetBagScanTip()
-            tip:ClearLines()
-            tip:SetBagItem(bag, slot)
-            local left1 = _G[tip:GetName().."TextLeft1"]
-            local tname = left1 and left1:GetText()
-            match = (tname == reagentName)
-          end
-        end
-        if match then
-          total = total + count
-        end
+      if C_Container.GetContainerItemID(bag, slot) == itemId then
+        local _, count = GetContainerItemInfo(bag, slot)
+        total = total + (count or 0)
       end
     end
   end
@@ -722,85 +632,37 @@ function CleveRoids.GetLiveItemCount(itemName)
   return total
 end
 
-function CleveRoids.GetSpellCost(spellSlot, bookType)
-  -- Fast path: existing fixed-slot read
-  CleveRoids.Frame:SetOwner(WorldFrame, "ANCHOR_NONE")
-  CleveRoids.Frame:SetSpell(spellSlot, bookType)
-
-  local cost, reagent
-  local costText = CleveRoids.Frame.costFontString:GetText()
-  if costText then
-      _, _, cost = string.find(costText, "^(%d+)%s+[^yYsS]")
+-- Power cost and (first) reagent for a spellbook slot, read from Spell.dbc via
+-- ClassicAPI -- no GameTooltip scan, no locale-dependent string parsing. Pass
+-- spellId to skip the slot->id resolution when the caller already has it.
+--   cost:    C_Spell.GetSpellPowerCost returns the *effective* (talent-modified)
+--            cost the engine actually charges -- matches the old tooltip value,
+--            unlike GetSpellInfo().cost which is base-only.
+--   reagent: C_Spell.GetSpellReagents returns { {itemID, count}, ... }; take the
+--            first reagent's itemID (Spell.dbc covers reagent spells like Vanish).
+-- Returns cost, reagentName (localized, for display), reagentId (for counting).
+function CleveRoids.GetSpellCost(spellSlot, bookType, spellId)
+  if not spellId then
+    spellId = select(10, GetSpellInfo(spellSlot, bookType))
   end
 
-  local reagentText = CleveRoids.Frame.reagentFontString:GetText()
-  if reagentText then
-      _, _, reagent = string.find(reagentText, "^Reagents?%s*:%s*(.*)")
-  end
-  reagent = _StripColor(reagent)
-  if reagent == "" then reagent = nil end
+  local cost = 0
+  local reagent, reagentId
 
-  -- Fallback: scan all lines on a named tooltip (handles Vanish layout)
-  if not reagent or not cost then
-    local tip = CleveRoidsTooltipScan
-    if not tip then
-      -- belt & suspenders: create if somehow missing
-      local ok,_ = pcall(CreateFrame, "GameTooltip", "CleveRoidsTooltipScan", UIParent, "GameTooltipTemplate")
-      if not ok or not CleveRoidsTooltipScan then
-        CleveRoidsTooltipScan = CreateFrame("GameTooltip", "CleveRoidsTooltipScan", UIParent)
-        local L1 = CleveRoidsTooltipScan:CreateFontString("$parentTextLeft1",  nil, "GameTooltipText")
-        local R1 = CleveRoidsTooltipScan:CreateFontString("$parentTextRight1", nil, "GameTooltipText")
-        CleveRoidsTooltipScan:AddFontStrings(L1, R1)
-        for i=2,32 do
-          CleveRoidsTooltipScan:CreateFontString("$parentTextLeft"..i,  nil, "GameTooltipText")
-          CleveRoidsTooltipScan:CreateFontString("$parentTextRight"..i, nil, "GameTooltipText")
-        end
-      end
-      CleveRoidsTooltipScan:SetOwner(WorldFrame, "ANCHOR_NONE")
-      tip = CleveRoidsTooltipScan
+  if spellId then
+    local costs = C_Spell.GetSpellPowerCost(spellId)
+    if costs and costs[1] and costs[1].cost then
+      cost = costs[1].cost
     end
 
-    tip:ClearLines()
-    tip:SetOwner(WorldFrame, "ANCHOR_NONE")
-    tip:SetSpell(spellSlot, bookType)
-
-    local base = tip:GetName() or "CleveRoidsTooltipScan"
-    local maxLines = (tip.NumLines and tip:NumLines()) or 32
-
-    for i = 1, maxLines do
-      local L = _G[base.."TextLeft"..i]
-      local R = _G[base.."TextRight"..i]
-      local lt = L and L:GetText() or ""
-      local rt = R and R:GetText() or ""
-
-      if not reagent then
-        if string.find(lt, "^[Rr]eagents?%s*:") then
-          reagent = _StripColor((rt ~= "" and rt) or (string.gsub(lt, "^[Rr]eagents?%s*:%s*", "")))
-        elseif string.find(rt, "^[Rr]eagents?%s*:") then
-          reagent = _StripColor((lt ~= "" and lt) or (string.gsub(rt, "^[Rr]eagents?%s*:%s*", "")))
-        end
-        if reagent == "" then reagent = nil end
-      end
-
-      if not cost and rt ~= "" then
-          local _, _, num = string.find(rt, "^(%d+)%s+(Mana|Energy|Rage|Focus)")
-          if num then cost = tonumber(num) end
-      end
-
-      if reagent and cost then break end
+    local reagents = C_Spell.GetSpellReagents(spellId)
+    if reagents and reagents[1] and reagents[1].itemID then
+      reagentId = reagents[1].itemID
+      reagent = C_Item.GetItemNameByID(reagentId)
     end
   end
 
-  if not reagent or reagent == "" then
-    reagent = nil
-    local name = GetSpellName(spellSlot, bookType)
-    if name then
-        name = CleveRoids.StripRank(name)
-        reagent = _ReagentBySpell[name]
-    end
-  end
-
-  return (cost and tonumber(cost) or 0), (reagent and reagent ~= "" and tostring(reagent) or nil)
+  return cost, (reagent and reagent ~= "" and tostring(reagent) or nil), reagentId
 end
 
 function CleveRoids.GetProxyActionSlot(slot)
@@ -4801,21 +4663,17 @@ function GetActionCount(slot)
             count = CleveRoids.GetLiveItemCount(actionToCheck.item.name or actionToCheck.action)
 
         elseif actionToCheck.spell then
-            local reagent = actionToCheck.spell.reagent
-            if not reagent or reagent == "" then
-                reagent = nil
+            local reagentId = actionToCheck.spell.reagentId
+            if not reagentId then
                 local ss, bt = actionToCheck.spell.spellSlot, actionToCheck.spell.bookType
                 if ss and bt then
-                    local _, r = CleveRoids.GetSpellCost(ss, bt)
-                    reagent = r
+                    local _, _, rid = CleveRoids.GetSpellCost(ss, bt, actionToCheck.spell.id)
+                    actionToCheck.spell.reagentId = rid    -- cache itemID so we don't re-derive every frame
+                    reagentId = rid
                 end
-                if (not reagent) and _ReagentBySpell and actionToCheck.spell.name then
-                    reagent = _ReagentBySpell[actionToCheck.spell.name]  -- e.g., Vanish → Flash Powder
-                end
-                actionToCheck.spell.reagent = reagent  -- cache it so we don't re-scan every frame
             end
-            if reagent and reagent ~= "" then
-                count = CleveRoids.GetReagentCount(reagent)  -- id-first bag scan, falls back to name/tooltip
+            if reagentId then
+                count = CleveRoids.GetReagentCount(reagentId)  -- id-based bag scan
             end
         end
     end
@@ -4853,17 +4711,8 @@ function IsConsumableAction(slot)
         end
 
 
-        if actionToCheck.spell then
-            local reagent = actionToCheck.spell.reagent
-            if (not reagent or reagent == "") and actionToCheck.spell.name then
-                reagent = _ReagentBySpell[actionToCheck.spell.name]
-                if reagent then
-                    actionToCheck.spell.reagent = reagent
-                end
-            end
-            if reagent and reagent ~= "" then
-                return 1
-            end
+        if actionToCheck.spell and actionToCheck.spell.reagentId then
+            return 1
         end
     end
 
@@ -4933,37 +4782,9 @@ if not CleveRoids.RunMacroHooked then
     CleveRoids.RunMacroHooked = true
 end
 
--- Robust named tooltip for scanning spells/items
-if not CleveRoidsTooltipScan then
-  -- Try to create with the standard template first
-  local ok, _ = pcall(CreateFrame, "GameTooltip", "CleveRoidsTooltipScan", UIParent, "GameTooltipTemplate")
-  if not ok or not CleveRoidsTooltipScan then
-    -- Fallback: manual tooltip with plenty of prebuilt lines
-    CleveRoidsTooltipScan = CreateFrame("GameTooltip", "CleveRoidsTooltipScan", UIParent)
-    local L1 = CleveRoidsTooltipScan:CreateFontString("$parentTextLeft1",  nil, "GameTooltipText")
-    local R1 = CleveRoidsTooltipScan:CreateFontString("$parentTextRight1", nil, "GameTooltipText")
-    CleveRoidsTooltipScan:AddFontStrings(L1, R1)
-    for i = 2, 32 do
-      CleveRoidsTooltipScan:CreateFontString("$parentTextLeft"..i,  nil, "GameTooltipText")
-      CleveRoidsTooltipScan:CreateFontString("$parentTextRight"..i, nil, "GameTooltipText")
-    end
-  end
-  CleveRoidsTooltipScan:SetOwner(WorldFrame, "ANCHOR_NONE")
-  CleveRoidsTooltipScan:EnableMouse(false)
-end
-
--- This single dummy frame handles events AND serves as our tooltip scanner.
-CleveRoids.Frame = CreateFrame("GameTooltip")
-CleveRoids.Frame:EnableMouse(false)  -- Prevent tooltip from capturing mouse input
-
--- Create the extra font strings needed for other functions like GetSpellCost.
-CleveRoids.Frame.costFontString = CleveRoids.Frame:CreateFontString()
-CleveRoids.Frame.rangeFontString = CleveRoids.Frame:CreateFontString()
-CleveRoids.Frame.reagentFontString = CleveRoids.Frame:CreateFontString()
-CleveRoids.Frame:AddFontStrings(CleveRoids.Frame:CreateFontString(), CleveRoids.Frame:CreateFontString())
-CleveRoids.Frame:AddFontStrings(CleveRoids.Frame.costFontString, CleveRoids.Frame.rangeFontString)
-CleveRoids.Frame:AddFontStrings(CleveRoids.Frame:CreateFontString(), CleveRoids.Frame:CreateFontString())
-CleveRoids.Frame:AddFontStrings(CleveRoids.Frame.reagentFontString, CleveRoids.Frame:CreateFontString())
+-- This single frame drives the addon's event loop and OnUpdate. (Spell cost /
+-- reagent lookups now read Spell.dbc directly via ClassicAPI -- no tooltip scan.)
+CleveRoids.Frame = CreateFrame("Frame")
 
 CleveRoids.Frame:SetScript("OnUpdate", CleveRoids.OnUpdate)
 CleveRoids.Frame:SetScript("OnEvent", function(...)
