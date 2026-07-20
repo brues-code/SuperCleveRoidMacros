@@ -504,7 +504,7 @@ local function makeBagItem(bagID, slot, link, Items)
 
     local itemID = C_Container.GetContainerItemID(bagID, slot)
 
-    local name = C_Item.GetItemName(ItemLocation:CreateFromBagAndSlot(bagID, slot))
+    local name = C_Item.GetItemName({bagID = bagID, slotIndex = slot})
     local count = 0
     local texture, itemCount = GetContainerItemInfo(bagID, slot)
     if itemCount then count = itemCount end
