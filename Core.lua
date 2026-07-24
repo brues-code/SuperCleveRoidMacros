@@ -3935,10 +3935,14 @@ function CleveRoids.OnUpdate(self)
 
     CR.lastUpdate = time
 
-    -- Reclaim the top of the SendChatMessage hook chain if another addon has
-    -- displaced our #showtooltip filter (see EnsureSendChatMessageHook). Cheap
-    -- identity check; only re-hooks when actually displaced.
-    if CR.EnsureSendChatMessageHook then
+    -- LeafVillageAchievements/Legends also hook SendChatMessage and can bump ours
+    -- off the top of the chain (orphaning it / decorating #showtooltip). Reclaim
+    -- the top when they're present so #showtooltip stays filtered.
+    if not CR._watchChatHooks then
+        CR._watchChatHooks = (C_AddOns.IsAddOnLoaded("LeafVillageAchievements")
+                or C_AddOns.IsAddOnLoaded("LeafVillageLegends"))
+    end
+    if CR._watchChatHooks then
         CR.EnsureSendChatMessageHook()
     end
 
@@ -5997,27 +6001,27 @@ function CleveRoids.Frame:KEY_UP()
     CleveRoids.isActionUpdateQueued = true
 end
 
--- Filter out the #showtooltip line that Blizzard's native macro executor sends
--- to chat when a macro runs from an action button. Named (not anonymous) so we
--- can detect displacement and reclaim the top of the hook chain.
+-- Base SendChatMessage captured at first hook; used to break a hook cycle.
+local baseSendChatMessage = SendChatMessage
+local sendingChatMessage = false
+
+-- Swallow #showtooltip lines Blizzard's macro executor sends to chat.
 local function CleveRoids_SendChatMessage(msg, ...)
     if msg and string.find(msg, "^#showtooltip") then
         return
     end
-    -- Call whatever we chained over (another addon's hook, or the real function)
-    CleveRoids.Hooks.SendChatMessage(msg, unpack(arg))
+    if sendingChatMessage then
+        -- Re-entered via a hook cycle; go straight to base to avoid recursion.
+        return baseSendChatMessage(msg, unpack(arg))
+    end
+    sendingChatMessage = true
+    local ok, err = pcall(CleveRoids.Hooks.SendChatMessage, msg, unpack(arg))
+    sendingChatMessage = false
+    if not ok and geterrorhandler then geterrorhandler()(err) end
 end
 
--- (Re-)assert our filter as the OUTERMOST SendChatMessage hook. This is a no-op
--- once we're already on top. It matters because some addons snapshot
--- SendChatMessage at their file-load and later install a hook that calls that
--- snapshot DIRECTLY -- if they loaded before us, their snapshot predates our
--- filter, so calling it directly orphans us and #showtooltip leaks to chat.
--- (LeafVillageAchievements does exactly this at PLAYER_ENTERING_WORLD+3s; and
--- because the fork sorts after it alphabetically, we load too late to be in its
--- snapshot -- upstream "CleveRoidMacros" sorted before it and wasn't affected.)
--- OnUpdate calls this so we reclaim the top within a frame of being displaced;
--- being outermost also guarantees we see the pristine line for the anchor match.
+-- Reassert our filter as the outermost SendChatMessage hook (no-op if already on
+-- top). See the OnUpdate caller for why this is needed.
 function CleveRoids.EnsureSendChatMessageHook()
     if SendChatMessage ~= CleveRoids_SendChatMessage then
         CleveRoids.Hooks.SendChatMessage = SendChatMessage
