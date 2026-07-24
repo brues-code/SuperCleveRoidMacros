@@ -3935,6 +3935,13 @@ function CleveRoids.OnUpdate(self)
 
     CR.lastUpdate = time
 
+    -- Reclaim the top of the SendChatMessage hook chain if another addon has
+    -- displaced our #showtooltip filter (see EnsureSendChatMessageHook). Cheap
+    -- identity check; only re-hooks when actually displaced.
+    if CR.EnsureSendChatMessageHook then
+        CR.EnsureSendChatMessageHook()
+    end
+
     -- Process deferred equipment index updates (for throttled UNIT_INVENTORY_CHANGED)
     -- PERFORMANCE: Skip check entirely if no pending update
     local pendingTime = CR.equipIndexPendingTime
@@ -5990,17 +5997,35 @@ function CleveRoids.Frame:KEY_UP()
     CleveRoids.isActionUpdateQueued = true
 end
 
-CleveRoids.Hooks.SendChatMessage = SendChatMessage
-function SendChatMessage(msg, ...)
-    -- Filter out #showtooltip lines
-    -- pfUI's macrotweak also does this, but our pattern is more specific
+-- Filter out the #showtooltip line that Blizzard's native macro executor sends
+-- to chat when a macro runs from an action button. Named (not anonymous) so we
+-- can detect displacement and reclaim the top of the hook chain.
+local function CleveRoids_SendChatMessage(msg, ...)
     if msg and string.find(msg, "^#showtooltip") then
         return
     end
-    
-    -- Call the original (or pfUI's hook if it's in the chain)
+    -- Call whatever we chained over (another addon's hook, or the real function)
     CleveRoids.Hooks.SendChatMessage(msg, unpack(arg))
 end
+
+-- (Re-)assert our filter as the OUTERMOST SendChatMessage hook. This is a no-op
+-- once we're already on top. It matters because some addons snapshot
+-- SendChatMessage at their file-load and later install a hook that calls that
+-- snapshot DIRECTLY -- if they loaded before us, their snapshot predates our
+-- filter, so calling it directly orphans us and #showtooltip leaks to chat.
+-- (LeafVillageAchievements does exactly this at PLAYER_ENTERING_WORLD+3s; and
+-- because the fork sorts after it alphabetically, we load too late to be in its
+-- snapshot -- upstream "CleveRoidMacros" sorted before it and wasn't affected.)
+-- OnUpdate calls this so we reclaim the top within a frame of being displaced;
+-- being outermost also guarantees we see the pristine line for the anchor match.
+function CleveRoids.EnsureSendChatMessageHook()
+    if SendChatMessage ~= CleveRoids_SendChatMessage then
+        CleveRoids.Hooks.SendChatMessage = SendChatMessage
+        SendChatMessage = CleveRoids_SendChatMessage
+    end
+end
+
+CleveRoids.EnsureSendChatMessageHook()
 
 CleveRoids.RegisterActionEventHandler = function(fn)
     if type(fn) == "function" then
