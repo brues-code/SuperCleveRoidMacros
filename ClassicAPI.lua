@@ -182,6 +182,17 @@ function API.IsSwimming()
     return IsSwimming() and true or false
 end
 
+-- True if the player is currently mounted.
+function API.IsMounted()
+    return IsMounted() and true or false
+end
+
+-- Player's stand state: 0 = standing, non-zero = sitting/sleeping/kneeling/etc.
+-- (see UnitStandState). Player-only.
+function API.GetPlayerStandState()
+    return UnitStandState("player") or 0
+end
+
 --------------------------------------------------------------------------------
 -- Cursor
 --------------------------------------------------------------------------------

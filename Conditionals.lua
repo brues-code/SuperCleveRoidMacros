@@ -5608,6 +5608,23 @@ CleveRoids.Keywords = {
         return not CleveRoids.ClassicAPI.IsStealthed()
     end,
 
+    mounted = function(conditionals)
+        return CleveRoids.ClassicAPI.IsMounted()
+    end,
+
+    nomounted = function(conditionals)
+        return not CleveRoids.ClassicAPI.IsMounted()
+    end,
+
+    standing = function(conditionals)
+        return CleveRoids.ClassicAPI.GetPlayerStandState() == 0
+    end,
+
+    -- Any non-standing pose (sit / chair / sleep / kneel)
+    sitting = function(conditionals)
+        return CleveRoids.ClassicAPI.GetPlayerStandState() ~= 0
+    end,
+
     casting = function(conditionals)
         if type(conditionals.casting) ~= "table" then return CleveRoids.CheckSpellCast(conditionals.target, "") end
         return Or(conditionals.casting, function (spell)
@@ -9182,6 +9199,7 @@ CleveRoids.STATIC_CONDITIONALS = {
     combat = true, nocombat = true, ic = true, ooc = true,
     zone = true, nozone = true,
     stealth = true, nostealth = true, stl = true, nostl = true,
+    mounted = true, nomounted = true, standing = true, sitting = true,
     form = true, noform = true, stance = true, nostance = true,
     equipped = true, noequipped = true, eq = true, noeq = true,
     set = true, noset = true,
