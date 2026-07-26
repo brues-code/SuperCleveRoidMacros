@@ -866,20 +866,7 @@ function lib:GetCachedIcon(spellId)
   if not spellId then return nil end
   if lib.iconCache[spellId] then return lib.iconCache[spellId] end
 
-  local texture = nil
-
-  -- Try Nampower DBC lookup first (fast)
-  if GetSpellRecField and GetSpellIconTexture then
-    local iconId = GetSpellRecField(spellId, "spellIconID")
-    if iconId and type(iconId) == "number" and iconId > 0 then
-      texture = GetSpellIconTexture(iconId)
-    end
-  end
-
-  -- Final fallback
-  if not texture then
-    texture = "Interface\\Icons\\INV_Misc_QuestionMark"
-  end
+  local texture = C_Spell.GetSpellTexture(spellId) or "Interface\\Icons\\INV_Misc_QuestionMark"
 
   lib.iconCache[spellId] = texture
   return texture
