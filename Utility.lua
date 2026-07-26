@@ -7515,6 +7515,26 @@ local spellSchoolCache = {}
 --   7. Tooltip scanning (player's spellbook only)
 --   8. Name pattern matching (fallback, least accurate)
 --   Returns nil if school cannot be determined (not cached)
+-- Authoritative bleed test from Spell.dbc mechanics. A bleed carries
+-- SpellMechanic 15 either at the spell level (Garrote/Rupture/Rend/Rip/Pounce/
+-- Deep Wounds) OR on an effect (Rake: spell-level 0, EffectMechanic[2]=15), so
+-- both must be checked -- GetSpellMechanicByID alone misses the effect-level case.
+local SPELL_MECHANIC_BLEED = 15
+local function IsBleedByMechanic(spellID)
+    if not spellID then return false end
+    local API = CleveRoids.ClassicAPI
+    if API.GetSpellMechanicByID(spellID) == SPELL_MECHANIC_BLEED then
+        return true
+    end
+    local em = API.GetSpellEffectMechanics(spellID)
+    if em then
+        for i = 1, 3 do
+            if em[i] == SPELL_MECHANIC_BLEED then return true end
+        end
+    end
+    return false
+end
+
 local function GetSpellSchool(spellName, spellID)
     if not spellName and not spellID then return nil end
 
@@ -7522,7 +7542,7 @@ local function GetSpellSchool(spellName, spellID)
     local baseName = nil
     if spellName then
         baseName = string.gsub(spellName, "%s*%(.-%)%s*$", "")
-    elseif spellID and GetSpellRecField then
+    elseif spellID then
         local fullName = C_Spell.GetSpellName(spellID)
         if fullName then
             baseName = string.gsub(fullName, "%s*%(.-%)%s*$", "")
@@ -7536,6 +7556,14 @@ local function GetSpellSchool(spellName, spellID)
     if baseName and SPLIT_DAMAGE_SPELLS[baseName] then
         local school = SPLIT_DAMAGE_SPELLS[baseName].debuff
         return school
+    end
+
+    -- PRIORITY 0.5: DBC bleed mechanic (authoritative, proactive). Catches bleeds
+    -- before any damage event is seen, incl. effect-level ones like Rake, and
+    -- correctly excludes non-bleeds the name patterns would false-positive (e.g.
+    -- Hemorrhage). Only bleed is decided here; other schools fall through.
+    if spellID and IsBleedByMechanic(spellID) then
+        return "bleed"
     end
 
     -- PRIORITY 1: Use learned school from Nampower damage events (most accurate)
@@ -7656,7 +7684,9 @@ local function GetSpellSchool(spellName, spellID)
         -- Bleed effects (DoTs that ignore armor)
         if string.find(lower, "rip") or string.find(lower, "rake") or string.find(lower, "rupture") or
            string.find(lower, "garrote") or string.find(lower, "rend") or string.find(lower, "deep wound") or
-           string.find(lower, "hemorrhage") or string.find(lower, "pounce") then
+           string.find(lower, "pounce") then
+            -- NOTE: Hemorrhage intentionally excluded -- Spell.dbc gives it no bleed
+            -- mechanic (its damage is physical), so bleed-immune mobs don't resist it.
             school = "bleed"
 
         -- Arcane

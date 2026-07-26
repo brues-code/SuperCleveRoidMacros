@@ -168,6 +168,19 @@ function API.GetSpellMechanicByID(spellID)
     return C_Spell.GetSpellMechanicByID(spellID)
 end
 
+-- Per-effect SpellMechanic ids (Spell.dbc EffectMechanic[3]) as {m1, m2, m3},
+-- or nil for an invalid spell / 0 for an effect with no mechanic. Complements
+-- GetSpellMechanicByID, which only reads the spell-level Mechanic field: vanilla
+-- stores some mechanics on an effect instead (e.g. Rake's bleed is effect-level,
+-- so GetSpellMechanicByID returns 0 but this returns {0,15,0}). Nil-guarded so an
+-- older ClassicAPI build without the function degrades gracefully.
+function API.GetSpellEffectMechanics(spellID)
+    if type(C_Spell.GetSpellEffectMechanics) == "function" then
+        return C_Spell.GetSpellEffectMechanics(spellID)
+    end
+    return nil
+end
+
 --------------------------------------------------------------------------------
 -- State
 --------------------------------------------------------------------------------
