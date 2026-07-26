@@ -209,8 +209,8 @@ local function InjectCustomSpells()
     local count = 0
     for spellID, data in pairs(CleveRoids.CustomCursiveSpells) do
         -- Get texture from GetSpellRecField + GetSpellIconTexture
-        local name = GetSpellRecField(spellID, "name")
-        local rank = GetSpellRecField(spellID, "rank")
+        local name = C_Spell.GetSpellName(spellID)
+        local rank = C_Spell.GetSpellSubtext(spellID)
         local texture = CleveRoids.libdebuff and CleveRoids.libdebuff:GetCachedIcon(spellID)
         if texture then
             -- Always update/add (in case Cursive reloaded and cleared them)
@@ -524,8 +524,8 @@ CleveRoids.HandleConsoleCommand = function(msg)
                 return
             end
 
-            local name = GetSpellRecField(spellID, "name")
-            local rank = GetSpellRecField(spellID, "rank")
+            local name = C_Spell.GetSpellName(spellID)
+            local rank = C_Spell.GetSpellSubtext(spellID)
             local texture = CleveRoids.libdebuff and CleveRoids.libdebuff:GetCachedIcon(spellID)
             if not name then
                 DEFAULT_CHAT_FRAME:AddMessage("|cffff0000Error:|r Spell ID " .. spellID .. " not found.")

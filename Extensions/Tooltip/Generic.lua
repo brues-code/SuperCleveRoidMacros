@@ -378,9 +378,9 @@ function CleveRoids.GetActionButtonInfo(slot)
     if not actionType then return end
 
     if actionType == "spell" and id then
-        local rank = GetSpellRecField(id, "rank")
+        local rank = C_Spell.GetSpellSubtext(id)
         if rank == "" then rank = nil end
-        return "SPELL", id, GetSpellRecField(id, "name"), rank
+        return "SPELL", id, C_Spell.GetSpellName(id), rank
     elseif actionType == "item" and id then
         local item = CleveRoids.GetItem(id)
         return "ITEM", id, (item and item.name)

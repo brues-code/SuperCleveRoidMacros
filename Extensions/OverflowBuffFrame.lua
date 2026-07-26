@@ -122,7 +122,7 @@ local function CreateIconButton(parent, index, iconTable)
         GameTooltip:SetOwner(btn, "ANCHOR_BOTTOMLEFT")
         local spellName
         if data.spellId then
-            spellName = GetSpellRecField and GetSpellRecField(data.spellId, "name") or ("Spell " .. data.spellId)
+            spellName = C_Spell.GetSpellName(data.spellId) or ("Spell " .. data.spellId)
         else
             spellName = data.displayName
         end
@@ -649,7 +649,7 @@ local function InjectTestTargetData()
     for i = 1, table.getn(TEST_TARGET_SPELL_IDS) do
         local spellId = TEST_TARGET_SPELL_IDS[i]
         local dur = targetDurations[i] or 60
-        local spellName = GetSpellRecField and GetSpellRecField(spellId, "name") or ("TestSpell" .. spellId)
+        local spellName = C_Spell.GetSpellName(spellId) or ("TestSpell" .. spellId)
         if not CleveRoids.AllCasterAuraTracking[targetGuid][spellName] then
             CleveRoids.AllCasterAuraTracking[targetGuid][spellName] = {}
         end

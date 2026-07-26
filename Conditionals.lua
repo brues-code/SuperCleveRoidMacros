@@ -105,7 +105,7 @@ local function BuildSpellNameCache()
 
     if lib.personalDebuffs then
         for sid, _ in pairs(lib.personalDebuffs) do
-            local name = GetSpellRecField(sid, "name")
+            local name = C_Spell.GetSpellName(sid)
             if name then
                 name = CleveRoids.StripRank(name)
                 if not _spellNameToIDs[name] then
@@ -118,7 +118,7 @@ local function BuildSpellNameCache()
 
     if lib.sharedDebuffs then
         for sid, _ in pairs(lib.sharedDebuffs) do
-            local name = GetSpellRecField(sid, "name")
+            local name = C_Spell.GetSpellName(sid)
             if name then
                 name = CleveRoids.StripRank(name)
                 if not _spellNameToIDs[name] then
@@ -163,7 +163,7 @@ local function GetSpellIDForRank(baseName, rankNum)
     if not matchIDs then return nil end
     local targetRank = "Rank " .. rankNum
     for _, sid in ipairs(matchIDs) do
-        local rank = GetSpellRecField and GetSpellRecField(sid, "rank")
+        local rank = C_Spell.GetSpellSubtext(sid)
         if rank and rank == targetRank then
             return sid
         end
@@ -916,7 +916,7 @@ function CleveRoids.GetAllCasterAuraTimeRemaining(targetGuid, spellId)
     local targetData, isPfUI = CleveRoids.GetAuraTrackingData(targetGuid)
     if not targetData then return nil end
 
-    local spellName = GetSpellRecField and GetSpellRecField(spellId, "name")
+    local spellName = C_Spell.GetSpellName(spellId)
     if not spellName then return nil end
 
     local casters = targetData[spellName]
@@ -960,7 +960,7 @@ function CleveRoids.FindAllCasterAuraByName(targetGuid, searchName)
     -- Resolve spell ID to name for direct lookup
     local searchID = tonumber(searchName)
     if searchID then
-        local resolvedName = GetSpellRecField and GetSpellRecField(searchID, "name")
+        local resolvedName = C_Spell.GetSpellName(searchID)
         if not resolvedName then return nil, nil end
         searchName = resolvedName
     end
@@ -1081,7 +1081,7 @@ local function OnAutoAttackOther(attackerGuid, targetGuid, totalDamage, hitInfo,
                             rec.start = GetTime()
 
                             if CleveRoids.debug then
-                                local spellName = GetSpellRecField and GetSpellRecField(spellID, "name") or "Unknown"
+                                local spellName = C_Spell.GetSpellName(spellID) or "Unknown"
                                 local baseName = CleveRoids.StripRank(spellName) or "Unknown"
                                 DEFAULT_CHAT_FRAME:AddMessage(
                                     string.format("|cff00ffaa[Judgement Refresh]|r Refreshed %s (ID:%d) on melee hit - new duration: %ds",
@@ -1091,7 +1091,7 @@ local function OnAutoAttackOther(attackerGuid, targetGuid, totalDamage, hitInfo,
 
                             -- Sync to pfUI if loaded (pre-7.6 only)
                             if not CleveRoids.hasPfUI76 and pfUI and pfUI.api and pfUI.api.libdebuff then
-                                local spellName = GetSpellRecField and GetSpellRecField(spellID, "name") or nil
+                                local spellName = C_Spell.GetSpellName(spellID) or nil
                                 local baseName = CleveRoids.StripRank(spellName)
                                 local targetName = (lib.guidToName and lib.guidToName[normalizedTarget]) or UnitName("target")
                                 local targetLevel = UnitLevel("target") or 0
@@ -1236,7 +1236,7 @@ local function OnAuraCastSelf(spellId, casterGuid, targetGuid, effect, effectAur
     -- Use the isBuffNotDebuff result determined above (avoids redundant slot scanning)
     local lib = CleveRoids.libdebuff
     if isBuffNotDebuff and spellId and durationMs and durationMs > 0 and lib and not lib.hasPfUIEnhanced then
-        local spellName = GetSpellRecField and GetSpellRecField(spellId, "name")
+        local spellName = C_Spell.GetSpellName(spellId)
         if spellName then
             local playerGuid = CleveRoids.GetGUID("player")
             if playerGuid then
@@ -1269,7 +1269,7 @@ local function OnAuraCastOther(spellId, casterGuid, targetGuid, effect, effectAu
     -- When pfUI enhanced is active, pfUI writes to pfUI.libdebuff_all_auras with
     -- full downrank protection — we read from that table via GetAuraTrackingData().
     if spellId and durationMs and durationMs > 0 then
-        local spellName = GetSpellRecField and GetSpellRecField(spellId, "name")
+        local spellName = C_Spell.GetSpellName(spellId)
         if spellName and not CleveRoids.hasPfUI76 then
             CleveRoids._allCasterAuraDirty = true
             if not CleveRoids.AllCasterAuraTracking[targetGuid] then
@@ -1327,7 +1327,7 @@ local function OnAuraCastOther(spellId, casterGuid, targetGuid, effect, effectAu
         -- (AURA_CAST_ON_OTHER fires for both buffs and debuffs; BUFF_ADDED_OTHER confirms buff)
         local lib = CleveRoids.libdebuff
         if lib and not lib.hasPfUIEnhanced then
-            local spellNameForPending = GetSpellRecField and GetSpellRecField(spellId, "name")
+            local spellNameForPending = C_Spell.GetSpellName(spellId)
             if spellNameForPending then
                 local normTargetGuid = CleveRoids.NormalizeGUID(targetGuid)
                 if normTargetGuid then
@@ -1472,7 +1472,7 @@ autoAttackFrame:SetScript("OnEvent", function()
 
         if spellId and spellId > 0 and durationMs and durationMs > 0 then
             local playerGUID = CleveRoids.GetGUID("player")
-            local durSpellName = GetSpellRecField and GetSpellRecField(spellId, "name")
+            local durSpellName = C_Spell.GetSpellName(spellId)
             if playerGUID and durSpellName and not CleveRoids.hasPfUI76 then
                 CleveRoids._allCasterAuraDirty = true
                 if not CleveRoids.AllCasterAuraTracking[playerGUID] then
@@ -1524,7 +1524,7 @@ autoAttackFrame:SetScript("OnEvent", function()
         local state = arg7
         if state == 2 then return end  -- Stack change, not full removal
         if guid and spellId and CleveRoids.AllCasterAuraTracking[guid] then
-            local removedName = GetSpellRecField and GetSpellRecField(spellId, "name")
+            local removedName = C_Spell.GetSpellName(spellId)
             if removedName and CleveRoids.AllCasterAuraTracking[guid][removedName] then
                 CleveRoids.AllCasterAuraTracking[guid][removedName] = nil
                 if not next(CleveRoids.AllCasterAuraTracking[guid]) then
@@ -1880,7 +1880,7 @@ local function IsPendingDebuffCast(spellName, targetUnit)
                 if arr then
                     for _, pending in pairs(arr) do
                         if pending and pending.targetGUID == targetGuid and pending.spellID then
-                            local pendingName = GetSpellRecField and GetSpellRecField(pending.spellID, "name")
+                            local pendingName = C_Spell.GetSpellName(pending.spellID)
                             if pendingName then
                                 local normalizedPending = NormalizeSpellNameForComparison(pendingName)
                                 if normalizedPending == normalizedCheck then
@@ -2018,7 +2018,7 @@ function CleveRoids.CancelAura(auraName)
             if aura_ix == -1 then break end
             local bid = GetPlayerBuffID(aura_ix)
             bid = (bid < -1) and (bid + 65536) or bid
-            if string.lower(GetSpellRecField(bid, "name") or "") == auraName then
+            if string.lower(C_Spell.GetSpellName(bid) or "") == auraName then
                 C_Spell.CancelSpellByID(bid)
                 return true
             end
@@ -2031,7 +2031,7 @@ function CleveRoids.CancelAura(auraName)
         for slot = 0, 31 do
             local spellId = _G.GetPlayerAuraDuration(slot)
             if spellId and spellId > 0 then
-                local name = GetSpellRecField(spellId, "name")
+                local name = C_Spell.GetSpellName(spellId)
                 if name and string.lower(name) == auraName then
                     C_Spell.CancelSpellByID(spellId)
                     return true
@@ -2047,7 +2047,7 @@ function CleveRoids.CancelAura(auraName)
         if entry.durationSec and entry.durationSec > 0 and elapsed > entry.durationSec then
             CleveRoids.OverflowBuffs[spellId] = nil
         else
-            local name = GetSpellRecField(spellId, "name")
+            local name = C_Spell.GetSpellName(spellId)
             if name and string.lower(name) == auraName then
                 C_Spell.CancelSpellByID(spellId)
                 CleveRoids.OverflowBuffs[spellId] = nil
@@ -3530,7 +3530,7 @@ local function GetLowercaseSpellName(spellID)
     local cached = _spellNameCache[spellID]
     if cached then return cached end
 
-    local name = GetSpellRecField(spellID, "name")
+    local name = C_Spell.GetSpellName(spellID)
     if not name then return nil end
 
     -- Strip rank and lowercase
@@ -3553,7 +3553,7 @@ local function GetSpellNames(spellID)
         return cached.base, cached.full
     end
 
-    local fullName = GetSpellRecField(spellID, "name")
+    local fullName = C_Spell.GetSpellName(spellID)
     if not fullName then return nil, nil end
 
     local baseName = _string_gsub(fullName, _RANK_PATTERN, "")
@@ -4208,7 +4208,7 @@ function CleveRoids.ValidateUnitDebuff(unit, args)
             local fallbackNameLower = _string_lower(args.name)
             for sid, rec in pairs(lib.objects[guid]) do
                 if rec and rec.caster == "player" then
-                    local n = GetSpellRecField and GetSpellRecField(sid, "name")
+                    local n = C_Spell.GetSpellName(sid)
                     if n then
                         n = CleveRoids.StripRank(n)
                         if _string_lower(n) == fallbackNameLower then
@@ -4295,7 +4295,7 @@ function CleveRoids.ValidateUnitDebuff(unit, args)
                             local cleanupNameLower = _string_lower(args.name)
                             for sid, rec in pairs(lib.objects[guid]) do
                                 if rec and rec.caster == "player" then
-                                    local n = GetSpellRecField and GetSpellRecField(sid, "name")
+                                    local n = C_Spell.GetSpellName(sid)
                                     if n then
                                         n = CleveRoids.StripRank(n)
                                         if _string_lower(n) == cleanupNameLower then
@@ -5089,7 +5089,7 @@ function CleveRoids.CheckSpellCast(unit, spell)
     if not CleveRoids.spell_tracking[guid] then
         return false
     else
-        if spell == GetSpellRecField(CleveRoids.spell_tracking[guid].spell_id, "name") or (spell == "") then
+        if spell == C_Spell.GetSpellName(CleveRoids.spell_tracking[guid].spell_id) or (spell == "") then
             return true
         end
         return false
