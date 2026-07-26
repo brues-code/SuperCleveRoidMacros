@@ -1391,12 +1391,6 @@ end
 -- Extension Entry Points
 -- ============================================================================
 
-function Extension.OnAddonLoaded()
-    if arg1 == "Blizzard_MacroUI" then
-        InstallHooks()
-    end
-end
-
 function Extension.OnLoad()
     -- Skip if macro checker is disabled
     if CleveRoidMacros and CleveRoidMacros.macrocheck == 0 then return end
@@ -1404,13 +1398,9 @@ function Extension.OnLoad()
     -- Skip if SuperMacro is loaded (detected at load time)
     if SuperMacroFrame ~= nil then return end
 
-    -- Listen for macro UI loading
-    Extension.RegisterEvent("ADDON_LOADED", "OnAddonLoaded")
-
-    -- If MacroFrame already exists (unlikely but safe), hook immediately
-    if MacroFrame and MacroFrameText then
-        InstallHooks()
-    end
+    -- Install once Blizzard's macro UI is available (fires immediately if already
+    -- loaded), replacing the ADDON_LOADED listener + manual "already loaded" check.
+    EventUtil.ContinueOnAddOnLoaded("Blizzard_MacroUI", InstallHooks)
 end
 
 _G["CleveRoids"] = CleveRoids

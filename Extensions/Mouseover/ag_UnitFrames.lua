@@ -4,7 +4,6 @@ local CleveRoids = _G.CleveRoids or {}
 CleveRoids.Hooks = CleveRoids.Hooks or {}
 
 local Extension = CleveRoids.RegisterExtension("ag_UnitFrames")
-Extension.RegisterEvent("ADDON_LOADED", "OnLoad")
 
 function Extension.OnEnter(unit)
     CleveRoids.SetMouseoverFrom("aguf", unit)
@@ -23,7 +22,6 @@ function Extension.OnLoad()
     CleveRoids.Hooks.ag_UnitFrames = { OnEnter = aUF.classes.aUFunit.prototype.OnEnter, OnLeave = aUF.classes.aUFunit.prototype.OnLeave}
     aUF.classes.aUFunit.prototype.OnEnter = CleveRoids.aUFOnEnter
     aUF.classes.aUFunit.prototype.OnLeave = CleveRoids.aUFOnLeave
-    Extension.UnregisterEvent("ADDON_LOADED", "Onload")
 end
 
 -- Taken from ag_UnitClass.lua
@@ -41,4 +39,4 @@ function CleveRoids:aUFOnLeave()
 end
 
 
-_G["CleveRoids"] = CleveRoids
+EventUtil.ContinueOnAddOnLoaded("ag_UnitFrames", Extension.OnLoad)

@@ -8,7 +8,6 @@ local CleveRoids = _G.CleveRoids or {}
 CleveRoids.Hooks = CleveRoids.Hooks or {}
 
 local Extension = CleveRoids.RegisterExtension("PerfectRaid")
-Extension.RegisterEvent("ADDON_LOADED", "OnLoad")
 
 function Extension.OnEnter(unit)
     CleveRoids.SetMouseoverFrom("praid", unit)
@@ -20,10 +19,6 @@ function Extension.OnLeave()
 end
 
 function Extension.OnLoad()
-    if arg1 ~= "PerfectRaid" then
-        return
-    end
-
     CleveRoids.Hooks.PerfectRaid = { CreateFrame = PerfectRaid.CreateFrame }
     PerfectRaid.CreateFrame = CleveRoids.PerfectRaidCreateFrame
 end
@@ -134,4 +129,4 @@ function CleveRoids.PerfectRaidCreateFrame(self, num)
 --]]
 end
 
-_G["CleveRoids"] = CleveRoids
+EventUtil.ContinueOnAddOnLoaded("PerfectRaid", Extension.OnLoad)

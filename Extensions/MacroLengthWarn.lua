@@ -133,12 +133,6 @@ function Extension.OnMacroFrameLoad()
     end
 end
 
-function Extension.OnAddonLoaded()
-    if arg1 == "Blizzard_MacroUI" then
-        Extension.OnMacroFrameLoad()
-    end
-end
-
 function Extension.OnLoad()
     -- Schedule messages to show after UI is ready
     local function ShowMessages()
@@ -178,16 +172,11 @@ function Extension.OnLoad()
         end
     end
 
-    -- Listen for macro UI loading
-    Extension.RegisterEvent("ADDON_LOADED", "OnAddonLoaded")
+    -- Hook the macro UI once available (fires immediately if already loaded).
+    EventUtil.ContinueOnAddOnLoaded("Blizzard_MacroUI", Extension.OnMacroFrameLoad)
 
-    -- Also try to hook MacroFrame_SaveMacro if it already exists
-    if MacroFrame_SaveMacro then
-        Extension.OnMacroFrameLoad()
-    end
-
-    -- Register PLAYER_LOGIN to show status messages
-    Extension.RegisterEvent("PLAYER_LOGIN", "OnPlayerLogin")
+    -- Status messages on login (currently disabled inside OnPlayerLogin).
+    EventUtil.ContinueOnPlayerLogin(Extension.OnPlayerLogin)
 
     -- Store the message function for later
     Extension.ShowMessages = ShowMessages

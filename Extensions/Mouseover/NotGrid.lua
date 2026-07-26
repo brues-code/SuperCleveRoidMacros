@@ -8,7 +8,6 @@ local CleveRoids = _G.CleveRoids or {}
 local CreateFrames = nil
 
 local Extension = CleveRoids.RegisterExtension("NotGrid")
-Extension.RegisterEvent("ADDON_LOADED", "OnLoad")
 
 function Extension.OnEnter()
     CleveRoids.SetMouseoverFrom("ngrid", this.unit)
@@ -48,7 +47,6 @@ function Extension.OnLoad()
     CreateFrames = NotGrid.CreateFrames
     NotGrid.CreateFrames = CleveRoids.NotGrid_CreateFrames
 
-    Extension.UnregisterEvent("ADDON_LOADED", "Onload")
 end
 
-_G["CleveRoids"] = CleveRoids
+EventUtil.ContinueOnAddOnLoaded("NotGrid", Extension.OnLoad)

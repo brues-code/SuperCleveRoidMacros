@@ -6,7 +6,6 @@ local _G = _G or getfenv(0)
 local CleveRoids = _G.CleveRoids or {}
 
 local Extension = CleveRoids.RegisterExtension("CT_RaidAssist")
-Extension.RegisterEvent("ADDON_LOADED", "OnLoad")
 
 function Extension.OnEnter()
 	local tempOptions = CT_RAMenu_Options["temp"]
@@ -49,14 +48,10 @@ function Extension.OnLeave()
 end
 
 function Extension.OnLoad()
-    if arg1 ~= "CT_RaidAssist" then
-        return
-    end
-
     Extension.Hook("CT_RA_MemberFrame_OnEnter", "OnEnter")
     Extension.HookMethod(_G["GameTooltip"], "Hide", "OnLeave")
     Extension.HookMethod(_G["GameTooltip"], "FadeOut", "OnLeave")
 
 end
 
-_G["CleveRoids"] = CleveRoids
+EventUtil.ContinueOnAddOnLoaded("CT_RaidAssist", Extension.OnLoad)

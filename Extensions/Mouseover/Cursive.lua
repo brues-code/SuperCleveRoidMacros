@@ -9,7 +9,6 @@ local CleveRoids = _G.CleveRoids or {}
 CleveRoids.Hooks = CleveRoids.Hooks or {}
 
 local Extension = CleveRoids.RegisterExtension("CursiveMouseover")
-Extension.RegisterEvent("ADDON_LOADED", "OnLoad")
 
 local hooked = false
 
@@ -66,16 +65,13 @@ local function HookCursiveUI()
 end
 
 function Extension.OnLoad()
-    -- Try to hook when Cursive loads
-    if arg1 == "Cursive" then
-        -- Delay slightly to ensure Cursive.ui is initialized
-        local frame = CreateFrame("Frame")
-        frame:SetScript("OnUpdate", function()
-            if HookCursiveUI() then
-                this:Hide()
-            end
-        end)
-    end
+    -- Delay slightly to ensure Cursive.ui is initialized
+    local frame = CreateFrame("Frame")
+    frame:SetScript("OnUpdate", function()
+        if HookCursiveUI() then
+            this:Hide()
+        end
+    end)
 end
 
 -- Also try to hook immediately in case Cursive is already loaded
@@ -83,4 +79,4 @@ if Cursive and Cursive.ui then
     HookCursiveUI()
 end
 
-_G["CleveRoids"] = CleveRoids
+EventUtil.ContinueOnAddOnLoaded("Cursive", Extension.OnLoad)

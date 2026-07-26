@@ -2,9 +2,10 @@ local _G = _G or getfenv(0)
 local CleveRoids = _G.CleveRoids or {}
 
 local Extension = CleveRoids.RegisterExtension("Compatibility_pfUI")
-Extension.RegisterEvent("ADDON_LOADED", "ADDON_LOADED")
-Extension.RegisterEvent("PLAYER_LOGIN", "PLAYER_LOGIN")
 Extension.Debug = false
+-- pfUI-loaded and player-login handlers are wired via ClassicAPI's EventUtil at
+-- the bottom of the file (ContinueOnAddOnLoaded fires immediately if pfUI already
+-- loaded, so no separate "we missed pfUI's ADDON_LOADED" fallback is needed).
 
 -- Track pfUI state
 Extension.pfUILoaded = false
@@ -726,23 +727,22 @@ function Extension.OnLoad()
     SLASH_PFUICD1 = "/pfuicd"
 end
 
-function Extension.ADDON_LOADED()
-    -- Check if pfUI just loaded AND the global actually exists
-    -- (another addon could be named "pfUI" without being the real UI framework)
-    if arg1 == "pfUI" and pfUI then
-        Extension.pfUILoaded = true
-        -- pfUI modules load after ADDON_LOADED, so schedule a check
-        if CleveRoids.ScheduleTimer then
-            CleveRoids.ScheduleTimer(function()
-                Extension.SetupCompatibility()
-            end, 0.5)
-        end
+-- Fires once pfUI has loaded (immediately if it loaded before us, via EventUtil).
+function Extension.OnPfUILoaded()
+    -- Guard: only the real pfUI framework sets this global (another addon could be
+    -- named "pfUI" without being the UI framework).
+    if not pfUI then return end
+    Extension.pfUILoaded = true
+    -- pfUI's submodules initialize after its ADDON_LOADED, so defer the setup.
+    if CleveRoids.ScheduleTimer then
+        CleveRoids.ScheduleTimer(function()
+            Extension.SetupCompatibility()
+        end, 0.5)
     end
 end
 
-function Extension.PLAYER_LOGIN()
-    -- If pfUI loaded before SCRM (alphabetical order), ADDON_LOADED for pfUI was missed.
-    -- Re-run InitPfUIIntegration here to ensure lib.objects is linked correctly.
+function Extension.OnPlayerLogin()
+    -- Ensure lib.objects is linked correctly (InitPfUIIntegration is idempotent).
     if pfUI and not CleveRoids.hasPfUI76 then
         local lib = CleveRoids.libdebuff
         if lib and lib.InitPfUIIntegration then
@@ -796,5 +796,11 @@ if not CleveRoids.ScheduleTimer then
         end)
     end
 end
+
+-- Wire handlers via ClassicAPI EventUtil (fires immediately if the event already
+-- happened, so load order relative to pfUI no longer matters). Registered here,
+-- after the handlers are defined, since ContinueOnAddOnLoaded may fire inline.
+EventUtil.ContinueOnAddOnLoaded("pfUI", Extension.OnPfUILoaded)
+EventUtil.ContinueOnPlayerLogin(Extension.OnPlayerLogin)
 
 _G["CleveRoids"] = CleveRoids
