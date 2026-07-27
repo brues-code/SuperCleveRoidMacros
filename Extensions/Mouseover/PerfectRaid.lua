@@ -18,7 +18,10 @@ function Extension.OnLeave()
     CleveRoids.ClearMouseoverFrom("native")
 end
 
-function Extension.OnLoad()
+function Extension.OnLoad() end
+
+function Extension.OnAddOnLoad()
+    if not PerfectRaid then return end
     CleveRoids.Hooks.PerfectRaid = { CreateFrame = PerfectRaid.CreateFrame }
     PerfectRaid.CreateFrame = CleveRoids.PerfectRaidCreateFrame
 end
@@ -129,4 +132,4 @@ function CleveRoids.PerfectRaidCreateFrame(self, num)
 --]]
 end
 
-EventUtil.ContinueOnAddOnLoaded("PerfectRaid", Extension.OnLoad)
+EventUtil.ContinueOnAddOnLoaded("PerfectRaid", Extension.OnAddOnLoad)

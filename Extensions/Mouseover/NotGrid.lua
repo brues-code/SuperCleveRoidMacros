@@ -38,7 +38,9 @@ function CleveRoids:NotGrid_CreateFrames()
     end
 end
 
-function Extension.OnLoad()
+function Extension.OnLoad() end
+
+function Extension.OnAddOnLoad()
     -- NotGrid loads before CleveRoids, so if NotGrid is enabled, then it's global will exist.
     if not NotGrid then
         return
@@ -49,4 +51,4 @@ function Extension.OnLoad()
 
 end
 
-EventUtil.ContinueOnAddOnLoaded("NotGrid", Extension.OnLoad)
+EventUtil.ContinueOnAddOnLoaded("NotGrid", Extension.OnAddOnLoad)

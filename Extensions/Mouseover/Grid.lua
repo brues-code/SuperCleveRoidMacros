@@ -18,7 +18,10 @@ function Extension.OnLeave()
     CleveRoids.ClearMouseoverFrom("native")
 end
 
-function Extension.OnLoad()
+function Extension.OnLoad() end
+
+function Extension.OnAddOnLoad()
+	if not GridFrame then return end
     CleveRoids.Hooks.Grid = { CreateFrames = GridFrame.frameClass.prototype.CreateFrames}
     GridFrame.frameClass.prototype.CreateFrames = CleveRoids.GrdCreateFrames
 end
@@ -106,4 +109,4 @@ function CleveRoids:GrdCreateFrames()
 	ClickCastFrames[self.frame] = true
 end
 
-EventUtil.ContinueOnAddOnLoaded("Grid", Extension.OnLoad)
+EventUtil.ContinueOnAddOnLoaded("Grid", Extension.OnAddOnLoad)

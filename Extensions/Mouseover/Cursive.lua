@@ -74,9 +74,4 @@ function Extension.OnLoad()
     end)
 end
 
--- Also try to hook immediately in case Cursive is already loaded
-if Cursive and Cursive.ui then
-    HookCursiveUI()
-end
-
 EventUtil.ContinueOnAddOnLoaded("Cursive", Extension.OnLoad)

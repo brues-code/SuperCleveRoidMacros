@@ -25,7 +25,10 @@ function Extension.OnLeaveElement()
     CleveRoids.ClearMouseoverFrom("native")
 end
 
-function Extension.OnLoad()
+function Extension.OnLoad() end
+
+function Extension.OnAddOnLoad()
+    if not DUF_UnitFrame_OnEnter then return end
     CleveRoids.ClearHooks()
     Extension.Hook("DUF_UnitFrame_OnEnter", "OnEnterFrame")
     Extension.Hook("DUF_UnitFrame_OnLeave", "OnLeaveFrame")
@@ -34,4 +37,4 @@ function Extension.OnLoad()
     Extension.Hook("DUF_Element_OnLeave", "OnLeaveElement")
 end
 
-EventUtil.ContinueOnAddOnLoaded("DiscordUnitFrames", Extension.OnLoad)
+EventUtil.ContinueOnAddOnLoaded("DiscordUnitFrames", Extension.OnAddOnLoad)

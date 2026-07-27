@@ -23,7 +23,9 @@ function Extension.SetHook(widget)
     end)
 end
 
-function Extension.OnLoad()
+function Extension.OnLoad() end
+
+function Extension.OnAddOnLoad()
     if not CT_AssistFrame then
         return
     end
@@ -35,4 +37,4 @@ function Extension.OnLoad()
     Extension.SetHook(CT_AssistFrame_Drag)
 end
 
-EventUtil.ContinueOnAddOnLoaded("CT_UnitFrames", Extension.OnLoad)
+EventUtil.ContinueOnAddOnLoaded("CT_UnitFrames", Extension.OnAddOnLoad)

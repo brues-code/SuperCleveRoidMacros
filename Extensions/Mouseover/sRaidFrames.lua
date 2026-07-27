@@ -16,10 +16,13 @@ function Extension.OnLeave()
     CleveRoids.ClearMouseoverFrom("native")
 end
 
-function Extension.OnLoad()
+function Extension.OnLoad() end
+
+function Extension.OnAddOnLoad()
+    if not sRaidFrames then return end
     Extension.HookMethod(sRaidFrames, "UnitTooltip", "OnEnter")
     Extension.HookMethod(_G["GameTooltip"], "Hide", "OnLeave")
     Extension.HookMethod(_G["GameTooltip"], "FadeOut", "OnLeave")
 end
 
-EventUtil.ContinueOnAddOnLoaded("sRaidFrames", Extension.OnLoad)
+EventUtil.ContinueOnAddOnLoaded("sRaidFrames", Extension.OnAddOnLoad)
