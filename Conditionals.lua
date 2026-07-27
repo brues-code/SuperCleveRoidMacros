@@ -6025,14 +6025,14 @@ CleveRoids.Keywords = {
         local groupVal = conditionals.group
         -- Boolean form [group] - check if in any group
         if groupVal == true then
-            return GetNumPartyMembers() > 0 or GetNumRaidMembers() > 0
+            return IsInGroup()
         end
         -- Value form [group:party] or [group:raid] or [group:party/raid]
         return Multi(groupVal, function(groupType)
             if groupType == "party" then
-                return GetNumPartyMembers() > 0
+                return IsInGroup()
             elseif groupType == "raid" then
-                return GetNumRaidMembers() > 0
+                return IsInRaid()
             end
             return false
         end, conditionals, "group")
@@ -6044,14 +6044,14 @@ CleveRoids.Keywords = {
         local groupVal = conditionals.nogroup
         -- Boolean form [nogroup] - check if not in any group
         if groupVal == true then
-            return GetNumPartyMembers() == 0 and GetNumRaidMembers() == 0
+            return not IsInGroup()
         end
         -- Value form with De Morgan's law via NegatedMulti
         return NegatedMulti(groupVal, function(groupType)
             if groupType == "party" then
-                return GetNumPartyMembers() == 0
+                return not IsInGroup()
             elseif groupType == "raid" then
-                return GetNumRaidMembers() == 0
+                return not IsInRaid()
             end
             return true
         end, conditionals, "nogroup")
