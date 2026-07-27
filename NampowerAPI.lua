@@ -71,7 +71,6 @@
 
     Spell Miss Events (v2.31+):
     - SPELL_MISS_SELF / SPELL_MISS_OTHER - Spell miss/resist/immune/dodge/etc.
-    - GetSpellPower([mode]) - Player mod damage done for all 7 schools
 
     Aura Event State Parameter (v2.32+):
     - Buff/debuff events include 7th `state` parameter (0=added, 1=removed, 2=modified)
@@ -364,9 +363,8 @@ API.VERSION_REQUIREMENTS = {
     ["AuraDurationEvents"]      = { 2, 30, 0 },
     ["GetPlayerAuraDuration"]   = { 2, 30, 0, "GetPlayerAuraDuration" },
 
-    -- v2.31+ - Spell miss events and spell power query
+    -- v2.31+ - Spell miss events
     ["SpellMissEvents"]         = { 2, 31, 0 },  -- SPELL_MISS_SELF/OTHER events
-    ["GetSpellPower"]           = { 2, 31, 0, "GetSpellPower" },
 
     -- v2.32+ - Aura event state parameter and stack removal fix
     ["AuraEventState"]          = { 2, 32, 0 },
@@ -575,9 +573,8 @@ local function InitializeFeatures()
     f.hasAuraDurationEvents = API.HasFeature("AuraDurationEvents")
     f.hasGetPlayerAuraDuration = API.HasFeature("GetPlayerAuraDuration")
 
-    -- v2.31+ Spell miss events and spell power
+    -- v2.31+ Spell miss events
     f.hasSpellMissEvents = API.HasFeature("SpellMissEvents")
-    f.hasGetSpellPower = API.HasFeature("GetSpellPower")
 
     -- v2.32+ Aura event state parameter
     f.hasAuraEventState = API.HasFeature("AuraEventState")
@@ -3387,15 +3384,6 @@ API.MISS_INFO = {
 -- SPELL POWER QUERY (v2.31+)
 --------------------------------------------------------------------------------
 
--- Get spell power for all 7 damage schools (v2.31+)
--- mode: optional mode parameter passed to GetSpellPower
--- Returns: physical, holy, fire, nature, frost, shadow, arcane (or nil if unavailable)
-function API.GetSpellPower(mode)
-    if not API.features.hasGetSpellPower or not _G.GetSpellPower then
-        return nil, nil, nil, nil, nil, nil, nil
-    end
-    return _G.GetSpellPower(mode)
-end
 
 -- Get duration of a spell in milliseconds (v2.38+)
 -- For channeling spells: returns the channel duration.

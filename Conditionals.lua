@@ -444,24 +444,26 @@ local stat_checks = {
     attackpower = function() local base, pos, neg = UnitAttackPower("player"); return base + pos + neg end,
     rap = function() local base, pos, neg = UnitRangedAttackPower("player"); return base + pos + neg end,
     rangedattackpower = function() local base, pos, neg = UnitRangedAttackPower("player"); return base + pos + neg end,
-    healing = function() local _, h = CleveRoids.NampowerAPI.GetSpellPower(); return h or 0 end,
-    healingpower = function() local _, h = CleveRoids.NampowerAPI.GetSpellPower(); return h or 0 end,
+    healing = function() return CleveRoids.ClassicAPI.GetSpellBonusHealing() or 0 end,
+    healingpower = function() return CleveRoids.ClassicAPI.GetSpellBonusHealing() or 0 end,
 
-    -- Bonus Spell Damage by School (Nampower v2.31+ GetSpellPower)
-    -- GetSpellPower() returns: physical, holy, fire, nature, frost, shadow, arcane
-    arcane_power = function() return select(7, CleveRoids.NampowerAPI.GetSpellPower()) or 0 end,
-    fire_power = function() return select(3, CleveRoids.NampowerAPI.GetSpellPower()) or 0 end,
-    frost_power = function() return select(5, CleveRoids.NampowerAPI.GetSpellPower()) or 0 end,
-    nature_power = function() return select(4, CleveRoids.NampowerAPI.GetSpellPower()) or 0 end,
-    shadow_power = function() return select(6, CleveRoids.NampowerAPI.GetSpellPower()) or 0 end,
+    -- Bonus Spell Damage by School (ClassicAPI GetSpellBonusDamage)
+    -- school: 1=Physical, 2=Holy, 3=Fire, 4=Nature, 5=Frost, 6=Shadow, 7=Arcane
+    arcane_power = function() return CleveRoids.ClassicAPI.GetSpellBonusDamage(7) or 0 end,
+    fire_power = function() return CleveRoids.ClassicAPI.GetSpellBonusDamage(3) or 0 end,
+    frost_power = function() return CleveRoids.ClassicAPI.GetSpellBonusDamage(5) or 0 end,
+    nature_power = function() return CleveRoids.ClassicAPI.GetSpellBonusDamage(4) or 0 end,
+    shadow_power = function() return CleveRoids.ClassicAPI.GetSpellBonusDamage(6) or 0 end,
 
     -- Highest spell power across all schools
     spell_power = function()
-        local p, h, fi, n, fr, s, a = CleveRoids.NampowerAPI.GetSpellPower()
-        if p then
-            return math.max(p, h, fi, n, fr, s, a)
+        local API = CleveRoids.ClassicAPI
+        local best = 0
+        for s = 1, 7 do
+            local v = API.GetSpellBonusDamage(s) or 0
+            if v > best then best = v end
         end
-        return 0
+        return best
     end,
 
     -- Defensive Stats

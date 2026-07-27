@@ -181,6 +181,22 @@ function API.GetSpellEffectMechanics(spellID)
     return nil
 end
 
+-- Flat spell-damage bonus (spell power) for a magic school, as a number.
+-- school is 1-based: 1=Physical, 2=Holy, 3=Fire, 4=Nature, 5=Frost, 6=Shadow,
+-- 7=Arcane. Reads the same client field nampower's GetSpellPower does -- exact,
+-- with gear/enchants/buffs/talents/set bonuses baked in.
+function API.GetSpellBonusDamage(school)
+    return GetSpellBonusDamage(school)
+end
+
+-- Flat healing bonus (+healing), as a number. Vanilla has no healing-done field,
+-- so ClassicAPI derives it from gear/enchant/buff MOD_HEALING_DONE plus
+-- stat-conversion talents (e.g. Spiritual Guidance) -- exact, not a holy-damage
+-- proxy.
+function API.GetSpellBonusHealing()
+    return GetSpellBonusHealing()
+end
+
 --------------------------------------------------------------------------------
 -- State
 --------------------------------------------------------------------------------
