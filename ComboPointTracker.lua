@@ -32,6 +32,35 @@ CleveRoids.lastRakeCast = CleveRoids.lastRakeCast or {
     timestamp = 0
 }
 
+-- Family membership without hardcoded rank lists. C_Spell.GetSpellName resolves
+-- ANY spellID from the client's Spell.dbc -- every rank (so no enumeration or
+-- spellbook scan) and TWoW's custom spells alike -- so "is this spellID a Rip?"
+-- is just a name match against one seed rank. seedNameCache memoizes the seed's
+-- localized name (locale-safe: derived from the ID, not a hardcoded string; a
+-- seed absent from the DBC, e.g. a TWoW spell on a stock client, resolves to nil
+-- and the set simply never matches -- which is correct, that spell can't be cast).
+local seedNameCache = {}
+local function SeedName(seedID)
+    local n = seedNameCache[seedID]
+    if n == nil then
+        n = C_Spell.GetSpellName(seedID) or false
+        seedNameCache[seedID] = n
+    end
+    return n or nil
+end
+
+-- Stand-in for a hardcoded {spellID=true,...} rank set: t[spellID] is true iff
+-- spellID is any rank of the family seeded by seedID. Same read shape as the old
+-- tables, so every membership consumer (`X and X[id]`) keeps working unchanged.
+-- Only valid for membership tests -- these are not iterable (pairs() sees empty).
+local function RankSet(seedID)
+    return setmetatable({}, { __index = function(_, spellID)
+        if type(spellID) ~= "number" then return nil end
+        local name = SeedName(seedID)
+        return (name and C_Spell.GetSpellName(spellID) == name) and true or nil
+    end })
+end
+
 -- Define spells that scale with combo points by SPELL ID and their duration formulas
 -- Duration = base + (combo_points - 1) * increment
 CleveRoids.ComboScalingSpellsByID = {
@@ -70,23 +99,9 @@ CleveRoids.FerociousBiteSpellIDs = {
     [31018] = true,  -- Rank 6
 }
 
--- Rip spell IDs (for Carnage talent - refreshed when Carnage procs)
-CleveRoids.RipSpellIDs = {
-    [1079] = true,   -- Rank 1
-    [9492] = true,   -- Rank 2
-    [9493] = true,   -- Rank 3
-    [9752] = true,   -- Rank 4
-    [9894] = true,   -- Rank 5
-    [9896] = true,   -- Rank 6
-}
-
--- Rake spell IDs (for Carnage talent - refreshed when Carnage procs)
-CleveRoids.RakeSpellIDs = {
-    [1822] = true,   -- Rank 1
-    [1823] = true,   -- Rank 2
-    [1824] = true,   -- Rank 3
-    [9904] = true,   -- Rank 4
-}
+-- Rip / Rake families (for Carnage talent). Seeded by Rank 1; matches every rank.
+CleveRoids.RipSpellIDs = RankSet(1079)
+CleveRoids.RakeSpellIDs = RankSet(1822)
 
 -- Combined table for all bleed spells that need immunity detection
 -- Used when checking if a cast bleed failed to apply (indicates bleed immunity)
@@ -123,14 +138,9 @@ CleveRoids.PounceToBleedMapping = {
 -- When Molten Blast hits, it refreshes Flame Shock duration on the target
 -- Detection: Monitor combat log for Molten Blast damage, then refresh Flame Shock
 -- =============================================================================
-CleveRoids.MoltenBlastSpellIDs = {
-    [36916] = true,  -- Rank 1
-    [36917] = true,  -- Rank 2
-    [36918] = true,  -- Rank 3
-    [36919] = true,  -- Rank 4
-    [36920] = true,  -- Rank 5
-    [36921] = true,  -- Rank 6
-}
+-- TWoW custom; seed resolves on the TWoW client (nil/never-matches on stock,
+-- where Molten Blast can't be cast anyway).
+CleveRoids.MoltenBlastSpellIDs = RankSet(36916)
 
 CleveRoids.FlameShockSpellIDs = {
     [8050] = true,   -- Rank 1
@@ -145,12 +155,7 @@ CleveRoids.FlameShockSpellIDs = {
 -- WARLOCK: Conflagrate → Immolate Duration Reduction
 -- When Conflagrate is cast, it reduces Immolate duration by 3 seconds
 -- =============================================================================
-CleveRoids.ConflagrateSpellIDs = {
-    [17962] = true,  -- Rank 1
-    [18930] = true,  -- Rank 2
-    [18931] = true,  -- Rank 3
-    [18932] = true,  -- Rank 4
-}
+CleveRoids.ConflagrateSpellIDs = RankSet(17962)
 
 CleveRoids.ImmolateSpellIDs = {
     [348] = true,    -- Rank 1
@@ -168,11 +173,8 @@ CleveRoids.ImmolateSpellIDs = {
 -- Channeled spell that accelerates DoT tick rate by 30% while channeling
 -- Complex tracking: debuff expires 30% faster while Dark Harvest is active
 -- =============================================================================
-CleveRoids.DarkHarvestSpellIDs = {
-    [52550] = true,  -- Rank 1
-    [52551] = true,  -- Rank 2
-    [52552] = true,  -- Rank 3
-}
+-- TWoW custom (see MoltenBlast note).
+CleveRoids.DarkHarvestSpellIDs = RankSet(52550)
 
 -- =============================================================================
 -- DRUID: Rake Debuff Cap Boss Whitelist
