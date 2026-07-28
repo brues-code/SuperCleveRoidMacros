@@ -198,25 +198,32 @@ function API.GetSpellBonusHealing()
 end
 
 --------------------------------------------------------------------------------
+-- Unit Health
+--------------------------------------------------------------------------------
+
+-- Health deficit (max - current) for `unit` in one call. Falls back to
+-- UnitHealthMax - UnitHealth without ClassicAPI.
+API.UnitHealthMissing = UnitHealthMissing or function(unit)
+    return (UnitHealthMax(unit) or 0) - (UnitHealth(unit) or 0)
+end
+
+--------------------------------------------------------------------------------
 -- Unit Power
 --------------------------------------------------------------------------------
 
 -- Current power for a specific Enum.PowerType (0=Mana, 1=Rage, 2=Focus,
 -- 3=Energy, 4=Happiness), or the unit's primary power when powerType is omitted.
 -- Display-divided (rage reads 0..100). Falls back to UnitMana without ClassicAPI.
-function API.UnitPower(unit, powerType)
-    if type(UnitPower) == "function" then return UnitPower(unit, powerType) end
+API.UnitPower = UnitPower or function(unit, powerType)
     return UnitMana(unit)
 end
 
-function API.UnitPowerMax(unit, powerType)
-    if type(UnitPowerMax) == "function" then return UnitPowerMax(unit, powerType) end
+API.UnitPowerMax = UnitPowerMax or function(unit, powerType)
     return UnitManaMax(unit)
 end
 
 -- Power deficit (max - current) for the type / primary power, in one call.
-function API.UnitPowerMissing(unit, powerType)
-    if type(UnitPowerMissing) == "function" then return UnitPowerMissing(unit, powerType) end
+API.UnitPowerMissing = UnitPowerMissing or function(unit, powerType)
     return (UnitManaMax(unit) or 0) - (UnitMana(unit) or 0)
 end
 

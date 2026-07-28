@@ -3399,10 +3399,7 @@ end
 -- returns: True or false
 function CleveRoids.ValidateHpLost(unit, operator, amount)
     if not unit or not operator or not amount then return false end
-    local API = CleveRoids.NampowerAPI
-    local maxHp = API and API.GetUnitMaxHealth and API.GetUnitMaxHealth(unit) or UnitHealthMax(unit)
-    local hp = API and API.GetUnitHealth and API.GetUnitHealth(unit) or UnitHealth(unit)
-    local hpLost = maxHp - hp
+    local hpLost = CleveRoids.ClassicAPI.UnitHealthMissing(unit)
 
     if CleveRoids.operators[operator] then
         return CleveRoids.comparators[operator](hpLost, amount)
