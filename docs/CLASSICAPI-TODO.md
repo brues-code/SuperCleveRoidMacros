@@ -49,16 +49,15 @@ API references are line numbers into `C:\Git\ClassicAPI\docs\API.md`.
   - class-aware `[dispellable]` (only types this character can actually remove).
   - optional name filtering on the type keywords (e.g. `[magic:Polymorph]`).
 
-### 2. `C_Item.GetWeaponEnchantInfo()` — temp-enchant IDs
-- **API:** `API.md:7159` — returns 12-tuple including `enchantID` for main/off/ranged.
-- **Unlocks:** detect *which* temp enchant (poison/oil/sharpening stone) is
-  applied to a weapon, not just that one exists.
-- **Naming:** `[poison]` is now taken by the target dispel-type conditional
-  (slice 1 above). Use weapon-specific keywords for this — e.g.
-  `[mhenchant:<id>]` / `[ohenchant:<id>]` (or `[mhpoison:<id>]`/`[ohpoison:<id>]`),
-  not a bare `[poison]`.
-- Vanilla's global only reports presence; this is a genuinely new capability
-  (rogue/shaman/enhance).
+### 2. ~~`C_Item.GetWeaponEnchantInfo()` — temp-enchant IDs~~ — DONE
+- Shipped as `[mhenchant]` / `[ohenchant]` (+ `no` variants). Matches the applied
+  temp enchant by SpellItemEnchantment ID *or* localized name — the name path
+  resolves via `C_Item.GetEnchantInfo(id).name` (the ID→name table this doc
+  assumed we lacked), so no tooltip scan. Wrappers `ClassicAPI.GetWeaponEnchant`
+  / `GetEnchantName`; `ValidateWeaponImbue` now reads through the former.
+- Bare = any temp enchant; OR-lists supported (`[mhenchant:2823/Deadly_Poison]`).
+- Follow-up (optional): route `[mhimbue:Name]`'s match through `GetEnchantName`
+  too, retiring the green-text tooltip scan in `CheckWeaponImbueByName`.
 
 ### 3. `GetUnitSpeed(unit)` + `IsFalling()` / `IsSwimming()`
 - **API:** `API.md:8312`, `API.md:7629`.
