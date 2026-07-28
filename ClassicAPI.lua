@@ -88,9 +88,6 @@ end
 -- AuraData (spellId, name, applications, duration, expirationTime, dispelName, ...).
 function API.GetUnitAuraBySpellID(unit, spellID, filter)
     if not unit or not spellID then return nil end
-    if type(C_UnitAuras) ~= "table" or type(C_UnitAuras.GetUnitAuraBySpellID) ~= "function" then
-        return nil
-    end
     return C_UnitAuras.GetUnitAuraBySpellID(unit, spellID, filter)
 end
 
@@ -101,9 +98,6 @@ end
 -- portability where a spellID is known.
 function API.GetAuraDataBySpellName(unit, spellName, filter)
     if not unit or not spellName or spellName == "" then return nil end
-    if type(C_UnitAuras) ~= "table" or type(C_UnitAuras.GetAuraDataBySpellName) ~= "function" then
-        return nil
-    end
     return C_UnitAuras.GetAuraDataBySpellName(unit, spellName, filter)
 end
 
@@ -192,7 +186,6 @@ end
 -- [noequipset]; the swap side is the reclaimed /equipset command.
 function API.IsEquipmentSetEquipped(name)
     if not name or name == "" then return false end
-    if type(C_EquipmentSet) ~= "table" then return false end
     local setID = C_EquipmentSet.GetEquipmentSetID(name)
     if not setID then return false end
     local _, _, _, isEquipped = C_EquipmentSet.GetEquipmentSetInfo(setID)
@@ -210,16 +203,14 @@ end
 -- just that one exists. Falls back to the vanilla 6-tuple global (enchantID nil,
 -- no ranged slot) when the C_Item version is unavailable.
 function API.GetWeaponEnchant(slot)
-    if type(C_Item) == "table" and type(C_Item.GetWeaponEnchantInfo) == "function" then
-        local hasM, mExp, mChg, mID, hasO, oExp, oChg, oID, hasR, rExp, rChg, rID =
-            C_Item.GetWeaponEnchantInfo()
-        if slot == "oh" then return hasO, oExp, oChg, oID
-        elseif slot == "ranged" then return hasR, rExp, rChg, rID
-        else return hasM, mExp, mChg, mID end
+    local hasM, mExp, mChg, mID, hasO, oExp, oChg, oID, hasR, rExp, rChg, rID =
+        C_Item.GetWeaponEnchantInfo()
+    if slot == "oh" then
+        return hasO, oExp, oChg, oID
+    elseif slot == "ranged" then
+        return hasR, rExp, rChg, rID
     end
-    local hasM, mExp, mChg, hasO, oExp, oChg = GetWeaponEnchantInfo()
-    if slot == "oh" then return hasO, oExp, oChg, nil end
-    return hasM, mExp, mChg, nil
+    return hasM, mExp, mChg, mID
 end
 
 -- Localized name of an item-enchant ID (poison/oil/sharpening stone/permanent),
@@ -228,7 +219,6 @@ end
 -- resolve the applied enchant's name without scraping the weapon tooltip.
 function API.GetEnchantName(enchantID)
     if not enchantID or enchantID == 0 then return nil end
-    if type(C_Item) ~= "table" or type(C_Item.GetEnchantInfo) ~= "function" then return nil end
     local info = C_Item.GetEnchantInfo(enchantID)
     return info and info.name or nil
 end
@@ -244,10 +234,6 @@ end
 -- seconds remaining (nil if ClassicAPI didn't observe the applying cast). Returns
 -- 0 for a client without C_LossOfControl. Player-only (vanilla LoC is local-only).
 function API.GetSchoolLockout()
-    if type(C_LossOfControl) ~= "table"
-        or type(C_LossOfControl.GetActiveLossOfControlDataCount) ~= "function" then
-        return 0, nil
-    end
     local n = C_LossOfControl.GetActiveLossOfControlDataCount() or 0
     for i = 1, n do
         local d = C_LossOfControl.GetActiveLossOfControlData(i)
@@ -278,10 +264,7 @@ end
 -- so GetSpellMechanicByID returns 0 but this returns {0,15,0}). Nil-guarded so an
 -- older ClassicAPI build without the function degrades gracefully.
 function API.GetSpellEffectMechanics(spellID)
-    if type(C_Spell.GetSpellEffectMechanics) == "function" then
-        return C_Spell.GetSpellEffectMechanics(spellID)
-    end
-    return nil
+    return C_Spell.GetSpellEffectMechanics(spellID)
 end
 
 -- Flat spell-damage bonus (spell power) for a magic school, as a number.
