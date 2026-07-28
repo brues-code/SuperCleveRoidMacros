@@ -2441,31 +2441,13 @@ function lib:FindPlayerDebuff(unit, spellID)
     return nil
   end
 
-  -- Find the texture by searching debuff and buff slots
+  -- Find the texture/stacks via one by-ID lookup (walks both debuff and buff
+  -- ranges), replacing the 16 debuff + 32 buff slot scan.
   local texture, stacks = nil, rec.stacks
-
-  -- Search debuff slots first
-  for i = 1, 16 do
-    local tex, st, dtype, sid = UnitDebuff(unit, i)
-    if not tex then break end
-    if sid == spellID then
-      texture = tex
-      stacks = st or stacks
-      break
-    end
-  end
-
-  -- If not found in debuffs, search buff slots
-  if not texture then
-    for i = 1, 32 do
-      local tex, st, sid = UnitBuff(unit, i)
-      if not tex then break end
-      if sid == spellID then
-        texture = tex
-        stacks = st or stacks
-        break
-      end
-    end
+  local aura = CleveRoids.ClassicAPI.GetUnitAuraBySpellID(unit, spellID)
+  if aura then
+    texture = aura.icon
+    stacks = aura.applications or stacks
   end
 
   if not texture then return nil end
@@ -2493,17 +2475,12 @@ function lib:FindPlayerBuff(unit, spellID)
     return nil
   end
 
-  -- Find the texture by searching buff slots only
+  -- Find the texture/stacks via one by-ID lookup restricted to buffs.
   local texture, stacks = nil, rec.stacks
-
-  for i = 1, 32 do
-    local tex, st, sid = UnitBuff(unit, i)
-    if not tex then break end
-    if sid == spellID then
-      texture = tex
-      stacks = st or stacks
-      break
-    end
+  local aura = CleveRoids.ClassicAPI.GetUnitAuraBySpellID(unit, spellID, "HELPFUL")
+  if aura then
+    texture = aura.icon
+    stacks = aura.applications or stacks
   end
 
   if not texture then return nil end
