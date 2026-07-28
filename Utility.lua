@@ -670,11 +670,17 @@ function CleveRoids.PrintT(t, depth)
 end
 
 CleveRoids.kmods = {
-    ctrl  = IsControlKeyDown,
-    alt   = IsAltKeyDown,
-    shift = IsShiftKeyDown,
-    mod   = function() return (IsControlKeyDown() or IsAltKeyDown() or IsShiftKeyDown()) end,
-    nomod = function() return (not IsControlKeyDown() and not IsAltKeyDown() and not IsShiftKeyDown()) end,
+    ctrl   = IsControlKeyDown,
+    lctrl  = IsLeftControlKeyDown,
+    rctrl  = IsRightControlKeyDown,
+    alt    = IsAltKeyDown,
+    lalt   = IsLeftAltKeyDown,
+    ralt   = IsRightAltKeyDown,
+    shift  = IsShiftKeyDown,
+    lshift = IsLeftShiftKeyDown,
+    rshift = IsRightShiftKeyDown,
+    mod    = IsModifierKeyDown,
+    nomod  = function() return not IsModifierKeyDown() end,
 }
 
 -- Key code lookup table for [keydown:X] conditional (Nampower v2.41+)
