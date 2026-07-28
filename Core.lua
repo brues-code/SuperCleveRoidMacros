@@ -151,6 +151,8 @@ local BOOLEAN_CONDITIONALS = {
     nomhenchant = true,
     ohenchant = true,
     noohenchant = true,
+    locked = true,
+    nolocked = true,
     group = true,
     nogroup = true,
     moving = true,
@@ -1581,18 +1583,9 @@ function CleveRoids.TryTargetFocus()
     return true
 end
 
--- Resolves the player's focus to a usable unit token.
--- Prefers pfUI's emulated focus (resolves to a real token like "party2"/"raid5")
--- for pfUI users, then falls back to ClassicAPI's native "focus" token (which
--- every UnitX function accepts) for everyone else.
 -- Returns the resolved token, or nil when no focus is set so @focus clauses
 -- silently fall through to the next macro alternative (no warning spam).
 function CleveRoids.GetFocusUnitId()
-    if pfUI and pfUI.uf and pfUI.uf.focus and pfUI.uf.focus.label and pfUI.uf.focus.id
-       and UnitExists(pfUI.uf.focus.label .. pfUI.uf.focus.id) then
-        return pfUI.uf.focus.label .. pfUI.uf.focus.id
-    end
-    -- ClassicAPI native focus token (set via /focus or the FOCUSTARGET keybind)
     if UnitExists("focus") then
         return "focus"
     end
@@ -4860,6 +4853,13 @@ CleveRoids.Frame:RegisterEvent("PLAYER_REGEN_ENABLED")  -- Left actual combat (n
 CleveRoids.Frame:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
 CleveRoids.Frame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
 CleveRoids.Frame:RegisterEvent("PLAYER_STARTED_MOVING")
+-- ClassicAPI loss-of-control (school-interrupt lockout) for [locked]/[nolocked].
+-- Gated on the namespace so an older ClassicAPI without it doesn't error on an
+-- unknown event.
+if type(C_LossOfControl) == "table" then
+    CleveRoids.Frame:RegisterEvent("LOSS_OF_CONTROL_ADDED")
+    CleveRoids.Frame:RegisterEvent("LOSS_OF_CONTROL_UPDATE")
+end
 -- Use GUID events when available (v2.39+), fall back to standard per-token events
 if CleveRoids.NampowerAPI.features.hasUnitGuidEvents then
     CleveRoids.Frame:RegisterEvent("UNIT_AURA_GUID")
@@ -5799,6 +5799,13 @@ function CleveRoids.Frame:PLAYER_FOCUS_CHANGED()
         CleveRoids.QueueActionUpdate()
     end
 end
+-- School-interrupt lockout applied/changed -> refresh [locked]/[nolocked] icons.
+function CleveRoids.Frame:LOSS_OF_CONTROL_ADDED()
+    if CleveRoidMacros.realtime == 0 then
+        CleveRoids.QueueActionUpdate()
+    end
+end
+CleveRoids.Frame.LOSS_OF_CONTROL_UPDATE = CleveRoids.Frame.LOSS_OF_CONTROL_ADDED
 function CleveRoids.Frame:UPDATE_SHAPESHIFT_FORM()
     if CleveRoidMacros.realtime == 0 then
         CleveRoids.QueueActionUpdate()

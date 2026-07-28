@@ -209,6 +209,31 @@ function API.GetEnchantName(enchantID)
 end
 
 --------------------------------------------------------------------------------
+-- Loss Of Control
+--------------------------------------------------------------------------------
+
+-- Locked spell-school mask from an active SCHOOL_INTERRUPT (Counterspell / Kick /
+-- Pummel / Earth Shock lockout) on the player, or 0 when not kicked. Read from
+-- C_LossOfControl, which synthesizes the lockout from the server's own
+-- SMSG_SPELL_COOLDOWN packet -- a state no debuff scan can see. Also returns the
+-- seconds remaining (nil if ClassicAPI didn't observe the applying cast). Returns
+-- 0 for a client without C_LossOfControl. Player-only (vanilla LoC is local-only).
+function API.GetSchoolLockout()
+    if type(C_LossOfControl) ~= "table"
+        or type(C_LossOfControl.GetActiveLossOfControlDataCount) ~= "function" then
+        return 0, nil
+    end
+    local n = C_LossOfControl.GetActiveLossOfControlDataCount() or 0
+    for i = 1, n do
+        local d = C_LossOfControl.GetActiveLossOfControlData(i)
+        if d and d.locType == "SCHOOL_INTERRUPT" then
+            return d.lockoutSchool or 0, d.timeRemaining
+        end
+    end
+    return 0, nil
+end
+
+--------------------------------------------------------------------------------
 -- Spell
 --------------------------------------------------------------------------------
 

@@ -2953,11 +2953,8 @@ function CleveRoids.CountEnemiesMatching(checkFunc)
     tryUnit("targettarget")
     tryUnit("targettargettarget")
     tryUnit("pettarget")
-    if pfUI and pfUI.uf and pfUI.uf.focus and pfUI.uf.focus.label and pfUI.uf.focus.id then
-        local focusUnit = pfUI.uf.focus.label .. pfUI.uf.focus.id
-        tryUnit(focusUnit)
-        tryUnit(focusUnit .. "target")
-    end
+    tryUnit("focus")
+    tryUnit("focustarget")
     for i = 1, 4 do
         tryUnit("party" .. i .. "target")
     end
@@ -2967,22 +2964,8 @@ function CleveRoids.CountEnemiesMatching(checkFunc)
         end
     end
 
-    -- 3. Nameplate scan: visible nameplates give live GUIDs without target switching.
-    --    ClassicAPI's C_NamePlate.GetNamePlateGUIDs() lists every unit with an
-    --    allocated nameplate (including default vanilla nameplates), replacing the
-    --    old WorldFrame child-walk + frame:GetName(1) GUID-extraction.
-    local plateGuids = CleveRoids.ClassicAPI.GetNamePlateGUIDs()
-    if plateGuids then
-        for i = 1, table.getn(plateGuids) do
-            local guid = plateGuids[i]
-            if guid and not checked[guid] and UnitExists(guid) and UnitCanAttack("player", guid) then
-                checked[guid] = true
-                CleveRoids.knownEnemyGuids[guid] = true
-                if checkFunc(guid) then
-                    count = count + 1
-                end
-            end
-        end
+    for i = 1, 40 do
+        tryUnit("nameplate"..i)
     end
 
     -- During tooltip evaluation, skip known-enemy cache iteration.
@@ -5226,6 +5209,33 @@ function CleveRoids.GetSpellMechanic(spellID)
 
     -- Fall back to ClassicAPI's Spell.dbc reader (always present; covers every spell)
     return CleveRoids.ClassicAPI.GetSpellMechanicByID(spellID) or 0
+end
+
+-- School name -> spell-school mask bit (WoW SPELL_SCHOOL_MASK_*).
+local LOCKOUT_SCHOOL_MASK = {
+    physical = 1, holy = 2, fire = 4, nature = 8, frost = 16, shadow = 32, arcane = 64,
+}
+
+-- Is `bit` set in `mask`? Shift right past `bit`, then test the low bit with
+-- math.mod (the % operator is 5.1-only; 1.12 is Lua 5.0, but math.mod exists).
+local function SchoolMaskHasBit(mask, bit)
+    if not mask or mask < bit then return false end
+    return math.mod(math.floor(mask / bit), 2) == 1
+end
+
+-- [locked] / [locked:school] -- player is under a spell-school interrupt lockout
+-- (Counterspell / Kick / Pummel / Earth Shock), read from C_LossOfControl. This
+-- is the lockout no debuff scan can detect; full silences stay on [mycc:silence].
+-- school nil/true = any school kicked; a name matches that school's mask bit.
+function CleveRoids.ValidateSchoolLocked(school)
+    local mask = CleveRoids.ClassicAPI.GetSchoolLockout()
+    if not mask or mask == 0 then return false end
+    if school == nil or school == true or school == "" then
+        return true
+    end
+    local bit = LOCKOUT_SCHOOL_MASK[string.lower(school)]
+    if not bit then return false end
+    return SchoolMaskHasBit(mask, bit)
 end
 
 -- Validate CC on a unit (target, focus, player, etc.)
@@ -8497,6 +8507,33 @@ CleveRoids.Keywords = {
         return NegatedMulti(conditionals.nomycc, function(ccType)
             return not CleveRoids.ValidateUnitCC("player", ccType)
         end, conditionals, "nomycc")
+    end,
+
+    -- [locked] / [locked:school] - player is under a spell-school interrupt
+    -- lockout (Counterspell/Kick/Pummel/Earth Shock), via ClassicAPI
+    -- C_LossOfControl -- the server lockout no debuff scan can see. Bare = any
+    -- school kicked; [locked:frost] = that school; [locked:fire/frost] = either.
+    -- Full silences are separate ([mycc:silence]). Player-only.
+    locked = function(conditionals)
+        local v = conditionals.locked
+        if v == nil or v == true or (type(v) == "table" and table.getn(v) == 0) then
+            return CleveRoids.ValidateSchoolLocked(nil)
+        end
+        return Or(v, function(school)
+            return CleveRoids.ValidateSchoolLocked(school)
+        end)
+    end,
+
+    -- [nolocked:school] - player is NOT school-locked. AND logic on negation:
+    -- [nolocked:fire/frost] = neither Fire nor Frost is kicked.
+    nolocked = function(conditionals)
+        local v = conditionals.nolocked
+        if v == nil or v == true or (type(v) == "table" and table.getn(v) == 0) then
+            return not CleveRoids.ValidateSchoolLocked(nil)
+        end
+        return NegatedMulti(v, function(school)
+            return not CleveRoids.ValidateSchoolLocked(school)
+        end, conditionals, "nolocked")
     end,
 
     -- ========================================================================
