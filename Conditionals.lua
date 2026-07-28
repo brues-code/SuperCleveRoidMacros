@@ -4635,19 +4635,9 @@ function CleveRoids.ValidatePlayerDebuff(args)
 end
 
 function CleveRoids.ValidateWeaponImbue(slot, args)
-    -- Check if weapon has enchant via API
-    local hasMainEnchant, mainExpiration, mainCharges, hasOffEnchant, offExpiration, offCharges = GetWeaponEnchantInfo()
-
-    local hasEnchant, expiration, charges
-    if slot == "mh" then
-        hasEnchant = hasMainEnchant
-        expiration = mainExpiration
-        charges = mainCharges
-    else
-        hasEnchant = hasOffEnchant
-        expiration = offExpiration
-        charges = offCharges
-    end
+    -- Temp-enchant state for this slot, read via ClassicAPI (centralizes the
+    -- 12-tuple indexing; enchantID unused here but powers [mhenchant]).
+    local hasEnchant, expiration, charges = CleveRoids.ClassicAPI.GetWeaponEnchant(slot)
 
     -- Only consider temporary enchants (with time or charges)
     -- This filters out permanent enchants like Crusader, Lifestealing, etc.
@@ -4800,6 +4790,48 @@ function CleveRoids.CheckWeaponImbueByName(slot, imbueName)
 
     -- Checked all lines, didn't find it
     return false
+end
+
+-- Does a single [mhenchant]/[ohenchant] value match the applied enchant?
+-- value is a numeric enchant ID (exact) or a name (resolved from the applied
+-- enchantID via ClassicAPI's SpellItemEnchantment lookup -- no tooltip scan).
+-- Name match is case-insensitive, exact-or-substring (so "Deadly" matches
+-- "Deadly Poison"). A parsed-arg table (from an operator form) uses its .name.
+local function EnchantValueMatches(value, enchantID)
+    if type(value) == "table" then value = value.name end
+    if not value or value == "" then return false end
+    local wantId = tonumber(value)
+    if wantId then
+        return enchantID == wantId
+    end
+    local name = CleveRoids.ClassicAPI.GetEnchantName(enchantID)
+    if not name then return false end
+    local nlower = GetLowerNormalizedName(name)
+    local want = GetLowerNormalizedName(value)
+    return nlower == want or string.find(nlower, want, 1, true) ~= nil
+end
+
+-- Matches the temporary weapon enchant on `slot` ("mh"/"oh") by enchant ID or
+-- localized name, both resolved via ClassicAPI (C_Item.GetWeaponEnchantInfo +
+-- GetEnchantInfo) -- locale-proof and exact, unlike the tooltip-scanned
+-- [mhimbue:Name]. value may be true/nil (any temp enchant), a single ID/name,
+-- or an OR-list array; returns true if the applied enchant matches any entry.
+function CleveRoids.ValidateWeaponEnchant(slot, value)
+    local hasEnchant, expiration, charges, enchantID = CleveRoids.ClassicAPI.GetWeaponEnchant(slot)
+    local hasTemp = hasEnchant and ((expiration and expiration > 0) or (charges and charges > 0))
+    if not hasTemp then return false end
+
+    -- Bare [mhenchant]: any temporary enchant present.
+    if value == nil or value == true then return true end
+
+    -- OR-list (e.g. [mhenchant:2823/Deadly_Poison]) is an array of strings.
+    if type(value) == "table" and not value.name and table.getn(value) > 0 then
+        for i = 1, table.getn(value) do
+            if EnchantValueMatches(value[i], enchantID) then return true end
+        end
+        return false
+    end
+    return EnchantValueMatches(value, enchantID)
 end
 
 -- TODO: Look into https://github.com/Stanzilla/WoWUIBugs/issues/47 if needed
@@ -7667,6 +7699,24 @@ CleveRoids.Keywords = {
     noohimbue = function(conditionals)
         local args = CleveRoids.ParseImbueArgs(conditionals.noohimbue, conditionals)
         return not CleveRoids.ValidateWeaponImbue("oh", args)
+    end,
+
+    -- [mhenchant:ID] / [mhenchant:Name] - main hand has that SPECIFIC temporary
+    -- weapon enchant, matched by SpellItemEnchantment ID or localized name via
+    -- ClassicAPI (locale-proof, unlike [mhimbue:Name]'s tooltip scan). Bare
+    -- [mhenchant] = any temp enchant; [mhenchant:A/B] = either; [nomhenchant:X]
+    -- = not that enchant. Names use _ for spaces, e.g. [mhenchant:Deadly_Poison].
+    mhenchant = function(conditionals)
+        return CleveRoids.ValidateWeaponEnchant("mh", conditionals.mhenchant)
+    end,
+    nomhenchant = function(conditionals)
+        return not CleveRoids.ValidateWeaponEnchant("mh", conditionals.nomhenchant)
+    end,
+    ohenchant = function(conditionals)
+        return CleveRoids.ValidateWeaponEnchant("oh", conditionals.ohenchant)
+    end,
+    noohenchant = function(conditionals)
+        return not CleveRoids.ValidateWeaponEnchant("oh", conditionals.noohenchant)
     end,
 
     immune = function(conditionals)

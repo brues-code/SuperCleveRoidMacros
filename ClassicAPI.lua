@@ -175,6 +175,40 @@ function API.IsEquipmentSetEquipped(name)
 end
 
 --------------------------------------------------------------------------------
+-- Weapon Enchant
+--------------------------------------------------------------------------------
+
+-- Temporary weapon-enchant state for a slot: "mh" (main), "oh" (off), or
+-- "ranged". Returns hasEnchant, expirationMs, charges, enchantID. The enchantID
+-- comes from ClassicAPI's modern C_Item.GetWeaponEnchantInfo 12-tuple (the
+-- vanilla global omits it), so [mhenchant] can tell WHICH imbue is applied, not
+-- just that one exists. Falls back to the vanilla 6-tuple global (enchantID nil,
+-- no ranged slot) when the C_Item version is unavailable.
+function API.GetWeaponEnchant(slot)
+    if type(C_Item) == "table" and type(C_Item.GetWeaponEnchantInfo) == "function" then
+        local hasM, mExp, mChg, mID, hasO, oExp, oChg, oID, hasR, rExp, rChg, rID =
+            C_Item.GetWeaponEnchantInfo()
+        if slot == "oh" then return hasO, oExp, oChg, oID
+        elseif slot == "ranged" then return hasR, rExp, rChg, rID
+        else return hasM, mExp, mChg, mID end
+    end
+    local hasM, mExp, mChg, hasO, oExp, oChg = GetWeaponEnchantInfo()
+    if slot == "oh" then return hasO, oExp, oChg, nil end
+    return hasM, mExp, mChg, nil
+end
+
+-- Localized name of an item-enchant ID (poison/oil/sharpening stone/permanent),
+-- read straight from SpellItemEnchantment.dbc via ClassicAPI -- or nil for an
+-- unknown id / a client without C_Item.GetEnchantInfo. Lets [mhenchant:Name]
+-- resolve the applied enchant's name without scraping the weapon tooltip.
+function API.GetEnchantName(enchantID)
+    if not enchantID or enchantID == 0 then return nil end
+    if type(C_Item) ~= "table" or type(C_Item.GetEnchantInfo) ~= "function" then return nil end
+    local info = C_Item.GetEnchantInfo(enchantID)
+    return info and info.name or nil
+end
+
+--------------------------------------------------------------------------------
 -- Spell
 --------------------------------------------------------------------------------
 
