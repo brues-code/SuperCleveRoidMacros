@@ -88,15 +88,6 @@ CleveRoids.RakeSpellIDs = {
     [9904] = true,   -- Rank 4
 }
 
--- Pounce Bleed spell IDs (for immunity detection - bleed portion of Pounce)
--- Note: Pounce (cast) TRIGGERS a separate Pounce Bleed spell with different IDs
--- Cast IDs: 9005, 9823, 9827 → Trigger Bleed IDs: 9007, 9824, 9826
-CleveRoids.PounceBleedSpellIDs = {
-    [9007] = true,   -- Rank 1 (triggered by Pounce 9005)
-    [9824] = true,   -- Rank 2 (triggered by Pounce 9823)
-    [9826] = true,   -- Rank 3 (triggered by Pounce 9827)
-}
-
 -- Combined table for all bleed spells that need immunity detection
 -- Used when checking if a cast bleed failed to apply (indicates bleed immunity)
 -- NOTE: These are the DEBUFF spell IDs (what appears on target), not cast spell IDs
@@ -546,26 +537,6 @@ function CleveRoids.TrackComboPointCastByID(spellID, targetGUID)
     end
 
     return duration
-end
-
--- API function to get last tracked combo points for a spell
-function CleveRoids.GetLastComboPointsForSpell(spellName)
-    if CleveRoids.ComboPointTracking[spellName] then
-        return CleveRoids.ComboPointTracking[spellName].combo_points
-    elseif CleveRoids.spell_tracking[spellName] then
-        return CleveRoids.spell_tracking[spellName].last_combo_points
-    end
-    return nil
-end
-
--- API function to get last calculated duration for a spell
-function CleveRoids.GetLastDurationForSpell(spellName)
-    if CleveRoids.ComboPointTracking[spellName] then
-        return CleveRoids.ComboPointTracking[spellName].duration
-    elseif CleveRoids.spell_tracking[spellName] then
-        return CleveRoids.spell_tracking[spellName].last_duration
-    end
-    return nil
 end
 
 -- Utility function to display current combo tracking info
