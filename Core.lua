@@ -2839,11 +2839,8 @@ function CleveRoids.DoTarget(msg)
 
     addCandidate("pettarget")
 
-    if pfUI and pfUI.uf and pfUI.uf.focus and pfUI.uf.focus.label and pfUI.uf.focus.id then
-        local focusTok = pfUI.uf.focus.label .. pfUI.uf.focus.id
-        addCandidate(focusTok)
-        addCandidate(focusTok .. "target")
-    end
+    addCandidate("focus")
+    addCandidate("focustarget")
 
     -- Visible nameplates as targeting candidates, via ClassicAPI's nameplateN
     -- unit tokens -- no SuperWoW WorldFrame child-walk / GUID scrape, and covers
