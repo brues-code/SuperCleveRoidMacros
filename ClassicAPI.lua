@@ -156,6 +156,25 @@ function API.GetItemSetInfo(setID)
 end
 
 --------------------------------------------------------------------------------
+-- Equipment Set
+--------------------------------------------------------------------------------
+
+-- True if the saved equipment set named `name` is currently equipped -- every
+-- resolvable item in its target slot (a missing bank-stored piece doesn't
+-- disqualify, matching C_EquipmentSet.GetEquipmentSetInfo's isEquipped). Name is
+-- an exact, case-sensitive match per GetEquipmentSetID. Returns false for an
+-- unknown name or a client without the EquipmentSet API. Powers [equipset]/
+-- [noequipset]; the swap side is the reclaimed /equipset command.
+function API.IsEquipmentSetEquipped(name)
+    if not name or name == "" then return false end
+    if type(C_EquipmentSet) ~= "table" then return false end
+    local setID = C_EquipmentSet.GetEquipmentSetID(name)
+    if not setID then return false end
+    local _, _, _, isEquipped = C_EquipmentSet.GetEquipmentSetInfo(setID)
+    return isEquipped and true or false
+end
+
+--------------------------------------------------------------------------------
 -- Spell
 --------------------------------------------------------------------------------
 

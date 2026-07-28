@@ -5836,6 +5836,26 @@ CleveRoids.Keywords = {
         end, conditionals, "noset")
     end,
 
+    -- [equipset:Name] — true if the saved equipment set "Name" is currently
+    -- equipped (ClassicAPI equipment manager, distinct from [set] tier pieces).
+    -- [equipset:Raid/PvP] = either set equipped. Names are case-sensitive; use _
+    -- for spaces, e.g. [equipset:My_Raid_Set].
+    equipset = function(conditionals)
+        return Multi(conditionals.equipset, function(v)
+            local name = (type(v) == "table") and v.name or v
+            return CleveRoids.ClassicAPI.IsEquipmentSetEquipped(name)
+        end, conditionals, "equipset")
+    end,
+
+    -- [noequipset:Name] — true if that equipment set is NOT currently equipped.
+    -- [noequipset:Raid/PvP] = neither equipped (De Morgan's).
+    noequipset = function(conditionals)
+        return NegatedMulti(conditionals.noequipset, function(v)
+            local name = (type(v) == "table") and v.name or v
+            return not CleveRoids.ClassicAPI.IsEquipmentSetEquipped(name)
+        end, conditionals, "noequipset")
+    end,
+
     -- [inbag:Item] — true if item exists in bags or equipped
     -- [inbag:Item<12] — true if bag count of Item is less than 12
     -- Supports multi-value: [inbag:Item1/Item2 inbag:Item3] = (Item1 OR Item2) AND Item3
