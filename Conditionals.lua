@@ -4752,6 +4752,19 @@ function CleveRoids.CheckWeaponImbueByName(slot, imbueName)
         return true  -- No name to check
     end
 
+    -- Fast path: resolve the applied temp-enchant's ID -> localized name via
+    -- ClassicAPI (SpellItemEnchantment.dbc) and match that directly -- exact,
+    -- locale-clean, no green-text tooltip heuristics. Only nameless enchants
+    -- (e.g. sharpening stones, which show "+N Weapon Damage" and carry no DBC
+    -- name) return nil here and fall through to the tooltip scan below.
+    local _, _, _, enchantID = CleveRoids.ClassicAPI.GetWeaponEnchant(slot)
+    local enchantName = enchantID and CleveRoids.ClassicAPI.GetEnchantName(enchantID)
+    if enchantName then
+        local nlower = GetLowerNormalizedName(enchantName)
+        local want = GetLowerNormalizedName(imbueName)
+        return nlower == want or string.find(nlower, want, 1, true) ~= nil
+    end
+
     -- Create tooltip scanner if needed
     if not CleveRoidsTooltip then
         CreateFrame("GameTooltip", "CleveRoidsTooltip", nil, "GameTooltipTemplate")
