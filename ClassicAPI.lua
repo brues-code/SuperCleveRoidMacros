@@ -52,13 +52,13 @@ end
 -- C_UnitAuras
 --------------------------------------------------------------------------------
 
--- Scan a unit's auras (indexFn = C_UnitAuras.GetBuffDataByIndex or
--- GetDebuffDataByIndex) for one matching the dispel type. Vanilla descriptors
--- hold 32 helpful / 16 harmful slots; cap as a backstop.
-local function scanDispel(indexFn, unit, dispelType, wantAny)
+-- Scan one aura range of `unit` (filter = "HELPFUL" or "HARMFUL") for an aura
+-- matching the dispel type. The filtered index self-terminates at the end of the
+-- range (nil); 48 is a backstop over vanilla's 32 helpful / 16 harmful slots.
+local function scanDispel(unit, filter, dispelType, wantAny)
     local i = 1
     while i <= 48 do
-        local data = indexFn(unit, i)
+        local data = C_UnitAuras.GetAuraDataByIndex(unit, i, filter)
         if not data then return false end
         local dn = data.dispelName
         if dn and dn ~= "" and (wantAny or dn == dispelType) then
@@ -76,10 +76,9 @@ end
 --               false -> scan debuffs (defensive cleanse, default)
 function API.UnitHasDispelType(unit, dispelType, helpful)
     if not unit or not UnitExists(unit) then return false end
-    local indexFn = helpful and C_UnitAuras.GetBuffDataByIndex
-        or C_UnitAuras.GetDebuffDataByIndex
+    local filter = helpful and "HELPFUL" or "HARMFUL"
     local wantAny = (dispelType == nil or dispelType == "any")
-    return scanDispel(indexFn, unit, dispelType, wantAny)
+    return scanDispel(unit, filter, dispelType, wantAny)
 end
 
 -- First matching aura on `unit` by spellID, or nil. With no filter it walks the
