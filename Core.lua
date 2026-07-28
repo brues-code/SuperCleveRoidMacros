@@ -947,13 +947,14 @@ function CleveRoids.TestForActiveAction(actions)
                 -- Prefer IsSpellUsable result if available (Nampower)
                 actions.active.oom = (notEnoughPower == 1)
             else
-                -- SuperWoW: UnitMana returns (current power, caster mana) for druids
-                local currentPower, casterMana = UnitMana("player")
-
-                -- For druids with SuperWoW, use caster mana for spell cost checks
-                local manaToCheck = currentPower
-                if CleveRoids.playerClass == "DRUID" and type(casterMana) == "number" then
-                    manaToCheck = casterMana
+                -- Read caster mana directly for druids (the mana slot survives
+                -- shapeshift, 0 = Enum.PowerType.Mana); other classes use their
+                -- primary power. Replaces the SuperWoW UnitMana 2nd-return hack.
+                local manaToCheck
+                if CleveRoids.playerClass == "DRUID" then
+                    manaToCheck = CleveRoids.ClassicAPI.UnitPower("player", 0)
+                else
+                    manaToCheck = CleveRoids.ClassicAPI.UnitPower("player")
                 end
 
                 actions.active.oom = (manaToCheck < actions.active.spell.cost)

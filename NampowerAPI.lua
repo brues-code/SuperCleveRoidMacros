@@ -3492,32 +3492,5 @@ function API.GetUnitMaxHealth(unitToken)
     return UnitHealthMax(unitToken)
 end
 
--- powerType: nil=current, 0=mana, 1=rage, 2=focus, 3=energy
--- GetUnitField uses power1-power4 fields
-local POWER_FIELDS = { [0] = "power1", [1] = "power2", [2] = "power3", [3] = "power4" }
-local MAX_POWER_FIELDS = { [0] = "maxPower1", [1] = "maxPower2", [2] = "maxPower3", [3] = "maxPower4" }
-
-function API.GetUnitPower(unitToken, powerType)
-    if API.features.hasGetUnitField and GetUnitField and powerType then
-        local field = POWER_FIELDS[powerType]
-        if field then
-            local val = GetUnitField(unitToken, field)
-            if val then return val end
-        end
-    end
-    return UnitMana(unitToken)
-end
-
-function API.GetUnitMaxPower(unitToken, powerType)
-    if API.features.hasGetUnitField and GetUnitField and powerType then
-        local field = MAX_POWER_FIELDS[powerType]
-        if field then
-            local val = GetUnitField(unitToken, field)
-            if val then return val end
-        end
-    end
-    return UnitManaMax(unitToken)
-end
-
 -- Expose API globally for other addons
 _G.CleveRoidsNampowerAPI = API

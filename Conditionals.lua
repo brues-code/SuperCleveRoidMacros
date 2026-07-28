@@ -55,15 +55,14 @@ function CleveRoids.GetCachedPlayerHealthPercent()
 end
 
 function CleveRoids.GetCachedPlayerPowerPercent()
-    local API = CleveRoids.NampowerAPI
-    local power = API and API.GetUnitPower and API.GetUnitPower("player") or UnitMana("player")
-    local max = API and API.GetUnitMaxPower and API.GetUnitMaxPower("player") or UnitManaMax("player")
+    local API = CleveRoids.ClassicAPI
+    local power = API.UnitPower("player")
+    local max = API.UnitPowerMax("player")
     return max > 0 and (100 * power / max) or 0
 end
 
 function CleveRoids.GetCachedPlayerPower()
-    local API = CleveRoids.NampowerAPI
-    return API and API.GetUnitPower and API.GetUnitPower("player") or UnitMana("player")
+    return CleveRoids.ClassicAPI.UnitPower("player")
 end
 
 function CleveRoids.GetCachedTargetHealthPercent()
@@ -3299,9 +3298,9 @@ end
 -- returns: True or false
 function CleveRoids.ValidatePower(unit, operator, amount)
     if not unit or not operator or not amount then return false end
-    local API = CleveRoids.NampowerAPI
-    local power = API and API.GetUnitPower and API.GetUnitPower(unit) or UnitMana(unit)
-    local maxPower = API and API.GetUnitMaxPower and API.GetUnitMaxPower(unit) or UnitManaMax(unit)
+    local API = CleveRoids.ClassicAPI
+    local power = API.UnitPower(unit)
+    local maxPower = API.UnitPowerMax(unit)
     local powerPercent = maxPower > 0 and (100 * power / maxPower) or 0
 
     if CleveRoids.operators[operator] then
@@ -3318,8 +3317,7 @@ end
 -- returns: True or false
 function CleveRoids.ValidateRawPower(unit, operator, amount)
     if not unit or not operator or not amount then return false end
-    local API = CleveRoids.NampowerAPI
-    local power = API and API.GetUnitPower and API.GetUnitPower(unit) or UnitMana(unit)
+    local power = CleveRoids.ClassicAPI.UnitPower(unit)
 
     if power and CleveRoids.operators[operator] then
         return CleveRoids.comparators[operator](power, amount)
@@ -3328,23 +3326,15 @@ function CleveRoids.ValidateRawPower(unit, operator, amount)
     return false
 end
 
--- Raw caster-form mana for druids (SuperWoW: 2nd return of UnitMana)
+-- Raw caster-form mana for druids. Read the mana power slot directly
+-- (0 = Enum.PowerType.Mana) so it works while shapeshifted, when the druid's
+-- primary power is rage/energy -- no SuperWoW 2nd-return-of-UnitMana needed.
 function CleveRoids.ValidateDruidRawMana(unit, operator, amount)
     unit = unit or "player"
     if not operator or amount == nil then return false end
     if (CleveRoids.playerClass ~= "DRUID") then return false end
 
-    -- SuperWoW returns: current-form power, caster-form mana
-    local _, casterMana = UnitMana(unit)
-
-    -- Fallback: if for some reason we didn't get a 2nd value and we're in caster form now
-    if type(casterMana) ~= "number" then
-        if UnitPowerType and UnitPowerType(unit) == 0 then
-            casterMana = UnitMana(unit)
-        else
-            return false
-        end
-    end
+    local casterMana = CleveRoids.ClassicAPI.UnitPower(unit, 0)
 
     local cmp = CleveRoids.comparators and CleveRoids.comparators[operator]
     return cmp and cmp(casterMana, amount) or false
@@ -3357,10 +3347,7 @@ end
 -- returns: True or false
 function CleveRoids.ValidatePowerLost(unit, operator, amount)
     if not unit or not operator or not amount then return false end
-    local API = CleveRoids.NampowerAPI
-    local maxPower = API and API.GetUnitMaxPower and API.GetUnitMaxPower(unit) or UnitManaMax(unit)
-    local power = API and API.GetUnitPower and API.GetUnitPower(unit) or UnitMana(unit)
-    local powerLost = maxPower - power
+    local powerLost = CleveRoids.ClassicAPI.UnitPowerMissing(unit)
 
     if CleveRoids.operators[operator] then
         return CleveRoids.comparators[operator](powerLost, amount)
@@ -8266,7 +8253,7 @@ CleveRoids.Keywords = {
         if not UnitExists(unit) then return false end
 
         return Or(conditionals.powertype, function(powerTypeName)
-            local powerType = UnitPowerType(unit)
+            local powerType = CleveRoids.ClassicAPI.UnitPowerType(unit)
             local powerTypeLower = string.lower(powerTypeName or "")
 
             if powerTypeLower == "mana" then
@@ -8289,7 +8276,7 @@ CleveRoids.Keywords = {
         if not UnitExists(unit) then return true end
 
         return NegatedMulti(conditionals.nopowertype, function(powerTypeName)
-            local powerType = UnitPowerType(unit)
+            local powerType = CleveRoids.ClassicAPI.UnitPowerType(unit)
             local powerTypeLower = string.lower(powerTypeName or "")
 
             if powerTypeLower == "mana" then
