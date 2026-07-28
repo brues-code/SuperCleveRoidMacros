@@ -3596,6 +3596,32 @@ function CleveRoids.DoEquipRing2(msg)
     return false
 end
 
+-- Equip a ClassicAPI equipment set by name. msg is the resolved set name (after
+-- conditional parsing). ClassicAPI's own /equipset is a bare
+-- GetEquipmentSetID -> UseEquipmentSet with no conditional support; routing it
+-- through DoWithConditionals adds [combat]/[mod]/@unit/etc. and ";"-separated
+-- fallthrough (first set whose conditionals pass wins). Nil-guarded so a client
+-- without the EquipmentSet API just no-ops instead of erroring.
+local function _equipSetAction(msg)
+    if not msg or msg == "" then return false end
+    if type(C_EquipmentSet) ~= "table" then return false end
+    local setID = C_EquipmentSet.GetEquipmentSetID(msg)
+    if not setID then return false end
+    C_EquipmentSet.UseEquipmentSet(setID)
+    return true
+end
+
+function CleveRoids.DoEquipSet(msg)
+    local parts = CleveRoids.splitStringIgnoringQuotes(msg)
+    for i = 1, table.getn(parts) do
+        local v = string.gsub(parts[i], "^%?", "")
+        if CleveRoids.DoWithConditionals(v, _equipSetAction, CleveRoids.FixEmptyTarget, false, _equipSetAction) then
+            return true
+        end
+    end
+    return false
+end
+
 function CleveRoids.DoCancelForm(msg)
     local handled
     -- PERFORMANCE: Use numeric iteration to avoid pairs() iterator allocation

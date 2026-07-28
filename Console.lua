@@ -63,6 +63,16 @@ SlashCmdList.EQSLOT13 = CleveRoids.DoEquipTrinket1
 SLASH_EQSLOT141 = "/equip14"
 SlashCmdList.EQSLOT14 = CleveRoids.DoEquipTrinket2
 
+-- Reclaim ClassicAPI's /equipset (command name EQUIP_SET) so it supports
+-- conditionals. ClassicAPI registers the localized aliases against EQUIP_SET;
+-- swapping the handler keeps every alias and adds the conditional engine.
+if SlashCmdList.EQUIP_SET then
+    SlashCmdList.EQUIP_SET = CleveRoids.DoEquipSet
+else
+    SLASH_EQUIPSET1 = "/equipset"
+    SlashCmdList.EQUIPSET = CleveRoids.DoEquipSet
+end
+
 SLASH_UNSHIFT1 = "/unshift"
 
 SlashCmdList.UNSHIFT = CleveRoids.DoUnshift
