@@ -8629,31 +8629,12 @@ function CleveRoids.CheckImmunity(unitId, spellOrSchool)
     -- Universal debuff-based immunities (Banish, etc.)
     -- Banish makes target immune to most damage schools (not all spells)
     do
-        local hasBanish = false
-
-        -- Check debuffs first (Banish: 710 = Rank 1, 18647 = Rank 2)
-        for i = 1, 16 do
-            local texture, stacks, dtype, spellID = UnitDebuff(unitId, i)
-            if not texture then break end
-
-            if spellID == 710 or spellID == 18647 then
-                hasBanish = true
-                break
-            end
-        end
-
-        -- Overflow handling: debuffs can overflow into buffs on NPCs
-        if not hasBanish and not UnitIsPlayer(unitId) then
-            for i = 1, 32 do
-                local texture, stacks, spellID = UnitBuff(unitId, i)
-                if not texture then break end
-
-                if spellID == 710 or spellID == 18647 then
-                    hasBanish = true
-                    break
-                end
-            end
-        end
+        -- Banish: 710 = Rank 1, 18647 = Rank 2. One by-spellID lookup each --
+        -- C_UnitAuras walks the whole aura array, so it finds the debuff even when
+        -- it has overflowed into an NPC's buff slots (no manual slot scan / overflow gate).
+        local API = CleveRoids.ClassicAPI
+        local hasBanish = (API.GetUnitAuraBySpellID(unitId, 710)
+            or API.GetUnitAuraBySpellID(unitId, 18647)) and true or false
 
         -- If Banished, check what's being tested for immunity
         if hasBanish then

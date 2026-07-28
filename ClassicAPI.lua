@@ -82,6 +82,19 @@ function API.UnitHasDispelType(unit, dispelType, helpful)
     return scanDispel(indexFn, unit, dispelType, wantAny)
 end
 
+-- First matching aura on `unit` by spellID, or nil. With no filter it walks the
+-- whole aura array (helpful then harmful), so it finds a debuff even when it has
+-- overflowed into an NPC's buff slots -- no 16+32 slot scan, no UnitIsPlayer
+-- gate. filter ("HELPFUL"/"HARMFUL") restricts the search. Returns the modern
+-- AuraData (spellId, name, applications, duration, expirationTime, dispelName, ...).
+function API.GetUnitAuraBySpellID(unit, spellID, filter)
+    if not unit or not spellID then return nil end
+    if type(C_UnitAuras) ~= "table" or type(C_UnitAuras.GetUnitAuraBySpellID) ~= "function" then
+        return nil
+    end
+    return C_UnitAuras.GetUnitAuraBySpellID(unit, spellID, filter)
+end
+
 --------------------------------------------------------------------------------
 -- GetUnitSpeed
 --------------------------------------------------------------------------------
