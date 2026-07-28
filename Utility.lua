@@ -8800,23 +8800,12 @@ function CleveRoids.CheckImmunity(unitId, spellOrSchool)
             end
         end
 
-        -- Check buff-based immunity (if NPC has the required buff)
+        -- Check buff-based immunity (if NPC has the required buff). One by-name
+        -- lookup across the unit's buffs via C_UnitAuras -- no 32-slot scan.
         if immunityData.buff then
-            local requiredBuff = immunityData.buff
-
-            -- Check target's buffs
-            for i = 1, 32 do
-                local texture, stacks, spellID = UnitBuff(unitId, i)
-                if not texture then break end
-
-                if spellID then
-                    local buffName = C_Spell.GetSpellName(spellID)
-                    if buffName and buffName == requiredBuff then
-                        return true
-                    end
-                end
+            if CleveRoids.ClassicAPI.GetAuraDataBySpellName(unitId, immunityData.buff, "HELPFUL") then
+                return true
             end
-
             -- Buff not found, not currently immune
             return false
         end

@@ -95,6 +95,19 @@ function API.GetUnitAuraBySpellID(unit, spellID, filter)
     return C_UnitAuras.GetUnitAuraBySpellID(unit, spellID, filter)
 end
 
+-- First matching aura on `unit` by spell NAME, or nil. Same whole-array search as
+-- GetUnitAuraBySpellID; the name is case-sensitive and locale-resolved, so pass it
+-- in the client's locale (what C_Spell.GetSpellName returns). filter
+-- ("HELPFUL"/"HARMFUL") restricts the search. Prefer the by-ID variant for
+-- portability where a spellID is known.
+function API.GetAuraDataBySpellName(unit, spellName, filter)
+    if not unit or not spellName or spellName == "" then return nil end
+    if type(C_UnitAuras) ~= "table" or type(C_UnitAuras.GetAuraDataBySpellName) ~= "function" then
+        return nil
+    end
+    return C_UnitAuras.GetAuraDataBySpellName(unit, spellName, filter)
+end
+
 --------------------------------------------------------------------------------
 -- GetUnitSpeed
 --------------------------------------------------------------------------------
