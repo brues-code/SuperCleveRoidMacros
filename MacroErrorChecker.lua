@@ -651,6 +651,8 @@ local function validateConditional(conditional, args, action)
         combo = true,
         hp = true, myhp = true, rawhp = true, myrawhp = true,
         power = true, mypower = true, rawpower = true, myrawpower = true,
+        mana = true, mymana = true, rage = true, myrage = true,
+        energy = true, myenergy = true,
         hplost = true, myhplost = true,
         powerlost = true, mypowerlost = true,
         stat = true,
@@ -678,6 +680,8 @@ local function validateConditional(conditional, args, action)
     -- Check operator syntax for numeric comparisons
     if args and type(args) == "string" then
         local hasHpOrPower = safeStringFind(baseCond, "hp") or safeStringFind(baseCond, "power") or
+                            safeStringFind(baseCond, "mana") or safeStringFind(baseCond, "energy") or
+                            safeStringFind(baseCond, "rage") or
                             safeStringFind(baseCond, "combo") or baseCond == "stat"
         if hasHpOrPower then
             local hasOperator = safeStringFind(args, "[<>=~]+")

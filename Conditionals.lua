@@ -3310,6 +3310,26 @@ function CleveRoids.ValidatePower(unit, operator, amount)
     return false
 end
 
+-- Validates a SPECIFIC power slot (Enum.PowerType: 0=Mana, 1=Rage, 3=Energy) as a
+-- percentage, regardless of the unit's primary power -- so [mana]/[energy]/[rage]
+-- read the right pool cross-form (druid mana in cat) and cross-unit (@target mana).
+-- A unit with no such pool (max <= 0) fails rather than reading as 0% (avoids a
+-- rageless caster satisfying [rage:<10]).
+function CleveRoids.ValidateTypedPower(unit, powerType, operator, amount)
+    if not unit or not operator or not amount then return false end
+    if not UnitExists(unit) then return false end
+    local API = CleveRoids.ClassicAPI
+    local maxPower = API.UnitPowerMax(unit, powerType)
+    if not maxPower or maxPower <= 0 then return false end
+    local powerPercent = 100 * API.UnitPower(unit, powerType) / maxPower
+
+    if CleveRoids.operators[operator] then
+        return CleveRoids.comparators[operator](powerPercent, amount)
+    end
+
+    return false
+end
+
 -- Checks whether or not the given unit has current power vs the given amount
 -- unit: The unit we're checking
 -- operator: valid comparitive operator symbol
@@ -5411,6 +5431,33 @@ local function ResolveFocusUnit(unit)
     return unit
 end
 
+-- Builds a Keyword validator for a specific power slot (Enum.PowerType) read as a
+-- percentage, mirroring [power]/[mypower]. condKey is the conditional name;
+-- unitDefault is "player" (self) or "target" (@unit-overridable); powerType is the
+-- Enum.PowerType id. Handles the multi-comparison (>50&<80) branch like [power].
+local function MakeTypedPowerKeyword(condKey, unitDefault, powerType)
+    return function(conditionals)
+        return Multi(conditionals[condKey], function(args)
+            if type(args) ~= "table" then return false end
+            local unit = (unitDefault == "player") and "player" or (conditionals.target or "target")
+
+            if args.comparisons and type(args.comparisons) == "table" then
+                if not UnitExists(unit) then return false end
+                local maxPower = CleveRoids.ClassicAPI.UnitPowerMax(unit, powerType)
+                if not maxPower or maxPower <= 0 then return false end
+                local powerPercent = 100 * CleveRoids.ClassicAPI.UnitPower(unit, powerType) / maxPower
+                for _, comp in ipairs(args.comparisons) do
+                    if not CleveRoids.operators[comp.operator] then return false end
+                    if not CleveRoids.comparators[comp.operator](powerPercent, comp.amount) then return false end
+                end
+                return true
+            end
+
+            return CleveRoids.ValidateTypedPower(unit, powerType, args.operator, args.amount)
+        end, conditionals, condKey)
+    end
+end
+
 -- A list of Conditionals and their functions to validate them
 CleveRoids.Keywords = {
     exists = function(conditionals)
@@ -6256,6 +6303,17 @@ CleveRoids.Keywords = {
             return CleveRoids.ValidatePower("player", args.operator, args.amount)
         end, conditionals, "mypower")
     end,
+
+    -- Type-specific power reads (percentage), for the SPECIFIC slot rather than the
+    -- unit's primary power. No prefix = target (@unit-overridable), my = player.
+    -- e.g. [@target,mana:<15] catches a near-OOM caster; [myenergy:>50] gates a
+    -- druid's cat rotation regardless of form.
+    mana = MakeTypedPowerKeyword("mana", "target", 0),
+    mymana = MakeTypedPowerKeyword("mymana", "player", 0),
+    rage = MakeTypedPowerKeyword("rage", "target", 1),
+    myrage = MakeTypedPowerKeyword("myrage", "player", 1),
+    energy = MakeTypedPowerKeyword("energy", "target", 3),
+    myenergy = MakeTypedPowerKeyword("myenergy", "player", 3),
 
     rawpower = function(conditionals)
         return Multi(conditionals.rawpower, function(args)
