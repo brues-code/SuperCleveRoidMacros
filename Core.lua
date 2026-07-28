@@ -2845,20 +2845,16 @@ function CleveRoids.DoTarget(msg)
         addCandidate(focusTok .. "target")
     end
 
-    if CleveRoids.hasSuperwow then
-        local numChildren = WorldFrame:GetNumChildren()
-        local children = { WorldFrame:GetChildren() }
-
-        for i = 1, numChildren do
-            local frame = children[i]
-            if frame and frame:IsVisible() then
-                local success, guid = pcall(frame.GetName, frame, 1)
-                if success and guid and type(guid) == "string" and string.len(guid) > 0 then
-                    if UnitExists(guid) then
-                        addCandidate(guid)
-                    end
-                end
-            end
+    -- Visible nameplates as targeting candidates, via ClassicAPI's nameplateN
+    -- unit tokens -- no SuperWoW WorldFrame child-walk / GUID scrape, and covers
+    -- default vanilla nameplates too. Slots are sparse (a removed plate leaves
+    -- its slot vacant until reused), so scan the full range rather than breaking
+    -- on the first gap; UnitExists returns false cleanly for a free/out-of-range
+    -- slot.
+    for i = 1, 40 do
+        local plate = "nameplate" .. i
+        if UnitExists(plate) then
+            addCandidate(plate)
         end
     end
 
