@@ -5724,14 +5724,9 @@ function CleveRoids.Frame:PLAYER_EQUIPMENT_CHANGED()
     -- arg1 = inventory slot that changed, arg2 = hasCurrent (slot now holds an item)
     local slot, hasCurrent = arg1, arg2
 
-    -- [equipped]/HasGearEquipped runs off its own live-rebuilt cache; invalidating
-    -- it is all that conditional needs.
-    if CleveRoids.InvalidateEquipmentCache then
-        CleveRoids.InvalidateEquipmentCache()
-    end
-
-    -- In combat: Skip indexing - EquipBagItem already handles cache invalidation
-    -- at the call site. This eliminates lag during rapid gear swapping.
+    -- In combat: skip the slot reindex to avoid lag during rapid gear swapping.
+    -- [equipped] reads live engine state (C_Item.IsEquippedItem) so it stays
+    -- correct regardless; the Items table self-heals on the next BAG_UPDATE.
     if UnitAffectingCombat("player") then
         return
     end

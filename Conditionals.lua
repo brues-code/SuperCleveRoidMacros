@@ -197,102 +197,6 @@ local function IsSharedDebuffByIdOrName(lib, spellID, debuffName)
     return false
 end
 
--- PERFORMANCE: Equipment cache for HasGearEquipped (avoids 19-slot scan per call)
--- Invalidated on UNIT_INVENTORY_CHANGED via CleveRoids.InvalidateEquipmentCache()
--- Enhanced with Nampower v2.18+ GetEquippedItems when available
-local _equippedItemIDs = {}      -- [slot] = itemID (number)
-local _equippedItemNames = {}    -- [slot] = itemName (lowercase string)
-local _equipmentCacheValid = false
-
--- Track if we've warned about GetEquippedItems errors (warn once per session)
-local _getEquippedItemsErrorWarned = false
-
-local function BuildEquipmentCache()
-    if _equipmentCacheValid then return end
-    _equipmentCacheValid = true
-
-    -- Clear old data
-    for i = 1, 19 do
-        _equippedItemIDs[i] = nil
-        _equippedItemNames[i] = nil
-    end
-
-    local string_find = string.find
-    local string_lower = string.lower
-
-    -- Try Nampower GetEquippedItems for faster enumeration
-    -- Requires v2.22+ because earlier versions (e.g., v2.19.1) have internal bug
-    local API = CleveRoids.NampowerAPI
-    local hasValidNampower = API and API.HasMinimumVersion and API.HasMinimumVersion(2, 22, 0)
-
-    if hasValidNampower and GetEquippedItems then
-        -- Use pcall to catch any internal Nampower errors and fall back gracefully
-        local success, result = pcall(GetEquippedItems, "player")
-
-        if not success then
-            -- Log the error once per session for debugging
-            if not _getEquippedItemsErrorWarned then
-                _getEquippedItemsErrorWarned = true
-                local errMsg = tostring(result)
-                if CleveRoids.Print then
-                    CleveRoids.Print("|cffff6600Warning:|r GetEquippedItems failed: " .. errMsg)
-                    CleveRoids.Print("Using fallback equipment detection. Consider updating Nampower.")
-                end
-            end
-            -- Fall through to manual enumeration
-        elseif result and type(result) == "table" then
-            local usedNampower = false
-            for nampowerSlot, itemInfo in pairs(result) do
-                -- Nampower uses 0-indexed slots, WoW API uses 1-indexed
-                -- tonumber() handles both string and numeric keys from different Nampower versions
-                -- Skip non-numeric keys (metadata fields, etc.)
-                local slotNum = tonumber(nampowerSlot)
-                if slotNum and type(itemInfo) == "table" and itemInfo.itemId then
-                    local slot = slotNum + 1
-                    -- itemInfo must be a table to access .itemId (userdata from some Nampower versions is not indexable)
-                    if slot >= 1 and slot <= 19 then
-                        _equippedItemIDs[slot] = itemInfo.itemId
-                        usedNampower = true
-
-                        -- Get item name via Nampower API or GetItemInfo
-                        local itemName = API and API.GetItemName and API.GetItemName(itemInfo.itemId)
-                        if not itemName then
-                            itemName = GetItemInfo(itemInfo.itemId)
-                        end
-                        if itemName then
-                            _equippedItemNames[slot] = string_lower(itemName)
-                        end
-                    end
-                end
-            end
-            if usedNampower then
-                return  -- Done with Nampower path
-            end
-            -- Fall through to manual enumeration if Nampower returned userdata items
-        end
-    end
-
-    -- Fallback: manual slot enumeration via ClassicAPI (id + decorated name),
-    -- no link string built. C_Item.GetItemName carries random-suffix decoration
-    -- and falls back to the base name internally, so it replaces the old
-    -- bracket-name / GetItemInfo two-step in a single call.
-    for slot = 1, 19 do
-        local id = GetInventoryItemID("player", slot)
-        if id then
-            _equippedItemIDs[slot] = id
-            local name = C_Item.GetItemName({ equipmentSlotIndex = slot })
-            if name then
-                _equippedItemNames[slot] = string_lower(name)
-            end
-        end
-    end
-end
-
--- Invalidate equipment cache (call on UNIT_INVENTORY_CHANGED)
-function CleveRoids.InvalidateEquipmentCache()
-    _equipmentCacheValid = false
-end
-
 -- ============================================================================
 -- PERFORMANCE: Unified item location lookup using CleveRoids.Items cache
 -- Returns: { type="inventory"|"bag", inventoryID=N } or { type="bag", bag=N, slot=N }
@@ -2060,26 +1964,12 @@ function CleveRoids.CancelAura(auraName)
     return false
 end
 
+-- ClassicAPI's C_Item.IsEquippedItem walks the 19 equipment slots natively and
+-- short-circuits on the first match, so it replaces the old Lua-side equipment
+-- cache entirely -- no per-call scan, no invalidation. Accepts itemID, item
+-- link, or (case-insensitive, decorated) name.
 function CleveRoids.HasGearEquipped(gearId)
-    if not gearId then return false end
-
-    -- PERFORMANCE: Build/refresh equipment cache if needed
-    BuildEquipmentCache()
-
-    -- Handle both numeric IDs and string IDs like "5196"
-    local wantId = tonumber(gearId)
-    local wantName = (type(gearId) == "string" and not wantId) and string.lower(gearId) or nil
-
-    -- PERFORMANCE: Use cached data instead of scanning all slots
-    for slot = 1, 19 do
-        if wantId and _equippedItemIDs[slot] == wantId then
-            return true
-        end
-        if wantName and _equippedItemNames[slot] == wantName then
-            return true
-        end
-    end
-    return false
+    return (gearId and C_Item.IsEquippedItem(gearId)) or false
 end
 
 
