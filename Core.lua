@@ -4840,7 +4840,7 @@ CleveRoids.Frame:RegisterEvent("UPDATE_MACROS")
 CleveRoids.Frame:RegisterEvent("SPELLS_CHANGED")
 CleveRoids.Frame:RegisterEvent("ACTIONBAR_SLOT_CHANGED")
 CleveRoids.Frame:RegisterEvent("BAG_UPDATE_DELAYED")
-CleveRoids.Frame:RegisterEvent("UNIT_INVENTORY_CHANGED")
+CleveRoids.Frame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 CleveRoids.Frame:RegisterEvent("UNIT_PET")
 
 -- == STATE CHANGE EVENT REGISTRATION (for performance) ==
@@ -5735,9 +5735,7 @@ function CleveRoids.Frame:BAG_UPDATE_DELAYED()
     end
 end
 
-function CleveRoids.Frame:UNIT_INVENTORY_CHANGED()
-    if arg1 ~= "player" then return end
-
+function CleveRoids.Frame:PLAYER_EQUIPMENT_CHANGED()
     -- PERFORMANCE: Invalidate equipment cache for HasGearEquipped
     if CleveRoids.InvalidateEquipmentCache then
         CleveRoids.InvalidateEquipmentCache()
