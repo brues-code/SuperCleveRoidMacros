@@ -337,6 +337,18 @@ function API.IsMounted()
     return IsMounted() and true or false
 end
 
+-- True if the player is under a WMO roof (building, cave, instance interior).
+-- Live engine geometry query, not zone-based; nil (-> false) pre-world.
+function API.IsIndoors()
+    return IsIndoors() and true or false
+end
+
+-- True if the player is outdoors (open sky / not inside a WMO interior).
+-- Exact complement of IsIndoors for a resolvable player.
+function API.IsOutdoors()
+    return IsOutdoors() and true or false
+end
+
 -- Player's stand state: 0 = standing, non-zero = sitting/sleeping/kneeling/etc.
 -- (see UnitStandState). Player-only.
 function API.GetPlayerStandState()

@@ -7352,6 +7352,26 @@ CleveRoids.Keywords = {
         return not CleveRoids.ClassicAPI.IsSwimming()
     end,
 
+    -- [indoors] - Player is under a WMO roof (building, cave, instance interior)
+    indoors = function(conditionals)
+        return CleveRoids.ClassicAPI.IsIndoors()
+    end,
+
+    -- [noindoors] - Player is NOT indoors
+    noindoors = function(conditionals)
+        return not CleveRoids.ClassicAPI.IsIndoors()
+    end,
+
+    -- [outdoors] - Player is outdoors (open sky / not inside a WMO interior)
+    outdoors = function(conditionals)
+        return CleveRoids.ClassicAPI.IsOutdoors()
+    end,
+
+    -- [nooutdoors] - Player is NOT outdoors
+    nooutdoors = function(conditionals)
+        return not CleveRoids.ClassicAPI.IsOutdoors()
+    end,
+
     -- [rooted] - Player is currently rooted (Nampower v2.36+)
     rooted = function(conditionals)
         if not CleveRoids.NampowerAPI.features.hasPlayerIsRooted then
@@ -9371,6 +9391,7 @@ CleveRoids.STATIC_CONDITIONALS = {
     mod = true, nomod = true,
     keydown = true, nokeydown = true,
     swimming = true, noswimming = true, swim = true, noswim = true,
+    indoors = true, noindoors = true, outdoors = true, nooutdoors = true,
     rooted = true, norooted = true,
     resting = true, noresting = true,
 }
