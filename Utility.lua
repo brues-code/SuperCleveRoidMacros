@@ -247,7 +247,6 @@ function CleveRoids.GetChannelDurationFromTooltipByID(spellID)
     end
 
     -- Fallback: resolve name and scan tooltip
-    if not GetSpellRecField then return nil end
     local spellName = C_Spell.GetSpellName(spellID)
     if not spellName then return nil end
     return CleveRoids.GetSpellDurationFromTooltip(spellName)
@@ -7105,10 +7104,7 @@ function CleveRoids.ApplySetBonusModifier(spellID, baseDuration)
     local modifiedDuration = modifier.modifier(baseDuration)
 
     if modifiedDuration ~= baseDuration and CleveRoids.debug then
-        local spellName = "Unknown"
-        if GetSpellRecField then
-            spellName = C_Spell.GetSpellName(spellID) or spellName
-        end
+        local spellName = C_Spell.GetSpellName(spellID) or "Unknown"
         DEFAULT_CHAT_FRAME:AddMessage(
             string.format("|cff00ffff[Set Bonus Modifier]|r %s (ID:%d): %.1fs -> %.1fs (%d/%d pieces)",
                 spellName, spellID, baseDuration, modifiedDuration,
@@ -7585,7 +7581,7 @@ local function GetSpellSchool(spellName, spellID)
     end
 
     -- If we only have spellID but no name, try to get name from GetSpellRecField
-    if spellID and not spellName and GetSpellRecField then
+    if spellID and not spellName then
         spellName = C_Spell.GetSpellName(spellID)
     end
 

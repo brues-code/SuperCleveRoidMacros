@@ -5901,11 +5901,9 @@ function CleveRoids.Frame:SPELL_QUEUE_EVENT()
                 queueType = eventCode,
                 queueTime = GetTime()
             }
-            if GetSpellRecField then
-                local name = C_Spell.GetSpellName(spellId)
-                if name then
-                    CleveRoids.queuedSpell.spellName = name
-                end
+            local name = C_Spell.GetSpellName(spellId)
+            if name then
+                CleveRoids.queuedSpell.spellName = name
             end
             -- BUGFIX: Update casting state when spell is queued (for [casting] conditional)
             if CleveRoids.UpdateCastingState then
@@ -5942,11 +5940,9 @@ function CleveRoids.Frame:SPELL_CAST_EVENT()
                 targetGuid = targetGuid,
                 timestamp = GetTime()
             }
-            if GetSpellRecField then
-                local name = C_Spell.GetSpellName(spellId)
-                if name then
-                    CleveRoids.lastCastSpell.spellName = name
-                end
+            local name = C_Spell.GetSpellName(spellId)
+            if name then
+                CleveRoids.lastCastSpell.spellName = name
             end
 
             -- Track pending cast for SPELL_GO correlation (reactive ability detection)
