@@ -4839,7 +4839,7 @@ CleveRoids.Frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 CleveRoids.Frame:RegisterEvent("UPDATE_MACROS")
 CleveRoids.Frame:RegisterEvent("SPELLS_CHANGED")
 CleveRoids.Frame:RegisterEvent("ACTIONBAR_SLOT_CHANGED")
-CleveRoids.Frame:RegisterEvent("BAG_UPDATE")
+CleveRoids.Frame:RegisterEvent("BAG_UPDATE_DELAYED")
 CleveRoids.Frame:RegisterEvent("UNIT_INVENTORY_CHANGED")
 CleveRoids.Frame:RegisterEvent("UNIT_PET")
 
@@ -5706,7 +5706,7 @@ function CleveRoids.Frame:ACTIONBAR_SLOT_CHANGED()
     end
 end
 
-function CleveRoids.Frame:BAG_UPDATE()
+function CleveRoids.Frame:BAG_UPDATE_DELAYED()
     -- In combat: Skip expensive indexing but still queue icon update
     -- so conditionals like [inbag] re-evaluate (they use live bag APIs)
     if UnitAffectingCombat("player") then
