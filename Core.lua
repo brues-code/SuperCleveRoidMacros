@@ -3974,25 +3974,6 @@ function CleveRoids.OnUpdate(self)
         CR.EnsureSendChatMessageHook()
     end
 
-    -- Process deferred equipment index updates (for throttled UNIT_INVENTORY_CHANGED)
-    -- PERFORMANCE: Skip check entirely if no pending update
-    local pendingTime = CR.equipIndexPendingTime
-    if pendingTime and not UnitAffectingCombat("player") then
-        if (time - (CR.lastEquipIndexTime or 0)) >= 0.2 then
-            CR.lastEquipIndexTime = time
-            CR.equipIndexPendingTime = nil
-            CR.lastItemIndexTime = time
-            CR.IndexItems()
-            CR.Actions = {}
-            CR.Macros = {}
-            CR.IndexActionBars()
-
-            if CRM.realtime == 0 then
-                CR.QueueActionUpdate()
-            end
-        end
-    end
-
     -- PERFORMANCE: Check for expired reactive procs only if we have any
     -- Use statically allocated removal buffer to avoid per-frame allocation
     local reactiveProcs = CR.reactiveProcs
@@ -5740,31 +5721,26 @@ function CleveRoids.Frame:BAG_UPDATE_DELAYED()
 end
 
 function CleveRoids.Frame:PLAYER_EQUIPMENT_CHANGED()
-    -- PERFORMANCE: Invalidate equipment cache for HasGearEquipped
+    -- arg1 = inventory slot that changed, arg2 = hasCurrent (slot now holds an item)
+    local slot, hasCurrent = arg1, arg2
+
+    -- [equipped]/HasGearEquipped runs off its own live-rebuilt cache; invalidating
+    -- it is all that conditional needs.
     if CleveRoids.InvalidateEquipmentCache then
         CleveRoids.InvalidateEquipmentCache()
     end
 
-    -- In combat: Skip ALL processing - EquipBagItem already handles cache invalidation
-    -- This eliminates lag from IndexEquippedItems during rapid gear swapping
+    -- In combat: Skip indexing - EquipBagItem already handles cache invalidation
+    -- at the call site. This eliminates lag during rapid gear swapping.
     if UnitAffectingCombat("player") then
         return
     end
 
-    -- Out of combat: Full indexing with throttle
-    local now = GetTime()
-    if (now - (CleveRoids.lastEquipIndexTime or 0)) < 0.2 then
-        CleveRoids.equipIndexPendingTime = now
-        return
-    end
-
-    CleveRoids.lastEquipIndexTime = now
-    CleveRoids.equipIndexPendingTime = nil
-    CleveRoids.lastItemIndexTime = now
-    CleveRoids.IndexItems()
-    CleveRoids.Actions = {}
-    CleveRoids.Macros = {}
-    CleveRoids.IndexActionBars()
+    -- Out of combat: reindex only the one slot that changed (the bag side of any
+    -- swap is covered by BAG_UPDATE_DELAYED). No action-bar rebuild is needed -
+    -- gear swaps don't change what's on the bars; QueueActionUpdate re-evaluates
+    -- [equipped:...] icons/conditionals.
+    CleveRoids.IndexEquipSlot(slot, hasCurrent)
 
     if CleveRoidMacros.realtime == 0 then
         CleveRoids.QueueActionUpdate()

@@ -196,13 +196,26 @@ function CleveRoids.IndexEquippedItems()
 end
 
 -- PERFORMANCE: Index a single equipment slot instead of all 20
--- Use when we know exactly which slot changed (e.g., from EquipBagItem)
-function CleveRoids.IndexEquipSlot(inventoryID)
+-- Use when we know exactly which slot changed (e.g., from EquipBagItem or
+-- PLAYER_EQUIPMENT_CHANGED). hasCurrent is the event's arg2 (does the slot now
+-- hold an item); pass false to skip the API probe on a slot we know is empty.
+function CleveRoids.IndexEquipSlot(inventoryID, hasCurrent)
     if not inventoryID then return end
 
     local items = CleveRoids.Items or {}
-    local itemID = GetInventoryItemID("player", inventoryID)
 
+    -- Clear any stale inventoryID still pointing at this slot: the item that was
+    -- here is now unequipped or swapped out (its real location comes from the
+    -- paired BAG_UPDATE rebuild). Equip changes are user-paced, so this table
+    -- scan is off the hot path.
+    for _, entry in pairs(items) do
+        if type(entry) == "table" and entry.inventoryID == inventoryID then
+            entry.inventoryID = nil
+        end
+    end
+
+    -- hasCurrent == false (arg2) => slot is now empty, nothing to add.
+    local itemID = hasCurrent ~= false and GetInventoryItemID("player", inventoryID)
     if itemID then
         local name, itemLink, _, _, itemType, itemSubType, _, _, texture = GetItemInfo(itemID)
         if name then
