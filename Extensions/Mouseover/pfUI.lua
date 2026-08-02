@@ -8,8 +8,8 @@
   - Resolving a real UnitID when .unit isn't set
   - Properly hooking party group[0] (your own party slot) with a safe closure and defaulting to "player"
 ]]
-local website = GetAddOnMetadata("pfUI", "X-Website")
-if website and string.find(website, 'brues') then return end
+
+if pfPlayer and pfPlayer.GetAttribute and pfPlayer:GetAttribute('unit') == 'player' then return end
 
 local _G = _G or getfenv(0)
 local CleveRoids = _G.CleveRoids or {}
