@@ -34,7 +34,6 @@ local function ResolvePfUnit(frame, fallbackName)
   name = strlower(name)
 
   local candidates = { "target", "targettarget", "player", "pet" }
-  local i
   for i = 1, 4 do
     table.insert(candidates, "party"..i)
     table.insert(candidates, "partypet"..i)
@@ -156,7 +155,6 @@ end
 function Extension.RegisterPartyScripts()
   if not pfUI or not pfUI.uf or not pfUI.uf.group then return end
 
-  local i
   for i = 0, 4 do
     local frame = pfUI.uf.group[i]
     if frame then
@@ -184,7 +182,6 @@ end
 function Extension.RegisterRaidScripts()
   if not pfUI or not pfUI.uf or not pfUI.uf.raid then return end
 
-  local i
   for i = 1, 40 do
     local frame = pfUI.uf.raid[i]
     if frame then
@@ -336,7 +333,6 @@ end
 function Extension.RegisterRaidMarkScripts()
   if not pfUI or not pfUI.raidmarkers or not pfUI.raidmarkers.rows then return end
 
-  local i
   for i = 1, 8 do
     local row = pfUI.raidmarkers.rows[i]
     if row then
