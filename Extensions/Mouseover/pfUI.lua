@@ -2,17 +2,11 @@
   Author: Dennis Werner Garske (DWG) / brian / Mewtiny
   License: MIT License
 
-  pfUI integration. pfUI's own unitframes now set the native mouseover unit
-  (Nampower SetMouseoverUnit, via pfUI.uf.OnEnter bound in pfUI.uf:EnableScripts
-  on every unitframe), so [@mouseover]/[mouseover] resolve against pfUI frames
-  through the native "mouseover" token -- every consumer checks UnitExists(
-  "mouseover") before the CleveRoids.mouseoverUnit fallback, so no per-frame
-  hooking is needed here anymore. What remains is the two things pfUI doesn't
-  cover:
-  - Raid-marker rows: NOT unitframes (never go through EnableScripts), so pfUI
-    sets no mouseover for them. Hooked so hovering registers "mark1".."mark8"
-    via CleveRoids.mouseoverUnit.
-  - /pfcast: wrapped so its argument runs through CleveRoids conditionals.
+  Fixes pfUI mouseover issues by:
+  - Using a unique source key per pfUI frame (e.g., "pfui:party3", "pfui:raid7")
+  - Pairing Set/Clear with the same per-frame key
+  - Resolving a real UnitID when .unit isn't set
+  - Properly hooking party group[0] (your own party slot) with a safe closure and defaulting to "player"
 ]]
 local website = GetAddOnMetadata("pfUI", "X-Website")
 if website and string.find(website, 'brues') then return end
@@ -104,11 +98,241 @@ local function PfClear(frame)
   end
 end
 
+-- PLAYER
+function Extension.RegisterPlayerScripts()
+  if not pfUI or not pfUI.uf or not pfUI.uf.player then return end
+  local frame = pfUI.uf.player
+  local onEnterFunc = frame:GetScript("OnEnter")
+  local onLeaveFunc = frame:GetScript("OnLeave")
+
+  frame:SetScript("OnEnter", function()
+    PfSet(this, "player")
+    if onEnterFunc then onEnterFunc(this) end
+  end)
+
+  frame:SetScript("OnLeave", function()
+    PfClear(this)
+    if onLeaveFunc then onLeaveFunc(this) end
+  end)
+end
+
+-- TARGET
+function Extension.RegisterTargetScripts()
+  if not pfUI or not pfUI.uf or not pfUI.uf.target then return end
+  local frame = pfUI.uf.target
+  local onEnterFunc = frame:GetScript("OnEnter")
+  local onLeaveFunc = frame:GetScript("OnLeave")
+
+  frame:SetScript("OnEnter", function()
+    PfSet(this, "target")
+    if onEnterFunc then onEnterFunc(this) end
+  end)
+
+  frame:SetScript("OnLeave", function()
+    PfClear(this)
+    if onLeaveFunc then onLeaveFunc(this) end
+  end)
+end
+
+-- TARGETTARGET
+function Extension.RegisterTargetTargetScripts()
+  if not pfUI or not pfUI.uf or not pfUI.uf.targettarget then return end
+  local frame = pfUI.uf.targettarget
+  local onEnterFunc = frame:GetScript("OnEnter")
+  local onLeaveFunc = frame:GetScript("OnLeave")
+
+  frame:SetScript("OnEnter", function()
+    PfSet(this, "targettarget")
+    if onEnterFunc then onEnterFunc(this) end
+  end)
+
+  frame:SetScript("OnLeave", function()
+    PfClear(this)
+    if onLeaveFunc then onLeaveFunc(this) end
+  end)
+end
+
+-- PARTY (pfUI.uf.group[0..4])  -- include 0 to cover your own party slot
+function Extension.RegisterPartyScripts()
+  if not pfUI or not pfUI.uf or not pfUI.uf.group then return end
+
+  local i
+  for i = 0, 4 do
+    local frame = pfUI.uf.group[i]
+    if frame then
+      -- bind loop index for closures (Vanilla-safe)
+      local idx = i
+      local onEnterFunc = frame:GetScript("OnEnter")
+      local onLeaveFunc = frame:GetScript("OnLeave")
+
+      frame:SetScript("OnEnter", function()
+        -- For group[0] (your own party frame), default to "player"
+        local defaultUnit = (idx == 0) and "player" or nil
+        PfSet(this, defaultUnit)
+        if onEnterFunc then onEnterFunc(this) end
+      end)
+
+      frame:SetScript("OnLeave", function()
+        PfClear(this)
+        if onLeaveFunc then onLeaveFunc(this) end
+      end)
+    end
+  end
+end
+
+-- RAID (pfUI.uf.raid[1..40])
+function Extension.RegisterRaidScripts()
+  if not pfUI or not pfUI.uf or not pfUI.uf.raid then return end
+
+  local i
+  for i = 1, 40 do
+    local frame = pfUI.uf.raid[i]
+    if frame then
+      local onEnterFunc = frame:GetScript("OnEnter")
+      local onLeaveFunc = frame:GetScript("OnLeave")
+
+      frame:SetScript("OnEnter", function()
+        PfSet(this)
+        if onEnterFunc then onEnterFunc(this) end
+      end)
+
+      frame:SetScript("OnLeave", function()
+        PfClear(this)
+        if onLeaveFunc then onLeaveFunc(this) end
+      end)
+    end
+  end
+end
+
+-- FOCUS
+function Extension.RegisterFocusScripts()
+  if not pfUI or not pfUI.uf or not pfUI.uf.focus then return end
+  local frame = pfUI.uf.focus
+  local onEnterFunc = frame:GetScript("OnEnter")
+  local onLeaveFunc = frame:GetScript("OnLeave")
+
+  frame:SetScript("OnEnter", function()
+    PfSet(this) -- ResolvePfUnit handles focus emulation
+    if onEnterFunc then onEnterFunc(this) end
+  end)
+
+  frame:SetScript("OnLeave", function()
+    PfClear(this)
+    if onLeaveFunc then onLeaveFunc(this) end
+  end)
+end
+
+-- FOCUSTARGET (if your pfUI build provides it)
+function Extension.RegisterFocusTargetScripts()
+  if not pfUI or not pfUI.uf or not pfUI.uf.focustarget then return end
+  local frame = pfUI.uf.focustarget
+  local onEnterFunc = frame:GetScript("OnEnter")
+  local onLeaveFunc = frame:GetScript("OnLeave")
+
+  frame:SetScript("OnEnter", function()
+    PfSet(this)
+    if onEnterFunc then onEnterFunc(this) end
+  end)
+
+  frame:SetScript("OnLeave", function()
+    PfClear(this)
+    if onLeaveFunc then onLeaveFunc(this) end
+  end)
+end
+
+-- PETTARGET (if your pfUI build provides it)
+function Extension.RegisterPetTargetScripts()
+  if not pfUI or not pfUI.uf or not pfUI.uf.pettarget then return end
+  local frame = pfUI.uf.pettarget
+  local onEnterFunc = frame:GetScript("OnEnter")
+  local onLeaveFunc = frame:GetScript("OnLeave")
+
+  frame:SetScript("OnEnter", function()
+    PfSet(this)
+    if onEnterFunc then onEnterFunc(this) end
+  end)
+
+  frame:SetScript("OnLeave", function()
+    PfClear(this)
+    if onLeaveFunc then onLeaveFunc(this) end
+  end)
+end
+
+-- TARGETTARGETTARGET (if your pfUI build provides it)
+function Extension.RegisterTargetTargetTargetScripts()
+  if not pfUI or not pfUI.uf or not pfUI.uf.targettargettarget then return end
+  local frame = pfUI.uf.targettargettarget
+  local onEnterFunc = frame:GetScript("OnEnter")
+  local onLeaveFunc = frame:GetScript("OnLeave")
+
+  frame:SetScript("OnEnter", function()
+    PfSet(this)
+    if onEnterFunc then onEnterFunc(this) end
+  end)
+
+  frame:SetScript("OnLeave", function()
+    PfClear(this)
+    if onLeaveFunc then onLeaveFunc(this) end
+  end)
+end
+
+-- PARTYTARGET (party1target..party4target, plus player's target)
+function Extension.RegisterPartyTargetScripts()
+  if not pfUI or not pfUI.uf then return end
+
+  -- This helper function is used to hook any given frame.
+  local function hookFrame(frame, defaultUnit)
+    if not frame then return end
+    local onEnterFunc = frame:GetScript("OnEnter")
+    local onLeaveFunc = frame:GetScript("OnLeave")
+
+    frame:SetScript("OnEnter", function()
+      PfSet(this, defaultUnit)
+      -- We remove the call to the original onEnterFunc to prevent overwritten tooltips.
+    end)
+
+    frame:SetScript("OnLeave", function()
+      PfClear(this)
+      if onLeaveFunc then onLeaveFunc(this) end
+    end)
+  end
+
+  -- This helper function is specifically for party member targets (1-4)
+  local function hookPartyMemberTarget(i, frame)
+    if not frame then return end
+    local defaultUnit = "party" .. i .. "target"
+    hookFrame(frame, defaultUnit)
+  end
+
+  -- Case A: Hook dedicated arrays for party members 1-4
+  if pfUI.uf.grouptarget then
+    for i = 1, 4 do hookPartyMemberTarget(i, pfUI.uf.grouptarget[i]) end
+  end
+  if pfUI.uf.partytarget then
+    for i = 1, 4 do hookPartyMemberTarget(i, pfUI.uf.partytarget[i]) end
+  end
+
+  -- Case B: Hook child target frames for party members 1-4
+  if pfUI.uf.group then
+    for i = 1, 4 do
+      local g = pfUI.uf.group[i]
+      if g and g.target then hookPartyMemberTarget(i, g.target) end
+    end
+  end
+
+  --- START OF FIX to include party0target ---
+  -- Case C: Specifically find and hook the player's own target frame (group[0].target)
+  if pfUI.uf.group and pfUI.uf.group[0] and pfUI.uf.group[0].target then
+    -- The player's target UnitID is always "target", not "party0target".
+    hookFrame(pfUI.uf.group[0].target, "target")
+  end
+  --- END OF FIX ---
+end
+
 -- RAID MARKERS (pfUI raidmarkers module)
 -- Rows are plain Buttons with label="mark" and id=1-8. They have no OnEnter/OnLeave
 -- by default, so [mouseover] macros are blind to them. We hook each row so hovering
--- registers "mark1".."mark8" through the normal priority system. pfUI's own
--- SetMouseoverUnit path only covers unitframes, so this stays.
+-- registers "mark1".."mark8" through the normal priority system.
 function Extension.RegisterRaidMarkScripts()
   if not pfUI or not pfUI.raidmarkers or not pfUI.raidmarkers.rows then return end
 
@@ -150,7 +374,17 @@ function Extension.HookPfCast()
 end
 
 function Extension.PLAYER_ENTERING_WORLD()
-  if not pfUI then return end
+  if not pfUI or not pfUI.uf then return end
+  Extension.RegisterPlayerScripts()
+  Extension.RegisterTargetScripts()
+  Extension.RegisterTargetTargetScripts()
+  Extension.RegisterPartyScripts()
+  Extension.RegisterPartyTargetScripts()
+  Extension.RegisterRaidScripts()
+  Extension.RegisterFocusScripts()
+  Extension.RegisterFocusTargetScripts()
+  Extension.RegisterPetTargetScripts()
+  Extension.RegisterTargetTargetTargetScripts()
   Extension.RegisterRaidMarkScripts()
   Extension.HookPfCast()
 end
