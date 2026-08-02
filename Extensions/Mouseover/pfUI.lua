@@ -14,6 +14,9 @@
     via CleveRoids.mouseoverUnit.
   - /pfcast: wrapped so its argument runs through CleveRoids conditionals.
 ]]
+local website = GetAddOnMetadata("pfUI", "X-Website")
+if website and string.find(website, 'brues') then return end
+
 local _G = _G or getfenv(0)
 local CleveRoids = _G.CleveRoids or {}
 
