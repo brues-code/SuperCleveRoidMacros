@@ -117,18 +117,6 @@ local cachedSpellDurations = {}
 local spellDurationCacheTime = {}
 local SPELL_CACHE_DURATION = 0.5  -- Re-scan every 0.5 seconds (haste can change mid-fight)
 
--- Get a spell's slot in the spellbook by spell ID
-local function GetSpellSlotByID(targetSpellID)
-    local i = 1
-    while true do
-        local spellName = GetSpellName(i, BOOKTYPE_SPELL)
-        if not spellName then break end
-        -- Note: spell ID matching done via GetSpellTexture comparison if needed
-        i = i + 1
-    end
-    return nil, nil
-end
-
 -- Get a spell's slot in the spellbook by name (finds highest rank by default)
 -- If targetRank is specified (e.g., "Rank 5"), finds that specific rank
 local function GetSpellSlotByName(targetSpellName, targetRank)

@@ -421,6 +421,27 @@ end
 
 function CleveRoids.GetSpell(text)
     text = CleveRoids.Trim(text)
+
+    -- Explicit "spell:<id>" form. If the player knows the spell, reuse its cached
+    -- spellbook entry (full cost/cooldown/usability). FindSpellBookSlotByID
+    -- (ClassicAPI) resolves per-rank IDs and pet spells natively and returns the
+    -- same bookType string CleveRoids.Spells is keyed by. If the spell is not in
+    -- either book, fall back to an id-only entry that SetAction renders via
+    -- SetSpellByID; cost=0 keeps the downstream active-action checks nil-safe.
+    local _, _, spellId = string.find(text, "^spell:(%d+)$")
+    if spellId then
+        spellId = tonumber(spellId)
+        local slot, book = FindSpellBookSlotByID(spellId)
+        if slot then
+            local name, rank = GetSpellInfo(slot, book)
+            local byName = name and CleveRoids.Spells[book] and CleveRoids.Spells[book][name]
+            if byName then
+                return (rank and rank ~= "" and byName[rank]) or byName.highest or byName
+            end
+        end
+        return { id = spellId, texture = C_Spell.GetSpellTexture(spellId) or CleveRoids.unknownTexture, cost = 0 }
+    end
+
     local rs, _, rank = string.find(text, "[^%s]%((Rank %d+)%)$")
     local name = rank and string.sub(text, 1, rs) or text
 
@@ -507,6 +528,12 @@ end
 
 function CleveRoids.GetItem(text)
     if not text or text == "" then return end
+
+    -- Explicit "item:<id>" form: force resolution by item ID. Reuses the numeric
+    -- lookup below (equipped -> bags -> GetItemInfo), so location-aware tooltip
+    -- rendering (SetInventoryItem/SetBagItem) still applies when the player has it.
+    local _, _, prefixedId = string.find(text, "^item:(%d+)$")
+    if prefixedId then text = prefixedId end
 
     local Items = CleveRoids.Items
     local item = Items[text] or Items[tostring(text)]

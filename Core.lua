@@ -970,7 +970,10 @@ function CleveRoids.TestForActiveAction(actions)
                 actions.active.oom = (manaToCheck < actions.active.spell.cost)
             end
 
-            local start, duration = GetSpellCooldown(actions.active.spell.spellSlot, actions.active.spell.bookType)
+            local start, duration = 0, 0
+            if actions.active.spell.spellSlot then
+                start, duration = GetSpellCooldown(actions.active.spell.spellSlot, actions.active.spell.bookType)
+            end
             local onCooldown = (start > 0 and duration > 0)
 
             if actions.active.isReactive then
@@ -4626,7 +4629,7 @@ function GetActionCooldown(slot)
             return GetInventoryItemCooldown("player", slotId)
         end
 
-        if a.spell then
+        if a.spell and a.spell.spellSlot then
             return GetSpellCooldown(a.spell.spellSlot, a.spell.bookType)
         elseif a.item then
             if a.item.bagID and a.item.slot then
