@@ -164,6 +164,8 @@ local BOOLEAN_CONDITIONALS = {
     stopattack = true,
     pet = true,
     nopet = true,
+    pethappiness = true,
+    nopethappiness = true,
     focus = true,
     nofocus = true,
     bg = true,
@@ -549,6 +551,7 @@ function CleveRoids.DisableAddon(reason)
         SlashCmdList.CLEVEROID = disabledMsg
         SlashCmdList.CAST = disabledMsg
         SlashCmdList.USE = disabledMsg
+        SlashCmdList.FEEDPET = disabledMsg
         SlashCmdList.EQUIP = disabledMsg
         SlashCmdList.EQUIPMH = disabledMsg
         SlashCmdList.EQUIPOH = disabledMsg
@@ -4849,6 +4852,7 @@ CleveRoids.Frame:RegisterEvent("BAG_UPDATE_DELAYED")
 CleveRoids.Frame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
 CleveRoids.Frame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 CleveRoids.Frame:RegisterEvent("UNIT_PET")
+CleveRoids.Frame:RegisterEvent("UNIT_HAPPINESS")
 
 -- == STATE CHANGE EVENT REGISTRATION (for performance) ==
 CleveRoids.Frame:RegisterEvent("PLAYER_TARGET_CHANGED")
@@ -4921,6 +4925,12 @@ function CleveRoids.Frame:UNIT_PET()
         if CleveRoidMacros.realtime == 0 then
             CleveRoids.QueueActionUpdate()
         end
+    end
+end
+
+function CleveRoids.Frame:UNIT_HAPPINESS()
+    if CleveRoidMacros.realtime == 0 then
+        CleveRoids.QueueActionUpdate()
     end
 end
 
@@ -7082,6 +7092,54 @@ local function FindItemInBags(itemName)
     return nil
 end
 
+function CleveRoids.DoFeedPet(msg)
+    -- Check macro stop flags
+    if CleveRoids.stopMacroFlag or CleveRoids.skipMacroFlag then
+        return false
+    end
+
+    local action = function(itemName)
+        -- Defensive: make sure we are not in "split stack" mode and nothing is on the cursor
+        if type(CloseStackSplitFrame) == "function" then CloseStackSplitFrame() end
+        if CursorHasItem and CursorHasItem() then ClearCursor() end
+
+        local _, isHunterPet = HasPetUI()
+        if not isHunterPet or not UnitExists("pet") or UnitHealth("pet") <= 0 then
+            return false
+        end
+
+        local bag, bagSlot = FindItemInBags(itemName)
+        if not bag then
+            CleveRoids.Print("Item not found: " .. itemName)
+            return false
+        end
+
+        local feedPet = (CleveRoids.Localized.Spells and CleveRoids.Localized.Spells["Feed Pet"]) or "Feed Pet"
+        CastSpellByName(feedPet)
+
+        -- Only apply the food if Feed Pet actually entered item-targeting mode.
+        if SpellIsTargeting and not SpellIsTargeting() then
+            return false
+        end
+
+        PickupContainerItem(bag, bagSlot)
+        return true
+    end
+
+    -- PERFORMANCE: Use numeric iteration to avoid pairs() iterator allocation
+    local parts = CleveRoids.splitStringIgnoringQuotes(msg)
+    for i = 1, table.getn(parts) do
+        if CleveRoids.DoWithConditionals(parts[i], action, CleveRoids.FixEmptyTarget, false, action) then
+            -- If /firstaction was used, stop macro evaluation after first successful feed
+            if CleveRoids.stopOnCastFlag then
+                CleveRoids.stopMacroFlag = true
+            end
+            return true
+        end
+    end
+    return false
+end
+
 function CleveRoids.DoApply(hand, msg)
     local weaponSlots = {
         ["main"] = 16,
@@ -7121,6 +7179,16 @@ function CleveRoids.DoApply(hand, msg)
         end
     end
     return handled
+end
+
+SLASH_FEEDPET1 = "/feedpet"
+SlashCmdList.FEEDPET = function(msg)
+    -- Require an item name argument
+    if not msg or msg == "" or string.gsub(msg, "%s+", "") == "" then
+        CleveRoids.Print("Usage: /feedpet [conditionals] ItemName")
+        return
+    end
+    CleveRoids.DoFeedPet(msg)
 end
 
 SLASH_APPLYMAIN1 = "/applymain"
