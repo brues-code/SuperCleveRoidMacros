@@ -3904,6 +3904,17 @@ function CleveRoids.OnUpdate(self)
     -- PERFORMANCE: Single GetTime() call per frame
     local time = GetTime()
 
+    -- Coalesced macro/spell/action-bar rebuild (armed by UPDATE_MACROS,
+    -- SPELLS_CHANGED and PLAYER_LOGIN). Debounced so the login burst -
+    -- SPELLS_CHANGED fires several times as the spellbook populates - collapses
+    -- into a single rebuild. Runs even before `ready` so spells/talents are
+    -- indexed before the init timer's first action-bar pass; RebuildMacros
+    -- itself skips the 120-slot action-bar rebuild until ready.
+    if CR.macroRebuildTime and time >= CR.macroRebuildTime then
+        CR.macroRebuildTime = nil
+        CR.RebuildMacros()
+    end
+
     -- PERFORMANCE: Early exit if not ready (before any other checks)
     if not CR.ready then
         -- Handle initialization timer only when not ready
@@ -4974,6 +4985,11 @@ function CleveRoids.Frame:PLAYER_LOGIN()
     CleveRoids.IndexPetSpells()
     CleveRoids.initializationTimer = GetTime() + 1.5
 
+    -- Guarantee a full index (talents + macros + action bars) even if
+    -- UPDATE_MACROS / SPELLS_CHANGED happen not to fire before the init timer.
+    -- Coalesces with those events' arming; RebuildMacros runs once for the burst.
+    CleveRoids.macroRebuildTime = GetTime() + 0.3
+
     -- PERFORMANCE: Initialize event-driven cache states
     CleveRoids._cachedPlayerInCombat = UnitAffectingCombat("player") and true or false
 end
@@ -5612,35 +5628,44 @@ function CleveRoids.Frame:PLAYER_TARGET_CHANGED()
     end
 end
 
-function CleveRoids.Frame:UPDATE_MACROS()
+-- Full rebuild of the macro/spell/talent/action-bar index. Invoked from the
+-- update loop when macroRebuildTime elapses (armed by UPDATE_MACROS /
+-- SPELLS_CHANGED / PLAYER_LOGIN), never inline from an event - so a burst of
+-- those events collapses into one rebuild.
+function CleveRoids.RebuildMacros()
     CleveRoids.currentSequence = nil
-    -- Explicitly nil tables before re-assignment
-    CleveRoids.ParsedMsg = nil;
     CleveRoids.ParsedMsg = {}
-
-    CleveRoids.Macros = nil;
     CleveRoids.Macros = {}
-
-    CleveRoids.Actions = nil;
     CleveRoids.Actions = {}
-
-    CleveRoids.Sequences = nil;
     CleveRoids.Sequences = {}
 
     CleveRoids.IndexSpells()
     CleveRoids.IndexTalents()
     CleveRoids.IndexPetSpells()
-    CleveRoids.IndexActionBars()
+
+    -- Action-bar indexing is wasted before `ready` (GetAction early-returns
+    -- while not ready), and the +1.5s init timer rebuilds the bars once anyway.
+    -- Skipping it here keeps the pre-ready login rebuilds from fanning 120 slot
+    -- updates out to Blizzard/pfUI/Bongos buttons.
+    if CleveRoids.ready then
+        CleveRoids.IndexActionBars()
+    end
+
     if CleveRoidMacros.realtime == 0 then
         CleveRoids.QueueActionUpdate()
     end
 end
 
+function CleveRoids.Frame:UPDATE_MACROS()
+    -- Debounce: collapse bursts (login, rapid macro edits) into one rebuild.
+    CleveRoids.macroRebuildTime = GetTime() + 0.3
+end
+
 function CleveRoids.Frame:SPELLS_CHANGED()
-    -- PERFORMANCE: Clear spell caches when spells change (learn new ranks, etc.)
+    -- Clear spell caches immediately (cheap); defer the heavy rebuild.
     CleveRoids.spellIdCache = {}
     CleveRoids.spellNameCache = {}
-    CleveRoids.Frame:UPDATE_MACROS()
+    CleveRoids.macroRebuildTime = GetTime() + 0.3
 end
 
 function CleveRoids.Frame:ACTIONBAR_SLOT_CHANGED()
@@ -5684,10 +5709,15 @@ function CleveRoids.Frame:BAG_UPDATE_DELAYED()
         CleveRoids.lastItemIndexTime = now
         CleveRoids.IndexItems()
 
-        -- Directly clear all relevant caches and force a UI refresh for all buttons.
-        CleveRoids.Actions = {}
-        CleveRoids.Macros = {}
-        CleveRoids.IndexActionBars()
+        -- Rebuild action bars so item-dependent macro resolution refreshes.
+        -- Skipped before `ready` (GetAction early-returns; the +1.5s init timer
+        -- builds the bars), which keeps bag-fill events during login from firing
+        -- a full 120-slot rebuild each time.
+        if CleveRoids.ready then
+            CleveRoids.Actions = {}
+            CleveRoids.Macros = {}
+            CleveRoids.IndexActionBars()
+        end
     end
 
     -- Always queue icon update so conditionals like [inbag] re-evaluate
