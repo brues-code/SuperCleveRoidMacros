@@ -3942,10 +3942,21 @@ function CleveRoids.OnUpdate(self)
         return
     end
 
-    -- PERFORMANCE: Delayed WDB warmup after login (ensures GetItemInfo works after WDB clear)
-    if CR.wdbWarmupTime and time >= CR.wdbWarmupTime then
-        CR.wdbWarmupTime = nil
-        CR.DoWDBWarmup()
+    -- Coalesced re-index after async item data arrives (GET_ITEM_INFO_RECEIVED).
+    -- ClassicAPI warms the item cache asynchronously, so items that were still
+    -- uncached during an earlier index pass land here once their
+    -- SMSG_ITEM_QUERY_SINGLE response resolves. Bursts are debounced into one
+    -- re-index via CR.itemInfoReindexTime (armed by the event handler).
+    if CR.itemInfoReindexTime and time >= CR.itemInfoReindexTime then
+        CR.itemInfoReindexTime = nil
+        -- In combat: drop it; PLAYER_LEAVE_COMBAT does a full re-index once safe.
+        if not UnitAffectingCombat("player") then
+            CR.lastItemIndexTime = GetTime()
+            CR.IndexItems()
+            CR.Actions = {}
+            CR.Macros = {}
+            CR.IndexActionBars()
+        end
     end
 
     -- PERFORMANCE: Cache refresh rate calculation (avoid per-frame division)
@@ -4824,6 +4835,7 @@ CleveRoids.Frame:RegisterEvent("UPDATE_MACROS")
 CleveRoids.Frame:RegisterEvent("SPELLS_CHANGED")
 CleveRoids.Frame:RegisterEvent("ACTIONBAR_SLOT_CHANGED")
 CleveRoids.Frame:RegisterEvent("BAG_UPDATE_DELAYED")
+CleveRoids.Frame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
 CleveRoids.Frame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 CleveRoids.Frame:RegisterEvent("UNIT_PET")
 
@@ -4964,57 +4976,6 @@ function CleveRoids.Frame:PLAYER_LOGIN()
 
     -- PERFORMANCE: Initialize event-driven cache states
     CleveRoids._cachedPlayerInCombat = UnitAffectingCombat("player") and true or false
-
-    -- Schedule delayed WDB warmup (loads items into client cache via tooltip scan)
-    -- This ensures GetItemInfo() works for all inventory items after a WDB clear
-    CleveRoids.wdbWarmupTime = GetTime() + 3.0  -- 3 second delay after login
-end
-
--- PERFORMANCE: WDB warmup - tooltip scan all bag items to ensure they're cached
--- This prevents GetItemInfo() returning nil for items after a WDB clear
-function CleveRoids.DoWDBWarmup()
-    if CleveRoids.wdbWarmupDone then return end
-    CleveRoids.wdbWarmupDone = true
-
-    -- Create a hidden tooltip for scanning if it doesn't exist
-    local tip = CleveRoidsWDBTip
-    if not tip then
-        tip = CreateFrame("GameTooltip", "CleveRoidsWDBTip", UIParent, "GameTooltipTemplate")
-        tip:SetOwner(WorldFrame, "ANCHOR_NONE")
-    end
-
-    local scanned = 0
-
-    -- Scan all bag slots
-    for bag = 0, 4 do
-        local slots = GetContainerNumSlots(bag) or 0
-        for slot = 1, slots do
-            if C_Container.GetContainerItemID(bag, slot) then
-                -- Tooltip scan loads the item into WDB
-                tip:ClearLines()
-                tip:SetBagItem(bag, slot)
-                scanned = scanned + 1
-            end
-        end
-    end
-
-    -- Scan equipped items
-    for slot = 1, 19 do
-        if GetInventoryItemID("player", slot) then
-            tip:ClearLines()
-            tip:SetInventoryItem("player", slot)
-            scanned = scanned + 1
-        end
-    end
-
-    -- Now trigger a full item index to populate the cache with valid data
-    if CleveRoids.IndexItems then
-        CleveRoids.IndexItems()
-    end
-
-    if CleveRoids.debug then
-        CleveRoids.Print("|cff88ff88[WDB Warmup]|r Scanned " .. scanned .. " items into cache")
-    end
 end
 
 function CleveRoids.Frame:ADDON_LOADED(addon)
@@ -5687,6 +5648,23 @@ function CleveRoids.Frame:ACTIONBAR_SLOT_CHANGED()
     CleveRoids.IndexActionSlot(arg1)
     if CleveRoidMacros.realtime == 0 then
         CleveRoids.QueueActionUpdate()
+    end
+end
+
+-- ClassicAPI fires GET_ITEM_INFO_RECEIVED when an async item-cache fill lands
+-- (the hooked GetItemInfo auto-warms on a miss). It fires for EVERY fill in the
+-- game though - quest DB scans, AH sweeps, chat-link hovers, inspects - so we
+-- ignore anything not in pendingItemInfo (items we own that missed the last
+-- index pass). That check is O(1) and keeps unrelated bursts free.
+function CleveRoids.Frame:GET_ITEM_INFO_RECEIVED()
+    local pending = CleveRoids.pendingItemInfo
+    if not (pending and pending[arg1]) then return end
+    -- Skip during combat; PLAYER_LEAVE_COMBAT re-indexes once it's safe.
+    if UnitAffectingCombat("player") then return end
+    -- Arm once per burst; the update loop clears it after re-indexing. Later
+    -- arrivals re-arm it, guaranteeing the final resolved state is captured.
+    if not CleveRoids.itemInfoReindexTime then
+        CleveRoids.itemInfoReindexTime = GetTime() + 0.5
     end
 end
 

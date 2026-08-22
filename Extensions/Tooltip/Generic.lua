@@ -238,6 +238,14 @@ function CleveRoids.IndexItems()
     local items = {}
     local NUM_BAG_SLOTS = NUM_BAG_SLOTS  -- Upvalue for bag constant
 
+    -- Rebuilt each pass: itemIDs the player owns that GetItemInfo couldn't
+    -- resolve yet (cold cache under ClassicAPI's async warmup). The
+    -- GET_ITEM_INFO_RECEIVED handler consults this so it only re-indexes for
+    -- our own uncached items and ignores the flood of unrelated fills (quest
+    -- DB scans, AH, chat-link hovers, inspects) in O(1).
+    local pendingItemInfo = {}
+    CleveRoids.pendingItemInfo = pendingItemInfo
+
     -- PERFORMANCE: Local function references
     local GetContainerNumSlots = GetContainerNumSlots
     local GetContainerItemInfo = GetContainerItemInfo
@@ -281,6 +289,9 @@ function CleveRoids.IndexItems()
                         if lowerName ~= name then
                             items[lowerName] = name
                         end
+                    else
+                        -- Owned but not cached yet; wait for GET_ITEM_INFO_RECEIVED.
+                        pendingItemInfo[itemID] = true
                     end
                 end
             end
@@ -318,6 +329,9 @@ function CleveRoids.IndexItems()
                     if lowerName ~= name then
                         items[lowerName] = name
                     end
+                else
+                    -- Owned but not cached yet; wait for GET_ITEM_INFO_RECEIVED.
+                    pendingItemInfo[itemID] = true
                 end
             end
         end
