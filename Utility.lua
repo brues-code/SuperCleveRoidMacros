@@ -2170,7 +2170,7 @@ function lib:GetDuration(spellID, casterGUID, comboPoints)
   end
 
   -- Check caster-specific learned durations
-  if casterGUID and CleveRoids_LearnedDurations[spellID] then
+  if casterGUID and CleveRoids_LearnedDurations and CleveRoids_LearnedDurations[spellID] then
     local learned = CleveRoids_LearnedDurations[spellID][casterGUID]
     if learned and learned > 0 then
       if CleveRoids.debug then
