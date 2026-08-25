@@ -4895,7 +4895,7 @@ function CleveRoids.ValidatePlayerAuraCount(bigger, amount)
 end
 
 function CleveRoids.IsReactive(name)
-    return CleveRoids.reactiveSpells[spellName] ~= nil
+    return CleveRoids.reactiveSpells[name] ~= nil
 end
 
 -- NOTE: CleveRoids.GetActionButtonInfo is defined in Extensions/Tooltip/Generic.lua
@@ -5401,6 +5401,23 @@ local function MakeTypedPowerKeyword(condKey, unitDefault, powerType)
             return CleveRoids.ValidateTypedPower(unit, powerType, args.operator, args.amount)
         end, conditionals, condKey)
     end
+end
+
+local PET_HAPPINESS_STATES = {
+    unhappy = 1,
+    content = 2,
+    happy = 3,
+}
+
+local function ResolvePetHappinessState(value)
+    local state = tonumber(value)
+    if state then
+        return state
+    end
+    if type(value) ~= "string" then
+        return nil
+    end
+    return PET_HAPPINESS_STATES[GetLowercaseString(value)]
 end
 
 -- A list of Conditionals and their functions to validate them
@@ -7220,6 +7237,39 @@ CleveRoids.Keywords = {
             end
             return string.lower(currentPet) ~= string.lower(petType)
         end, conditionals, "nopet")
+    end,
+
+    -- Hunter pet happiness: 1=unhappy, 2=content, 3=happy.
+    pethappiness = function(conditionals)
+        local happiness = GetPetHappiness()
+        local _, isHunterPet = HasPetUI()
+        if not isHunterPet or not happiness then
+            return false
+        end
+
+        if conditionals.pethappiness == true then
+            return true
+        end
+
+        return Multi(conditionals.pethappiness, function(requiredState)
+            return happiness == ResolvePetHappinessState(requiredState)
+        end, conditionals, "pethappiness")
+    end,
+
+    nopethappiness = function(conditionals)
+        local happiness = GetPetHappiness()
+        local _, isHunterPet = HasPetUI()
+        if not isHunterPet or not happiness then
+            return true
+        end
+
+        if conditionals.nopethappiness == true then
+            return false
+        end
+
+        return NegatedMulti(conditionals.nopethappiness, function(forbiddenState)
+            return happiness ~= ResolvePetHappinessState(forbiddenState)
+        end, conditionals, "nopethappiness")
     end,
 
     -- [focus] / [nofocus] - whether a focus is set. Covers pfUI's emulated focus

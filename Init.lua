@@ -124,6 +124,7 @@ CleveRoids.dynamicCmds = {
     ["/castpet"]      = true,
     ["/castsequence"] = true,
     ["/use"]          = true,
+    ["/feedpet"]      = true,
     ["/equip"]        = true,
     ["/equipmh"]      = true,
     ["/equipoh"]      = true,
