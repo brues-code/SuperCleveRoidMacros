@@ -4895,7 +4895,7 @@ function CleveRoids.ValidatePlayerAuraCount(bigger, amount)
 end
 
 function CleveRoids.IsReactive(name)
-    return CleveRoids.reactiveSpells[spellName] ~= nil
+    return CleveRoids.reactiveSpells[name] ~= nil
 end
 
 -- NOTE: CleveRoids.GetActionButtonInfo is defined in Extensions/Tooltip/Generic.lua

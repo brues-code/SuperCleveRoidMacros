@@ -7114,7 +7114,7 @@ function CleveRoids.DoFeedPet(msg)
             return false
         end
 
-        local feedPet = (CleveRoids.Localized.Spells and CleveRoids.Localized.Spells["Feed Pet"]) or "Feed Pet"
+        local feedPet = C_Spell.GetSpellName(6991) or "Feed Pet"
         CastSpellByName(feedPet)
 
         -- Only apply the food if Feed Pet actually entered item-targeting mode.
