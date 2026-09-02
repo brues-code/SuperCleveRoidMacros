@@ -3,9 +3,11 @@
 
     ClassicAPI is a client mod (sibling to Nampower/SuperWoW) that backports the
     modern C_* API into the 1.12.1 Lua environment. It is a HARD REQUIREMENT of
-    this addon, so the wrappers below call the API directly — no fallbacks. The
-    load-time requirement check (Core.lua) uses IsAvailable() to warn when the
-    DLL is missing; users who don't want ClassicAPI should run the upstream addon.
+    this addon (ClassicAPI v1.12.1+, which added the positional
+    C_UnitAuras.UnitAura), so the wrappers below call the API directly — no
+    fallbacks. The load-time requirement check (Core.lua) uses IsAvailable() to
+    warn when the DLL is missing and HasMinimumVersion() when it's too old; users
+    who don't want ClassicAPI should run the upstream addon.
 
     Detection: the global CLASSIC_API_VERSION is defined once the client has
     booted, encoded as X*10000 + Y*100 + Z for a vX.Y.Z tag (untagged dev builds
@@ -53,15 +55,16 @@ end
 --------------------------------------------------------------------------------
 
 -- Scan one aura range of `unit` (filter = "HELPFUL" or "HARMFUL") for an aura
--- matching the dispel type. The filtered index self-terminates at the end of the
--- range (nil); 48 is a backstop over vanilla's 32 helpful / 16 harmful slots.
+-- matching the dispel type. Uses the positional C_UnitAuras.UnitAura (added in
+-- ClassicAPI v1.12.1, this addon's minimum) -- no table allocated per slot, with
+-- dispelName as the 4th return. The filtered index self-terminates at the end of
+-- the range (nil name); 48 is a backstop over vanilla's 32 helpful / 16 harmful slots.
 local function scanDispel(unit, filter, dispelType, wantAny)
     local i = 1
     while i <= 48 do
-        local data = C_UnitAuras.GetAuraDataByIndex(unit, i, filter)
-        if not data then return false end
-        local dn = data.dispelName
-        if dn and dn ~= "" and (wantAny or dn == dispelType) then
+        local name, _, _, dispelName = C_UnitAuras.UnitAura(unit, i, filter)
+        if not name then return false end
+        if dispelName and dispelName ~= "" and (wantAny or dispelName == dispelType) then
             return true
         end
         i = i + 1

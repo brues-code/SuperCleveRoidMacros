@@ -198,8 +198,10 @@ requirementCheckFrame:SetScript("OnEvent", function()
     local hasNampower30 = hasNampower and CleveRoids.NampowerAPI
         and CleveRoids.NampowerAPI.HasMinimumVersion(3, 0, 0)
     local hasClassicAPI = CleveRoids.ClassicAPI and CleveRoids.ClassicAPI.IsAvailable()
+    -- v1.12.1 added the positional C_UnitAuras.UnitAura the dispel conditionals use.
+    local hasClassicAPI1121 = hasClassicAPI and CleveRoids.ClassicAPI.HasMinimumVersion(1, 12, 1)
 
-    if not hasNampower30 or not hasUnitXP or not hasClassicAPI then
+    if not hasNampower30 or not hasUnitXP or not hasClassicAPI or not hasClassicAPI1121 then
         -- Show warnings (don't disable — tearing down a partially-initialized addon causes hangs)
         if not hasNampower then
             CleveRoids.Print("|cFFFF9900WARNING:|r |cFF00FFFFAvitasia's Nampower v3.0.0+|r is required:")
@@ -219,6 +221,10 @@ requirementCheckFrame:SetScript("OnEvent", function()
             CleveRoids.Print("|cFFFF9900WARNING:|r |cFF00FFFFClassicAPI|r is required:")
             CleveRoids.Print("https://github.com/brues-code/ClassicAPI")
             CleveRoids.Print("Dispel-type and movement conditionals will be unavailable without it.")
+        elseif not hasClassicAPI1121 then
+            CleveRoids.Print("|cFFFF9900WARNING:|r |cFF00FFFFClassicAPI v1.12.1+|r is required:")
+            CleveRoids.Print("https://github.com/brues-code/ClassicAPI")
+            CleveRoids.Print("Dispel-type conditionals will be unavailable with this older version.")
         end
     end
 
