@@ -5422,6 +5422,11 @@ end
 
 -- A list of Conditionals and their functions to validate them
 CleveRoids.Keywords = {
+    button = function(conditionals)
+        local button = conditionals._groups.button[1].values[1]
+        return CleveRoids.buttons[button] and IsMouseButtonDown(CleveRoids.buttons[button])
+    end,
+
     exists = function(conditionals)
         return UnitExists(conditionals.target)
     end,

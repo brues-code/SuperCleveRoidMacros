@@ -656,6 +656,14 @@ function CleveRoids.PrintT(t, depth)
     end
 end
 
+CleveRoids.buttons = {
+    ['1'] = 'LeftButton',
+    ['2'] = 'RightButton',
+    ['3'] = 'MiddleButton',
+    ['4'] = 'Button4',
+    ['5'] = 'Button5',
+}
+
 CleveRoids.kmods = {
     ctrl   = IsControlKeyDown,
     lctrl  = IsLeftControlKeyDown,
