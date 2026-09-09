@@ -261,11 +261,11 @@ local function GetInventoryIdFromSlot(slotName)
     return SLOT_TO_INVID[slotName] or GetInventorySlotInfo(slotName)
 end
 
--- Check if slot 18 is a relic (no GCD) for current player class
+-- Check if slot 18 is a relic (no GCD). Backed by CleveRoids.hasRelicSlot, cached
+-- at PLAYER_LOGIN -- see the note there on why it can't be sampled on demand.
 local function IsRelicSlot(slot)
     if slot ~= 18 then return false end
-    local playerClass = CleveRoids.playerClass
-    return playerClass == "PALADIN" or playerClass == "DRUID" or playerClass == "SHAMAN"
+    return CleveRoids.hasRelicSlot or false
 end
 
 -- PERFORMANCE: Cache GetTime() result for cooldown checks within same frame
@@ -289,16 +289,11 @@ local function PerformEquipSwap(item, inventoryId, useQueueScript)
     if not item or not inventoryId then return false end
 
     -- Check if in combat and swapping weapons
-    -- Slot 18 (ranged) is only a weapon for Hunter/Warrior/Rogue/Mage/Warlock/Priest
-    -- For Druid/Paladin/Shaman, slot 18 is idol/libram/totem - can swap freely
+    -- Slot 18 is a ranged weapon for exactly the classes with no relic slot; for
+    -- Paladin/Druid/Shaman it's an idol/libram/totem that can swap freely.
     local isWeapon = (inventoryId == 16 or inventoryId == 17)
     if inventoryId == 18 then
-        -- Use cached playerClass for performance
-        local playerClass = CleveRoids.playerClass
-        -- Only treat slot 18 as weapon for classes that use ranged weapons
-        isWeapon = (playerClass == "HUNTER" or playerClass == "WARRIOR" or
-                    playerClass == "ROGUE" or playerClass == "MAGE" or
-                    playerClass == "WARLOCK" or playerClass == "PRIEST")
+        isWeapon = not IsRelicSlot(inventoryId)
     end
 
     if isWeapon and UnitAffectingCombat("player") then
@@ -4984,6 +4979,9 @@ function CleveRoids.Frame:PLAYER_LOGIN()
     if CleveRoids.disabled then return end
 
     _, CleveRoids.playerClass = UnitClass("player")
+
+    CleveRoids.hasRelicSlot = UnitHasRelicSlot("player") and true or false
+
     CleveRoids.IndexSpells()
     CleveRoids.IndexPetSpells()
     CleveRoids.initializationTimer = GetTime() + 1.5
