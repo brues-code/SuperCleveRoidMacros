@@ -656,6 +656,24 @@ function CleveRoids.PrintT(t, depth)
     end
 end
 
+CleveRoids.buttons = {
+    ['1'] = 'LeftButton',
+    ['2'] = 'RightButton',
+    ['3'] = 'MiddleButton',
+    ['4'] = 'Button4',
+    ['5'] = 'Button5',
+}
+
+-- True while any mapped mouse button is held. Backs the argument-less [button] /
+-- [nobutton], mirroring how a bare [mod] means "any modifier". Bare [nobutton] is
+-- the practical "activated by a keybind, not a click" test.
+function CleveRoids.AnyMouseButtonDown()
+    for _, name in pairs(CleveRoids.buttons) do
+        if IsMouseButtonDown(name) then return true end
+    end
+    return false
+end
+
 CleveRoids.kmods = {
     ctrl   = IsControlKeyDown,
     lctrl  = IsLeftControlKeyDown,

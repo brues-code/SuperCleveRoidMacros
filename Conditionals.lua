@@ -5422,6 +5422,30 @@ end
 
 -- A list of Conditionals and their functions to validate them
 CleveRoids.Keywords = {
+    -- [button:N] — true while mouse button N is held (1=Left, 2=Right, 3=Middle,
+    -- 4/5=extra). Routed through Multi so OR/AND lists and repeated groups behave
+    -- like every other argument conditional ([button:1/2] = left or right).
+    -- [button] with no argument — true if any mapped mouse button is held.
+    button = function(conditionals)
+        if type(conditionals.button) ~= "table" then
+            return CleveRoids.AnyMouseButtonDown()
+        end
+        return Multi(conditionals.button, function(button)
+            local name = CleveRoids.buttons[button]
+            return name and IsMouseButtonDown(name) or false
+        end, conditionals, "button")
+    end,
+
+    nobutton = function(conditionals)
+        if type(conditionals.nobutton) ~= "table" then
+            return not CleveRoids.AnyMouseButtonDown()
+        end
+        return NegatedMulti(conditionals.nobutton, function(button)
+            local name = CleveRoids.buttons[button]
+            return not (name and IsMouseButtonDown(name))
+        end, conditionals, "nobutton")
+    end,
+
     exists = function(conditionals)
         return UnitExists(conditionals.target)
     end,
@@ -9330,6 +9354,7 @@ CleveRoids.STATIC_CONDITIONALS = {
     inbag = true, noinbag = true,
     mod = true, nomod = true,
     keydown = true, nokeydown = true,
+    button = true, nobutton = true,
     swimming = true, noswimming = true, swim = true, noswim = true,
     indoors = true, noindoors = true, outdoors = true, nooutdoors = true,
     rooted = true, norooted = true,
