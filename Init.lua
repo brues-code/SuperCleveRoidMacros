@@ -187,9 +187,17 @@ CleveRoids.ignoreKeywords = {
     _operators    = true,  -- Metadata for AND/OR operator tracking
     _groups       = true,  -- Grouped conditional values for AND/OR evaluation
     multiscan     = true,  -- Processed before Keywords loop (target resolution)
-    mouseuse      = true,  -- Post-cast modifier: auto-click AOE targeting circle at cursor
     cursor        = true,  -- Modifier: place ground-target spell/item at cursor (CastAtCursor)
     stopattack    = true,  -- Post-cast modifier: stop autoattack after cast (CheapShot pattern)
+}
+
+-- Deprecated conditional names, rewritten to their current keyword in ParseMsg
+-- before anything downstream (evaluation, _groups) sees them. This is the path
+-- for renamed *modifiers* -- ignoreKeywords entries, which have no Keywords
+-- predicate that an alias could just point at the way [stl] does for [stealth].
+-- MacroErrorChecker also reads this table, so the old names stay valid syntax.
+CleveRoids.conditionalAliases = {
+    mouseuse = "cursor",  -- pre-ClassicAPI name, back when it clicked the AoE reticle
 }
 
 -- TODO: Localize?

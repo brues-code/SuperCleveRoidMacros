@@ -1933,6 +1933,9 @@ function CleveRoids.ParseMsg(msg)
                 -- e.g., distance:30:facing>1 → condition="distance", args="30:facing>1")
                 local conditionGroup = CleveRoids.splitStringIgnoringQuotes(conditionGroups, ":")
                 local condition = conditionGroup[1]
+                -- Rewrite deprecated names (e.g. mouseuse -> cursor) so old macros
+                -- keep working and only the current keyword exists downstream.
+                condition = CleveRoids.conditionalAliases[condition] or condition
                 local args = conditionGroup[2]
                 for _cgi = 3, table.getn(conditionGroup) do
                     args = (args or "") .. ":" .. conditionGroup[_cgi]
@@ -2583,22 +2586,6 @@ function CleveRoids.DoWithConditionals(msg, hook, fixEmptyTargetFunc, targetBefo
                 CleveRoids.Print("|cff00ff00[EquipLog] Calling action('" .. tostring(msg) .. "')|r")
             end
             action(msg, conditionals.target)
-        end
-    end
-
-    -- [mouseuse] modifier: auto-click the AOE targeting circle at cursor position
-    if conditionals.mouseuse and SpellIsTargeting() then
-        local wasAttacking = CleveRoids.CurrentSpell.autoAttack
-        CameraOrSelectOrMoveStart()
-        CameraOrSelectOrMoveStop()
-        -- CameraOrSelectOrMoveStart can start auto-attack as a side effect.
-        -- Stop it immediately if it wasn't active before.
-        if not wasAttacking then
-            local slot = CleveRoids.GetProxyActionSlot(CleveRoids.Localized.Attack)
-            if slot and CleveRoids.Hooks.IsCurrentAction(slot) then
-                AttackTarget()
-                CleveRoids.CurrentSpell.autoAttack = false
-            end
         end
     end
 

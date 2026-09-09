@@ -35,6 +35,14 @@ if CleveRoids.ignoreKeywords then
     end
 end
 
+-- Deprecated names still valid in macros; ParseMsg rewrites them to the current
+-- keyword, so they never reach Keywords/ignoreKeywords under their old name.
+if CleveRoids.conditionalAliases then
+    for alias, _ in pairs(CleveRoids.conditionalAliases) do
+        VALID_CONDITIONALS[alias] = true
+    end
+end
+
 -- Known valid commands
 local VALID_COMMANDS = {
     -- Core commands NOT registered via SlashCmdList (so not auto-discoverable):
