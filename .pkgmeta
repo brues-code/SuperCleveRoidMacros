@@ -1,0 +1,4 @@
+package-as: SuperCleveRoidMacros
+
+ignore:
+  - .luarc.json
