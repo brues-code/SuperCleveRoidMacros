@@ -1672,7 +1672,7 @@ function API.IsItemInSlot(itemIdOrName, inventorySlot)
 
     -- Use native v2.18 GetEquippedItem if available
     if GetEquippedItem then
-        local slotInfo = GetEquippedItem("player", inventorySlot - 1)  -- 0-indexed
+        local slotInfo = GetEquippedItem("player", inventorySlot)
         if slotInfo and slotInfo.itemId then
             local checkId = tonumber(itemIdOrName)
             if checkId then
