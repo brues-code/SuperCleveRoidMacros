@@ -1474,7 +1474,7 @@ end
 
 -- Get all equipped items for a unit
 -- Requires v2.18+ for native GetEquippedItems (with Lua fallback for player only)
--- Returns table with slot indices (0-18) as keys, item info tables as values
+-- Returns table with slot indices (1-19) as keys, item info tables as values
 function API.GetEquippedItems(unitToken)
     unitToken = unitToken or "player"
 
@@ -1489,8 +1489,8 @@ function API.GetEquippedItems(unitToken)
     end
 
     local items = {}
-    for slot = 0, 18 do
-        local itemId = CleveRoids.ClassicAPI.GetInventoryItemID("player", slot + 1)
+    for slot = 1, 19 do
+        local itemId = CleveRoids.ClassicAPI.GetInventoryItemID("player", slot)
         if itemId then
             items[slot] = {
                 itemId = itemId,
@@ -1518,7 +1518,7 @@ function API.GetEquippedItem(unitToken, slot)
         return nil
     end
 
-    local itemId = CleveRoids.ClassicAPI.GetInventoryItemID("player", slot + 1)  -- 1-indexed
+    local itemId = CleveRoids.ClassicAPI.GetInventoryItemID("player", slot)  -- both are 1-indexed
     if itemId then
         return {
             itemId = itemId,
@@ -1672,7 +1672,7 @@ function API.IsItemInSlot(itemIdOrName, inventorySlot)
 
     -- Use native v2.18 GetEquippedItem if available
     if GetEquippedItem then
-        local slotInfo = GetEquippedItem("player", inventorySlot)
+        local slotInfo = GetEquippedItem("player", inventorySlot) -- 1-indexed (1-19)
         if slotInfo and slotInfo.itemId then
             local checkId = tonumber(itemIdOrName)
             if checkId then
