@@ -286,6 +286,15 @@ function API.GetSpellBonusHealing()
     return GetSpellBonusHealing()
 end
 
+-- Spell haste for `unit` as a percentage: 0 unhasted, positive when casts are
+-- sped up, negative while slowed (Curse of Tongues). 0 for a unit that doesn't
+-- resolve. Vanilla has no haste API at all -- ClassicAPI derives this from the
+-- UNIT_MOD_CAST_SPEED descriptor field the server folds into the cast time, so
+-- it's exact and needs no nampower GetUnitField dependency.
+function API.UnitSpellHaste(unit)
+    return UnitSpellHaste(unit)
+end
+
 --------------------------------------------------------------------------------
 -- Unit Health
 --------------------------------------------------------------------------------

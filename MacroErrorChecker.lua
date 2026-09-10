@@ -669,6 +669,7 @@ local function validateConditional(conditional, args, action)
         button = true,
         form = true, stance = true,
         level = true, mylevel = true,
+        myspellhaste = true,
         distance = true, nodistance = true,
         swingtimer = true, stimer = true,
         rangedtimer = true, rtimer = true,
@@ -689,7 +690,7 @@ local function validateConditional(conditional, args, action)
     if args and type(args) == "string" then
         local hasHpOrPower = safeStringFind(baseCond, "hp") or safeStringFind(baseCond, "power") or
                             safeStringFind(baseCond, "mana") or safeStringFind(baseCond, "energy") or
-                            safeStringFind(baseCond, "rage") or
+                            safeStringFind(baseCond, "rage") or safeStringFind(baseCond, "haste") or
                             safeStringFind(baseCond, "combo") or baseCond == "stat"
         if hasHpOrPower then
             local hasOperator = safeStringFind(args, "[<>=~]+")
