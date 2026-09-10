@@ -3249,6 +3249,17 @@ function CleveRoids.ValidatePowerLost(unit, operator, amount)
     return false
 end
 
+function CleveRoids.ValidateSpellHaste(unit, operator, amount)
+    if not unit or not operator or not amount then return false end
+    local haste =  CleveRoids.ClassicAPI.UnitSpellHaste(unit)
+
+    if CleveRoids.operators[operator] then
+        return CleveRoids.comparators[operator](haste, amount)
+    end
+
+    return false
+end
+
 -- Checks whether or not the given unit has hp in percent vs the given amount
 -- unit: The unit we're checking
 -- operator: valid comparitive operator symbol
@@ -6480,6 +6491,29 @@ CleveRoids.Keywords = {
 
             return CleveRoids.ValidateLevel("player", args.operator, args.amount)
         end, conditionals, "mylevel")
+    end,
+
+    myspellhaste = function(conditionals)
+        return Multi(conditionals.myspellhaste, function(args)
+            if type(args) ~= "table" then return false end
+            -- Handle multi-comparison (e.g., >50&<80)
+            if args.comparisons and type(args.comparisons) == "table" then
+                local haste = CleveRoids.ClassicAPI.UnitSpellHaste("player")
+
+                -- ALL comparisons must pass (AND logic)
+                for _, comp in ipairs(args.comparisons) do
+                    if not CleveRoids.operators[comp.operator] then
+                        return false
+                    end
+                    if not CleveRoids.comparators[comp.operator](haste, comp.amount) then
+                        return false
+                    end
+
+                end
+                return true
+            end
+            return CleveRoids.ValidateSpellHaste("player", args.operator, args.amount)
+        end, conditionals, "myspellhaste")
     end,
 
     myhp = function(conditionals)

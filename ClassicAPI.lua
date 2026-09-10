@@ -286,6 +286,11 @@ function API.GetSpellBonusHealing()
     return GetSpellBonusHealing()
 end
 
+-- A Proxy for CassicAPIs UnitSpellHaste function
+API.UnitSpellHaste = UnitSpellHaste or function(unit)
+    return UnitSpellHaste(unit)
+end
+
 --------------------------------------------------------------------------------
 -- Unit Health
 --------------------------------------------------------------------------------
