@@ -506,6 +506,7 @@ local COMMANDS_NO_ACTION_NEEDED = {
     ["/startattack"] = true,
     ["/stopattack"] = true,
     ["/stopcasting"] = true,
+    ["/stopchanneling"] = true,
     ["/unqueue"] = true,
     ["/retarget"] = true,
     ["/stopmacro"] = true,

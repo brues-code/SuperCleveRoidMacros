@@ -130,6 +130,12 @@ local StopAttack = function(msg)
     CleveRoids.DeferStopAttack()
 end
 
+local StopChanneling = function(msg)
+    -- No Blizzard equivalent: 1.12 has SpellStopCasting (immediate) and nothing
+    -- that waits for the next channel tick, so this is nampower-only.
+    CleveRoids.StopChanneling()
+end
+
 -- Register slash commands and assign original handlers.
 -- These will be hooked immediately after.
 SLASH_STARTATTACK1 = "/startattack"
@@ -140,6 +146,9 @@ SlashCmdList.STOPATTACK = StopAttack
 
 SLASH_STOPCASTING1 = "/stopcasting"
 SlashCmdList.STOPCASTING = SpellStopCasting
+
+SLASH_STOPCHANNELING1 = "/stopchanneling"
+SlashCmdList.STOPCHANNELING = StopChanneling
 
 SLASH_CLEARTARGET1 = "/cleartarget"
 SlashCmdList.CLEARTARGET = ClearTarget
@@ -199,6 +208,21 @@ SlashCmdList.STOPCASTING = function(msg)
     else
         -- If no conditionals, run the original command.
         CleveRoids.Hooks.STOPCASTING_SlashCmd()
+    end
+end
+
+-- /stopchanneling hook
+CleveRoids.Hooks.STOPCHANNELING_SlashCmd = SlashCmdList.STOPCHANNELING
+SlashCmdList.STOPCHANNELING = function(msg)
+    if CleveRoids.stopMacroFlag then return end
+    msg = msg or ""
+    if string.find(msg, "%[") then
+        -- If conditionals are present, let the function handle it.
+        -- It will only stop the channel if the conditions are met.
+        CleveRoids.DoConditionalStopChanneling(msg)
+    else
+        -- If no conditionals, run the original command.
+        CleveRoids.Hooks.STOPCHANNELING_SlashCmd(msg)
     end
 end
 

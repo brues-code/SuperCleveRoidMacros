@@ -3005,6 +3005,37 @@ function CleveRoids.DoConditionalStartAttack(msg)
     return false
 end
 
+-- Stop channeling on the next tick (nampower v2.18+), behind /stopchanneling.
+-- The underlying API no-ops in two cases and a command that does nothing
+-- without saying why reads as broken, so each gets a one-shot warning -- the
+-- same treatment the [rooted] conditional gives a too-old nampower.
+local _stopChannelingWarned = {}
+local function warnStopChanneling(key, reason)
+    if _stopChannelingWarned[key] then return end
+    _stopChannelingWarned[key] = true
+    DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[SuperCleveRoidMacros]|r /stopchanneling "
+        .. reason .. ".", 1, 0.5, 0.5)
+end
+
+function CleveRoids.StopChanneling()
+    local API = CleveRoids.NampowerAPI
+
+    -- Nothing was sent: nampower is absent or predates ChannelStopCastingNextTick.
+    if not API.StopChannelNextTick() then
+        warnStopChanneling("version", "requires Nampower v2.18.0 or newer")
+        return false
+    end
+
+    -- The call went through, but nampower only acts on it while channel
+    -- queueing is on, so the channel would run to completion regardless.
+    if not API.IsQueueingEnabled("channeling") then
+        warnStopChanneling("setting", "requires Nampower's NP_QueueChannelingSpells setting to be enabled")
+        return false
+    end
+
+    return true
+end
+
 -- PERFORMANCE: Module-level actions to avoid closure allocation per call
 local function _stopAttackAction()
     CleveRoids.DeferStopAttack()
@@ -3012,6 +3043,10 @@ end
 
 local function _stopCastingAction()
     SpellStopCasting()
+end
+
+local function _stopChannelingAction()
+    CleveRoids.StopChanneling()
 end
 
 -- Attempts to conditionally stop an attack. Returns false if no conditionals are found.
@@ -3036,6 +3071,20 @@ function CleveRoids.DoConditionalStopCasting(msg)
     local parts = CleveRoids.splitStringIgnoringQuotes(msg)
     for i = 1, table.getn(parts) do
         if CleveRoids.DoWithConditionals(parts[i], nil, CleveRoids.FixEmptyTarget, false, _stopCastingAction) then
+            return true
+        end
+    end
+    return false
+end
+
+-- Attempts to conditionally interrupt channeling. Returns false if no conditionals are found.
+function CleveRoids.DoConditionalStopChanneling(msg)
+    if not string.find(msg, "%[") then return false end
+
+    -- PERFORMANCE: Use numeric iteration to avoid pairs() iterator allocation
+    local parts = CleveRoids.splitStringIgnoringQuotes(msg)
+    for i = 1, table.getn(parts) do
+        if CleveRoids.DoWithConditionals(parts[i], nil, CleveRoids.FixEmptyTarget, false, _stopChannelingAction) then
             return true
         end
     end
