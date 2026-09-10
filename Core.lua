@@ -1110,6 +1110,16 @@ local function DisplayValueFor(action)
     return action.action
 end
 
+-- Last value handed to SetMacroDisplay, per macro index.
+--
+-- Publishing is NOT free. The client repaints every slot holding the macro through
+-- its own notifier, and that comes back to us as ACTIONBAR_SLOT_CHANGED ->
+-- ClearAction + IndexActionSlot -> TestForActiveAction -> publish. Publishing a value
+-- that has not changed therefore re-indexes slots for nothing and feeds itself.
+-- GetAction and IndexActionSlot both call in on paths that fire constantly, so the
+-- no-op check below is what keeps that from turning into a churn loop.
+local publishedDisplay = {}
+
 -- Publish one macro's resolved action. Nothing is re-evaluated for us, so this must
 -- be called whenever the answer changes; the published value stands until replaced.
 --
@@ -1120,7 +1130,12 @@ function CleveRoids.PublishDisplay(actions)
     if not CleveRoids.useClassicAPIDisplay then return end
     local macroID = actions and actions.macroID
     if not macroID then return end  -- SuperMacro macros have no Blizzard index
-    C_Macro.SetMacroDisplay(macroID, DisplayValueFor(actions.active) or false)
+
+    local value = DisplayValueFor(actions.active) or false
+    if publishedDisplay[macroID] == value then return end
+    publishedDisplay[macroID] = value
+
+    C_Macro.SetMacroDisplay(macroID, value)
 end
 
 -- Republish every parsed macro. Used after login and after a re-parse, since
@@ -1128,6 +1143,10 @@ end
 -- which is what keeps the macro window grid's icons correct.
 function CleveRoids.PublishAllDisplays()
     if not CleveRoids.useClassicAPIDisplay then return end
+    -- Forget what we published so every macro republishes once. Callers reach here
+    -- after login and after a re-parse, where a cached value could otherwise
+    -- suppress the publish a freshly rebuilt macro still needs.
+    publishedDisplay = {}
     for _, macro in pairs(CleveRoids.Macros) do
         if type(macro) == "table" and macro.actions and macro.actions.macroID then
             CleveRoids.TestForActiveAction(macro.actions)
@@ -1142,6 +1161,7 @@ function CleveRoids.ReleaseDisplays()
     for i = 1, 36 do
         C_Macro.SetMacroDisplay(i, nil)
     end
+    publishedDisplay = {}
     CleveRoids.ClassicAPIMacroDisplay = false
     CleveRoids.useClassicAPIDisplay = false
 end
@@ -1259,29 +1279,29 @@ end
 -- PERFORMANCE: Static buffer for arg backup
 local _originalArgsBuffer = CleveRoids._originalArgsBuffer
 
-function CleveRoids.SendEventForAction(slot, event, ...)
+-- Prebuilt global names. Building "arg" .. i inline cost a concatenation per
+-- iteration, three ten-iteration loops per call, on a function that runs once per
+-- action slot (up to 120 per full index).
+local ARG_GLOBALS = {
+    "arg1", "arg2", "arg3", "arg4", "arg5",
+    "arg6", "arg7", "arg8", "arg9", "arg10",
+}
+
+-- Takes eventArg explicitly rather than `...`: in 1.12's Lua 5.0 a vararg function
+-- allocates an `arg` table on every call, and every caller passes exactly one extra
+-- value (the slot). The old arg.n fan-out below collapsed to a single case.
+function CleveRoids.SendEventForAction(slot, event, eventArg)
     local old_this = this
 
     -- PERFORMANCE: Reuse static buffer instead of creating table each call
     local original_global_args = _originalArgsBuffer
     for i = 1, 10 do
-        original_global_args[i] = _G["arg" .. i]
+        original_global_args[i] = _G[ARG_GLOBALS[i]]
     end
 
-    if type(arg) == "table" then
-
-        local n_varargs_from_arg_table = arg.n or 0
-        for i = 1, 10 do
-            if i <= n_varargs_from_arg_table then
-                _G["arg" .. i] = arg[i]
-            else
-                _G["arg" .. i] = nil
-            end
-        end
-    else
-        for i = 1, 10 do
-            _G["arg" .. i] = nil
-        end
+    _G.arg1 = eventArg
+    for i = 2, 10 do
+        _G[ARG_GLOBALS[i]] = nil
     end
 
     local button_to_call_event_on
@@ -1319,7 +1339,7 @@ function CleveRoids.SendEventForAction(slot, event, ...)
     this = old_this
 
     for i = 1, 10 do
-        _G["arg" .. i] = original_global_args[i]
+        _G[ARG_GLOBALS[i]] = original_global_args[i]
     end
 
     -- FIX: Skip addon handler calls during initial indexing to prevent 120 rapid calls
@@ -1327,30 +1347,9 @@ function CleveRoids.SendEventForAction(slot, event, ...)
         return
     end
 
-    if type(arg) == "table" and arg.n then
-
-        if arg.n == 0 then
-            for _, fn_h in ipairs(CleveRoids.actionEventHandlers) do fn_h(slot, event) end
-        elseif arg.n == 1 then
-            for _, fn_h in ipairs(CleveRoids.actionEventHandlers) do fn_h(slot, event, arg[1]) end
-        elseif arg.n == 2 then
-            for _, fn_h in ipairs(CleveRoids.actionEventHandlers) do fn_h(slot, event, arg[1], arg[2]) end
-        elseif arg.n == 3 then
-            for _, fn_h in ipairs(CleveRoids.actionEventHandlers) do fn_h(slot, event, arg[1], arg[2], arg[3]) end
-        elseif arg.n == 4 then
-            for _, fn_h in ipairs(CleveRoids.actionEventHandlers) do fn_h(slot, event, arg[1], arg[2], arg[3], arg[4]) end
-        elseif arg.n == 5 then
-            for _, fn_h in ipairs(CleveRoids.actionEventHandlers) do fn_h(slot, event, arg[1], arg[2], arg[3], arg[4], arg[5]) end
-        elseif arg.n == 6 then
-            for _, fn_h in ipairs(CleveRoids.actionEventHandlers) do fn_h(slot, event, arg[1], arg[2], arg[3], arg[4], arg[5], arg[6]) end
-        else
-            for _, fn_h in ipairs(CleveRoids.actionEventHandlers) do fn_h(slot, event, arg[1], arg[2], arg[3], arg[4], arg[5], arg[6], arg[7]) end
-        end
-    else
-
-        for _, fn_h in ipairs(CleveRoids.actionEventHandlers) do
-            fn_h(slot, event)
-        end
+    local handlers = CleveRoids.actionEventHandlers
+    for i = 1, table.getn(handlers) do
+        handlers[i](slot, event, eventArg)
     end
 end
 
@@ -4386,7 +4385,13 @@ end
 CleveRoids.Frame = CreateFrame("Frame")
 
 CleveRoids.Frame:SetScript("OnUpdate", CleveRoids.OnUpdate)
-CleveRoids.Frame:SetScript("OnEvent", function(...)
+-- Declared with no parameters on purpose. In 1.12's Lua 5.0 a function written
+-- `function(...)` builds a fresh `arg` table on every single call, and this fires
+-- for all ~48 registered events -- including the UNIT_HEALTH / UNIT_AURA /
+-- UNIT_*_GUID power streams, which tick continuously for every unit in range. That
+-- was a table per event, purely as garbage: the handler reads the event globals
+-- (event, this, arg1..arg10), never the vararg.
+CleveRoids.Frame:SetScript("OnEvent", function()
     CleveRoids.Frame[event](this,arg1,arg2,arg3,arg4,arg5,arg6,arg7,arg8,arg9,arg10)
 end)
 
@@ -4733,8 +4738,76 @@ end
 
 -- Nampower SPELL_CAST_EVENT handler for reliable channel tracking
 -- Also handles spell_tracking clearing and cast sequence advancement (Nampower fallback for UNIT_CASTEVENT)
+-- Nampower SPELL_CAST_EVENT. This one handler covers three separate concerns that
+-- used to live in two same-named functions, the second of which silently replaced
+-- the first (Lua assigns in file order), so the channel/sequence half never ran:
+--   1. [casting] conditional state + cast bookkeeping (lastCastSpell, pendingCasts,
+--      combo-point capture for finishers).
+--   2. Channel start detection.
+--   3. The Nampower fallback for spell_tracking and cast-sequence advancement, used
+--      when SuperWoW is absent and UNIT_CASTEVENT never fires.
+-- Args arrive from the dispatcher as (self, arg1..arg10).
 function CleveRoids.Frame:SPELL_CAST_EVENT(success, spellId, castType, targetGuid, itemId)
     local CHANNEL = 4
+
+    -- BUGFIX: Update casting state on spell cast events (for [casting] conditional)
+    if CleveRoids.UpdateCastingState then
+        CleveRoids.UpdateCastingState()
+    end
+
+    if success == 1 then
+        CleveRoids.lastCastSpell = {
+            spellId = spellId,
+            castType = castType,
+            targetGuid = targetGuid,
+            timestamp = GetTime()
+        }
+        local name = C_Spell.GetSpellName(spellId)
+        if name then
+            CleveRoids.lastCastSpell.spellName = name
+        end
+
+        -- Track pending cast for SPELL_GO correlation (reactive ability detection)
+        -- Keyed by spellId so concurrent casts don't overwrite each other
+        CleveRoids.pendingCasts = CleveRoids.pendingCasts or {}
+
+        -- Clean up consumed entries older than 5 seconds (lightweight, runs per-cast)
+        local cleanupTime = GetTime() - 5
+        for id, entry in pairs(CleveRoids.pendingCasts) do
+            if entry.consumed and entry.consumedAt and entry.consumedAt < cleanupTime then
+                CleveRoids.pendingCasts[id] = nil
+            end
+        end
+
+        CleveRoids.pendingCasts[spellId] = {
+            castType = castType,
+            targetGuid = targetGuid,
+            timestamp = GetTime(),
+            comboPoints = nil,
+        }
+
+        -- Capture combo points NOW (before server consumes them)
+        -- SPELL_CAST_EVENT fires client-side, so CP are guaranteed available
+        if (CleveRoids.IsComboScalingSpellID and CleveRoids.IsComboScalingSpellID(spellId)) or
+           (CleveRoids.FerociousBiteSpellIDs and CleveRoids.FerociousBiteSpellIDs[spellId]) then
+            local cp = CleveRoids.GetComboPoints and CleveRoids.GetComboPoints() or 0
+            if cp > 0 then
+                CleveRoids.pendingCasts[spellId].comboPoints = cp
+                if CleveRoids.debug then
+                    local castSpellName = C_Spell.GetSpellName(spellId) or "Unknown"
+                    DEFAULT_CHAT_FRAME:AddMessage(
+                        string.format("|cff00ff88[SPELL_CAST_EVENT]|r Captured %d CP for %s (ID:%d)",
+                            cp, castSpellName, spellId)
+                    )
+                end
+            end
+        end
+    else
+        -- Cast failed - clear pending entry for this spell
+        if CleveRoids.pendingCasts then
+            CleveRoids.pendingCasts[spellId] = nil
+        end
+    end
 
     if castType == CHANNEL and success == 1 then
         -- Channel started successfully
@@ -5372,29 +5445,33 @@ function CleveRoids.Frame:SPELL_UPDATE_COOLDOWN()
     CleveRoids.UpdateAllManagedCooldowns()
 end
 
--- Helper function to notify addon handlers about cooldown updates
--- NOTE: Blizzard action buttons are handled natively via ActionButton_OnEvent which calls
--- our GetActionCooldown hook. We do NOT call CooldownFrame_SetTimer directly to avoid
--- conflicts with SuperWoW's own GetActionCooldown handling for #showtooltip macros.
--- Track which slots have been logged to avoid spam
+-- Helper function to notify addon handlers about cooldown updates.
+-- Blizzard's own buttons need nothing from us: ActionButton_OnEvent reads the stock
+-- action-bar functions, which resolve through the value published with
+-- C_Macro.SetMacroDisplay. This exists only for third-party bars that keep their own
+-- cooldown frames -- Bongos does; pfUI's handler ignores the event outright.
+--
+-- Runs on every SPELL_UPDATE_COOLDOWN (so every GCD and cooldown tick) and touches
+-- every managed slot, up to 120. Keep the per-slot work here and in the registered
+-- handlers allocation-free.
 CleveRoids.cooldownDebugLogged = {}
 
 function CleveRoids.UpdateAllManagedCooldowns()
     local Actions = CleveRoids.Actions
     if not Actions then return end
 
-    -- Only notify third-party handlers (pfUI/Bongos)
-    -- Blizzard buttons update themselves via GetActionCooldown hook
-    local handlerCount = CleveRoids.actionEventHandlers and table.getn(CleveRoids.actionEventHandlers) or 0
+    local handlers = CleveRoids.actionEventHandlers
+    local handlerCount = handlers and table.getn(handlers) or 0
     if handlerCount == 0 then return end
 
-    for slot, actions in pairs(Actions) do
+    local slot, actions = next(Actions)
+    while slot do
         if actions then
-            -- Notify action event handlers (for pfUI/Bongos) about the cooldown update
-            for _, fn_h in ipairs(CleveRoids.actionEventHandlers) do
-                fn_h(slot, "ACTIONBAR_UPDATE_COOLDOWN")
+            for i = 1, handlerCount do
+                handlers[i](slot, "ACTIONBAR_UPDATE_COOLDOWN")
             end
         end
+        slot, actions = next(Actions, slot)
     end
 end
 -- PERFORMANCE OPTIMIZATION: Throttled event handlers to reduce CPU spam
@@ -5498,75 +5575,6 @@ function CleveRoids.Frame:SPELL_QUEUE_EVENT()
         end
     end
 end
-
-function CleveRoids.Frame:SPELL_CAST_EVENT()
-    if event == "SPELL_CAST_EVENT" then
-        local success = arg1
-        local spellId = arg2
-        local castType = arg3
-        local targetGuid = arg4
-
-        -- BUGFIX: Update casting state on spell cast events (for [casting] conditional)
-        if CleveRoids.UpdateCastingState then
-            CleveRoids.UpdateCastingState()
-        end
-
-        if success == 1 then
-            CleveRoids.lastCastSpell = {
-                spellId = spellId,
-                castType = castType,
-                targetGuid = targetGuid,
-                timestamp = GetTime()
-            }
-            local name = C_Spell.GetSpellName(spellId)
-            if name then
-                CleveRoids.lastCastSpell.spellName = name
-            end
-
-            -- Track pending cast for SPELL_GO correlation (reactive ability detection)
-            -- Keyed by spellId so concurrent casts don't overwrite each other
-            CleveRoids.pendingCasts = CleveRoids.pendingCasts or {}
-
-            -- Clean up consumed entries older than 5 seconds (lightweight, runs per-cast)
-            local cleanupTime = GetTime() - 5
-            for id, entry in pairs(CleveRoids.pendingCasts) do
-                if entry.consumed and entry.consumedAt and entry.consumedAt < cleanupTime then
-                    CleveRoids.pendingCasts[id] = nil
-                end
-            end
-
-            CleveRoids.pendingCasts[spellId] = {
-                castType = castType,
-                targetGuid = targetGuid,
-                timestamp = GetTime(),
-                comboPoints = nil,
-            }
-
-            -- Capture combo points NOW (before server consumes them)
-            -- SPELL_CAST_EVENT fires client-side, so CP are guaranteed available
-            if (CleveRoids.IsComboScalingSpellID and CleveRoids.IsComboScalingSpellID(spellId)) or
-               (CleveRoids.FerociousBiteSpellIDs and CleveRoids.FerociousBiteSpellIDs[spellId]) then
-                local cp = CleveRoids.GetComboPoints and CleveRoids.GetComboPoints() or 0
-                if cp > 0 then
-                    CleveRoids.pendingCasts[spellId].comboPoints = cp
-                    if CleveRoids.debug then
-                        local castSpellName = C_Spell.GetSpellName(spellId) or "Unknown"
-                        DEFAULT_CHAT_FRAME:AddMessage(
-                            string.format("|cff00ff88[SPELL_CAST_EVENT]|r Captured %d CP for %s (ID:%d)",
-                                cp, castSpellName, spellId)
-                        )
-                    end
-                end
-            end
-        else
-            -- Cast failed - clear pending entry for this spell
-            if CleveRoids.pendingCasts then
-                CleveRoids.pendingCasts[spellId] = nil
-            end
-        end
-    end
-end
-
 
 -- Nampower v2.41+: KEY_DOWN/KEY_UP events
 -- arg1=keyCode (int), arg2=metaKeyState (Shift=1,Ctrl=2,Alt=4), arg3=repeat, arg4=time

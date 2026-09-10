@@ -429,7 +429,17 @@ function Extension.RegisterPfUIActionEventHandler()
     -- Register a handler that will be called whenever CleveRoids updates macro states
     if CleveRoids.RegisterActionEventHandler then
         Extension.DLOG("Registering pfUI action event handler")
-        CleveRoids.RegisterActionEventHandler(function(slot, event, ...)
+        -- Declared without `...` on purpose: in 1.12's Lua 5.0 a vararg function
+        -- allocates an `arg` table on every call, and this handler never read it.
+        -- That mattered because UpdateAllManagedCooldowns fans
+        -- ACTIONBAR_UPDATE_COOLDOWN out across every managed slot -- up to 120 calls
+        -- -- on each SPELL_UPDATE_COOLDOWN, which fires on every GCD and cooldown
+        -- tick. Those calls all allocated a table and then did nothing, because the
+        -- whole body only ever applied to ACTIONBAR_SLOT_CHANGED. Hence the early
+        -- return before any work.
+        CleveRoids.RegisterActionEventHandler(function(slot, event)
+            if event ~= "ACTIONBAR_SLOT_CHANGED" then return end
+
             local button = pfUI.bars and pfUI.bars.buttons and pfUI.bars.buttons[slot]
 
             if Extension.Debug then
@@ -441,23 +451,21 @@ function Extension.RegisterPfUIActionEventHandler()
                 ))
             end
 
-            -- For slot change events, do a full button update so the icon,
-            -- cooldown, and tooltip refresh through CleveRoids' hooked
-            -- GetActionTexture / GetActionCooldown / GameTooltip:SetAction.
+            -- Full button update so the icon, cooldown and tooltip refresh.
             -- pfUI's ButtonMacroScan defers to us for managed macros (leaves
-            -- spellslot nil), so its ButtonFullUpdate routes through those hooks
-            -- and follows the active conditional — no manual cooldown override
-            -- needed.
-            if event == "ACTIONBAR_SLOT_CHANGED" then
-                -- Mark the slot for update in pfUI's cache (processed next OnUpdate)
-                if pfUI.bars and pfUI.bars.update then
-                    pfUI.bars.update[slot] = true
-                end
+            -- spellslot nil), so ButtonFullUpdate reads the stock action-bar
+            -- functions -- which now resolve through the value we publish with
+            -- C_Macro.SetMacroDisplay, rather than the Lua overrides this addon
+            -- used to install.
 
-                -- Also directly call ButtonFullUpdate if the button exists
-                if button and pfUI.bars.ButtonFullUpdate then
-                    pfUI.bars.ButtonFullUpdate(button)
-                end
+            -- Mark the slot for update in pfUI's cache (processed next OnUpdate)
+            if pfUI.bars and pfUI.bars.update then
+                pfUI.bars.update[slot] = true
+            end
+
+            -- Also directly call ButtonFullUpdate if the button exists
+            if button and pfUI.bars.ButtonFullUpdate then
+                pfUI.bars.ButtonFullUpdate(button)
             end
         end)
 
