@@ -9246,52 +9246,20 @@ function CleveRoids.ParseReactiveCombatLog(lowerMsg)
     end
 end
 
--- Clear reactive proc when spell is cast
-function CleveRoids.ClearReactiveProcOnCast(spellName)
-    if not spellName then return end
-
-    -- Check if this is a reactive spell
-    if CleveRoids.reactiveSpells and CleveRoids.reactiveSpells[spellName] then
-        CleveRoids.ClearReactiveProc(spellName)
-        CleveRoids.QueueActionUpdate()
-    end
-end
-
--- Hook UNIT_CASTEVENT to clear reactive procs
-local originalUnitCastEvent = CleveRoids.Frame and CleveRoids.Frame.UNIT_CASTEVENT
-if originalUnitCastEvent then
-    CleveRoids.Frame.UNIT_CASTEVENT = function(...)
-        -- Call original handler first
-        if type(originalUnitCastEvent) == "function" then
-            originalUnitCastEvent(unpack(arg))
-        end
-
-        -- Clear reactive proc and resist state on spell cast start
-        if arg1 == "player" and arg2 == "START" and arg4 then
-            CleveRoids.ClearReactiveProcOnCast(arg4)
-            CleveRoids.ClearResistState()
-        end
-    end
-end
-
--- Hook SPELL_START_SELF to clear reactive procs (Nampower fallback when SuperWoW not available)
-local originalSpellStartSelf = CleveRoids.Frame and CleveRoids.Frame.SPELL_START_SELF
-if originalSpellStartSelf and not CleveRoids.hasSuperwow then
-    CleveRoids.Frame.SPELL_START_SELF = function(...)
-        -- Call original handler first
-        if type(originalSpellStartSelf) == "function" then
-            originalSpellStartSelf(unpack(arg))
-        end
-
-        -- Clear reactive proc and resist state on spell cast start
-        -- SPELL_START_SELF args: casterGuid, targetGuid, spellId, ...
-        local spellId = arg[3]
-        if spellId then
-            CleveRoids.ClearReactiveProcOnCast(spellId)
-            CleveRoids.ClearResistState()
-        end
-    end
-end
+-- Removed: ClearReactiveProcOnCast plus wrappers around Frame.UNIT_CASTEVENT and
+-- Frame.SPELL_START_SELF that tried to clear a reactive proc when its spell was cast.
+-- The feature never worked, for three independent reasons:
+--   1. Both wrappers guarded on `CleveRoids.Frame and CleveRoids.Frame.<handler>`,
+--      but CleveRoids.Frame is created in Core.lua, which loads AFTER this file, so
+--      the guard was always false and neither wrapper was ever installed.
+--   2. The UNIT_CASTEVENT wrapper tested arg2 == "START", but that signature is
+--      (caster, target, action, spell_id, cast_time) -- the action is arg3, so it was
+--      comparing the target.
+--   3. Both passed a spell *ID* to a function that looks the name up in
+--      CleveRoids.reactiveSpells, which is keyed by name, so nothing could match.
+-- They also each allocated an `arg` table per call and unpack()'d it. Deleting is
+-- behaviour-preserving; if clearing a reactive proc on cast is still wanted it needs
+-- to be written fresh against the real handler signatures.
 
 -- NAMPOWER v2.24+ AUTO_ATTACK EVENT HANDLER FOR REACTIVE ABILITIES
 -- Uses native events for dodge/parry/block detection when available.
