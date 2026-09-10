@@ -773,12 +773,6 @@ lib.iconCache = lib.iconCache or {}          -- [spellId] = texture (shared with
 -- Buff tracking tables (parallel to debuff tables, standalone Nampower mode only)
 -- Buff tables are NOT linked to pfUI — pfUI has no public buff tracking tables.
 -- They remain empty when hasPfUIEnhanced=true since all buff event handlers are gated by it.
-lib.ownBuffCasts = lib.ownBuffCasts or {}      -- [targetGUID][buffName] = {startTime, duration, spellId, casterGuid}
-                                               -- Player's own buff casts on self or others (AURA_CAST events)
-lib.allBuffAuras = lib.allBuffAuras or {}      -- [targetGUID][buffName][casterGuid] = {startTime, duration, rank}
-                                               -- All buffs from all casters on any unit (confirmed by BUFF_ADDED events)
-lib.pendingBuffCasts = lib.pendingBuffCasts or {} -- [targetGUID][spellId] = {casterGuid, duration, spellName, time}
-                                               -- Temp storage from AURA_CAST_ON_OTHER, consumed by BUFF_ADDED_OTHER
 
 -- Flag indicating whether enhanced pfUI tracking is available
 lib.hasPfUIEnhanced = false
@@ -1264,57 +1258,6 @@ function lib:CleanupStaleTrackingData()
     end
   end
 
-  -- Clean ownBuffCasts (player-cast buffs on targets)
-  if lib.ownBuffCasts then
-    for guid, buffs in pairs(lib.ownBuffCasts) do
-      for buffName, data in pairs(buffs) do
-        local elapsed = now - (data.startTime or 0)
-        local dur = data.duration or 0
-        -- Remove if expired (duration > 0 and past end time) or stale (no duration and old)
-        if (dur > 0 and elapsed > dur) or (dur <= 0 and elapsed > staleTime) then
-          buffs[buffName] = nil
-        end
-      end
-      if not next(buffs) then
-        lib.ownBuffCasts[guid] = nil
-      end
-    end
-  end
-
-  -- Clean allBuffAuras (all-caster buff tracking)
-  if lib.allBuffAuras then
-    for guid, buffs in pairs(lib.allBuffAuras) do
-      for buffName, casters in pairs(buffs) do
-        for cGuid, data in pairs(casters) do
-          local elapsed = now - (data.startTime or 0)
-          local dur = data.duration or 0
-          if (dur > 0 and elapsed > dur) or (dur <= 0 and elapsed > staleTime) then
-            casters[cGuid] = nil
-          end
-        end
-        if not next(casters) then
-          buffs[buffName] = nil
-        end
-      end
-      if not next(buffs) then
-        lib.allBuffAuras[guid] = nil
-      end
-    end
-  end
-
-  -- Clean pendingBuffCasts (short-lived correlation data, 2 second TTL)
-  if lib.pendingBuffCasts then
-    for guid, spells in pairs(lib.pendingBuffCasts) do
-      for spellId, data in pairs(spells) do
-        if (now - (data.time or 0)) > 2 then
-          spells[spellId] = nil
-        end
-      end
-      if not next(spells) then
-        lib.pendingBuffCasts[guid] = nil
-      end
-    end
-  end
 end
 
 -- Get the caster GUID for a debuff on a target
@@ -4185,7 +4128,6 @@ if CleveRoids.hasNampower then
 
     -- BUFF_ADDED/REMOVED events require v2.30+ for auraSlot and state args
     if npMajor > 2 or (npMajor == 2 and npMinor >= 30) then
-      ev:RegisterEvent("BUFF_ADDED_OTHER")
       ev:RegisterEvent("BUFF_REMOVED_SELF")
       ev:RegisterEvent("BUFF_REMOVED_OTHER")
     end
@@ -5765,49 +5707,6 @@ ev:SetScript("OnEvent", function()
       end
     end
 
-  -- NAMPOWER v2.30+ BUFF_ADDED_OTHER - Confirm pending AURA_CAST_ON_OTHER data as buff
-  elseif event == "BUFF_ADDED_OTHER" then
-    if lib.hasPfUIEnhanced then return end
-
-    local guid    = CleveRoids.NormalizeGUID(arg1)
-    local spellId = arg3
-    local state   = arg7  -- 0=added, 1=removed, 2=modified
-
-    if not guid or not spellId then return end
-
-    -- Consume pending AURA_CAST data for this buff
-    local pending = lib.pendingBuffCasts[guid] and lib.pendingBuffCasts[guid][spellId]
-    if pending then
-      local spellName = pending.spellName or (C_Spell.GetSpellName(spellId))
-      if spellName then
-        local casterGuid = pending.casterGuid
-        local duration   = pending.duration
-        local now = GetTime()
-
-        -- allBuffAuras: confirmed buff from any caster
-        lib.allBuffAuras[guid] = lib.allBuffAuras[guid] or {}
-        lib.allBuffAuras[guid][spellName] = lib.allBuffAuras[guid][spellName] or {}
-        lib.allBuffAuras[guid][spellName][casterGuid or "unknown"] = {
-          startTime = now,
-          duration  = duration or 0,
-          rank      = 0,
-        }
-
-        -- ownBuffCasts: only if player is the caster
-        local playerGuid = CleveRoids.GetGUID("player")
-        if playerGuid and casterGuid == playerGuid then
-          lib.ownBuffCasts[guid] = lib.ownBuffCasts[guid] or {}
-          lib.ownBuffCasts[guid][spellName] = {
-            startTime  = now,
-            duration   = duration or 0,
-            spellId    = spellId,
-            casterGuid = casterGuid,
-          }
-        end
-      end
-      lib.pendingBuffCasts[guid][spellId] = nil
-    end
-
   -- NAMPOWER v2.30+ BUFF_REMOVED_SELF - Player's own buffs removed
   elseif event == "BUFF_REMOVED_SELF" then
     if lib.hasPfUIEnhanced then return end
@@ -5818,22 +5717,6 @@ ev:SetScript("OnEvent", function()
     if state == 2 then return end  -- Stack decrease only, not full removal
 
     local spellName = C_Spell.GetSpellName(spellId)
-    local playerGuid = CleveRoids.GetGUID("player")
-
-    if spellName and playerGuid then
-      if lib.ownBuffCasts[playerGuid] then
-        lib.ownBuffCasts[playerGuid][spellName] = nil
-        if not next(lib.ownBuffCasts[playerGuid]) then
-          lib.ownBuffCasts[playerGuid] = nil
-        end
-      end
-      if lib.allBuffAuras[playerGuid] then
-        lib.allBuffAuras[playerGuid][spellName] = nil
-        if not next(lib.allBuffAuras[playerGuid]) then
-          lib.allBuffAuras[playerGuid] = nil
-        end
-      end
-    end
 
     -- Also prune from OverflowBuffs (existing system)
     if spellId and CleveRoids.OverflowBuffs and CleveRoids.OverflowBuffs[spellId] then
@@ -5859,28 +5742,6 @@ ev:SetScript("OnEvent", function()
     if state == 2 then return end  -- Stack decrease only, not full removal
 
     local spellName = C_Spell.GetSpellName(spellId)
-    if spellName then
-      if lib.allBuffAuras[guid] then
-        lib.allBuffAuras[guid][spellName] = nil
-        if not next(lib.allBuffAuras[guid]) then
-          lib.allBuffAuras[guid] = nil
-        end
-      end
-      if lib.ownBuffCasts[guid] then
-        lib.ownBuffCasts[guid][spellName] = nil
-        if not next(lib.ownBuffCasts[guid]) then
-          lib.ownBuffCasts[guid] = nil
-        end
-      end
-    end
-
-    -- Clean pending correlation data
-    if lib.pendingBuffCasts[guid] then
-      lib.pendingBuffCasts[guid][spellId] = nil
-      if not next(lib.pendingBuffCasts[guid]) then
-        lib.pendingBuffCasts[guid] = nil
-      end
-    end
 
     -- Also clean AllCasterAuraTracking (keyed by spellName)
     if spellName and CleveRoids.AllCasterAuraTracking[guid] then
@@ -5932,15 +5793,6 @@ ev:SetScript("OnEvent", function()
     end
 
     -- Clean up buff tracking tables
-    if lib.ownBuffCasts[guid] then
-      lib.ownBuffCasts[guid] = nil
-    end
-    if lib.allBuffAuras[guid] then
-      lib.allBuffAuras[guid] = nil
-    end
-    if lib.pendingBuffCasts[guid] then
-      lib.pendingBuffCasts[guid] = nil
-    end
 
     -- Clean up cast tracking for this unit (they can't be casting if dead)
     if CleveRoids.castTracking[guid] then

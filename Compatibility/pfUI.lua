@@ -552,7 +552,6 @@ function Extension.SetupPfUIEventHooks(lib)
         ev:UnregisterEvent("AURA_CAST_ON_OTHER")
         ev:UnregisterEvent("DEBUFF_ADDED_OTHER")
         ev:UnregisterEvent("DEBUFF_REMOVED_OTHER")
-        ev:UnregisterEvent("BUFF_ADDED_OTHER")
         ev:UnregisterEvent("BUFF_REMOVED_SELF")
         ev:UnregisterEvent("BUFF_REMOVED_OTHER")
 
