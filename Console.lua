@@ -141,6 +141,9 @@ SlashCmdList.STOPATTACK = StopAttack
 SLASH_STOPCASTING1 = "/stopcasting"
 SlashCmdList.STOPCASTING = SpellStopCasting
 
+SLASH_STOPCHANNELING1 = "/stopchanneling"
+SlashCmdList.STOPCHANNELING = SpellStopChanneling
+
 SLASH_CLEARTARGET1 = "/cleartarget"
 SlashCmdList.CLEARTARGET = ClearTarget
 
@@ -199,6 +202,20 @@ SlashCmdList.STOPCASTING = function(msg)
     else
         -- If no conditionals, run the original command.
         CleveRoids.Hooks.STOPCASTING_SlashCmd()
+    end
+end
+
+-- /stopchanneling hook
+SlashCmdList.STOPCHANNELING = function(msg)
+    if CleveRoids.stopMacroFlag then return end
+    msg = msg or ""
+    if string.find(msg, "%[") then
+        -- If conditionals are present, let the function handle it.
+        -- It will only stop the cast if the conditions are met.
+        CleveRoids.DoConditionalStopChanneling(msg)
+    else
+        -- If no conditionals, run the original command.
+        CleveRoids.NampowerAPI.StopChannelNextTick()
     end
 end
 
@@ -465,4 +482,3 @@ function CleveRoids.DoQuickHeal(msg)
         end
     end
 end
-

@@ -3014,6 +3014,10 @@ local function _stopCastingAction()
     SpellStopCasting()
 end
 
+local function _stopChannelingAction()
+    CleveRoids.NampowerAPI.StopChannelNextTick()
+end
+
 -- Attempts to conditionally stop an attack. Returns false if no conditionals are found.
 function CleveRoids.DoConditionalStopAttack(msg)
     if not string.find(msg, "%[") then return false end
@@ -3036,6 +3040,20 @@ function CleveRoids.DoConditionalStopCasting(msg)
     local parts = CleveRoids.splitStringIgnoringQuotes(msg)
     for i = 1, table.getn(parts) do
         if CleveRoids.DoWithConditionals(parts[i], nil, CleveRoids.FixEmptyTarget, false, _stopCastingAction) then
+            return true
+        end
+    end
+    return false
+end
+
+-- Attempts to conditionally interrupt channeling. Returns false if no conditionals are found.
+function CleveRoids.DoConditionalStopChanneling(msg)
+    if not string.find(msg, "%[") then return false end
+
+    -- PERFORMANCE: Use numeric iteration to avoid pairs() iterator allocation
+    local parts = CleveRoids.splitStringIgnoringQuotes(msg)
+    for i = 1, table.getn(parts) do
+        if CleveRoids.DoWithConditionals(parts[i], nil, CleveRoids.FixEmptyTarget, false, _stopChannelingAction) then
             return true
         end
     end
