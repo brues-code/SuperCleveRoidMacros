@@ -531,6 +531,12 @@ function CleveRoids.DisableAddon(reason)
     -- Mark state
     CleveRoids.disabled = true
 
+    -- Hand macro display back to ClassicAPI's own #showtooltip parser before we go
+    -- quiet, or every claimed macro would keep the last value we published.
+    if CleveRoids.ReleaseDisplays then
+        CleveRoids.ReleaseDisplays()
+    end
+
     -- Stop main frame activity
     if CleveRoids.Frame then
         if CleveRoids.Frame.UnregisterAllEvents then
@@ -1087,6 +1093,59 @@ function CleveRoids.TestForActiveAction(actions)
     return changed
 end
 
+--------------------------------------------------------------------------------
+-- ClassicAPI macro display
+--------------------------------------------------------------------------------
+
+-- The value to hand C_Macro.SetMacroDisplay for an active action. The nested hop
+-- mirrors the {MacroName} fallback the GameTooltip.SetAction override used: when
+-- `action` is a macro reference, `action.macro` holds the inner macro's
+-- #showtooltip action info (see CreateActionInfo), and `action.action` is the
+-- literal "{Name}" text, which names no spell or item.
+local function DisplayValueFor(action)
+    if not action then return nil end
+    if type(action.macro) == "table" and action.macro.action then
+        return action.macro.action
+    end
+    return action.action
+end
+
+-- Publish one macro's resolved action. Nothing is re-evaluated for us, so this must
+-- be called whenever the answer changes; the published value stands until replaced.
+--
+-- `false` is deliberate when there is no active action: it means "this macro is mine,
+-- nothing matched" and shows the question mark. Skipping the call instead would hand
+-- the macro back to ClassicAPI's own #showtooltip parser.
+function CleveRoids.PublishDisplay(actions)
+    if not CleveRoids.useClassicAPIDisplay then return end
+    local macroID = actions and actions.macroID
+    if not macroID then return end  -- SuperMacro macros have no Blizzard index
+    C_Macro.SetMacroDisplay(macroID, DisplayValueFor(actions.active) or false)
+end
+
+-- Republish every parsed macro. Used after login and after a re-parse, since
+-- ClassicAPI re-evaluates nothing for us. Covers macros that aren't on a bar too,
+-- which is what keeps the macro window grid's icons correct.
+function CleveRoids.PublishAllDisplays()
+    if not CleveRoids.useClassicAPIDisplay then return end
+    for _, macro in pairs(CleveRoids.Macros) do
+        if type(macro) == "table" and macro.actions and macro.actions.macroID then
+            CleveRoids.TestForActiveAction(macro.actions)
+            CleveRoids.PublishDisplay(macro.actions)
+        end
+    end
+end
+
+-- Hand every macro back to ClassicAPI's own parser and stop claiming ownership.
+function CleveRoids.ReleaseDisplays()
+    if not CleveRoids.useClassicAPIDisplay then return end
+    for i = 1, 36 do
+        C_Macro.SetMacroDisplay(i, nil)
+    end
+    CleveRoids.ClassicAPIMacroDisplay = false
+    CleveRoids.useClassicAPIDisplay = false
+end
+
 -- PERFORMANCE: Static buffer references for hot path
 local _actionsToSlotsBuffer = CleveRoids._actionsToSlotsBuffer
 local _slotsBuffer = CleveRoids._slotsBuffer
@@ -1130,10 +1189,16 @@ function CleveRoids.TestForAllActiveActions()
         local slots = actionsToSlots[actions]
         local stateChanged = CleveRoids.TestForActiveAction(actions)
         if stateChanged then
-            -- Send event to ALL slots that use this macro
-            local count = slots._count
-            for j = 1, count do
-                CleveRoids.SendEventForAction(slots[j], "ACTIONBAR_SLOT_CHANGED", slots[j])
+            if CleveRoids.useClassicAPIDisplay then
+                -- Publishing repaints every slot holding this macro through the
+                -- client's own notifier, so the per-slot fan-out below is redundant.
+                CleveRoids.PublishDisplay(actions)
+            else
+                -- Send event to ALL slots that use this macro
+                local count = slots._count
+                for j = 1, count do
+                    CleveRoids.SendEventForAction(slots[j], "ACTIONBAR_SLOT_CHANGED", slots[j])
+                end
             end
         end
         -- Clear for reuse (reset count and clear buffer reference)
@@ -1179,6 +1244,7 @@ function CleveRoids.GetAction(slot)
     if macro then
         actions = macro.actions
         CleveRoids.TestForActiveAction(actions)
+        CleveRoids.PublishDisplay(actions)
         CleveRoids.Actions[slot] = actions
         CleveRoids.SendEventForAction(slot, "ACTIONBAR_SLOT_CHANGED", slot)
         return actions
@@ -1750,6 +1816,10 @@ local function BuildMacro(cacheKey, macroID, name, texture, body)
         body    = body,
         actions = {},
     }
+    -- Back-reference so the update loop, which walks `actions` objects rather than
+    -- macros, can name the macro to C_Macro.SetMacroDisplay. nil for SuperMacro
+    -- macros, which have no Blizzard index and so cannot be published.
+    macro.actions.macroID = macroID
     macro.actions.list = {}
 
     -- build a list of testable actions for the macro
@@ -3975,6 +4045,12 @@ function CleveRoids.OnUpdate(self)
             CR._suppressActionHandlers = false
 
             CR.TestForAllActiveActions()
+
+            -- First publish of the session. Deferred to here rather than done at
+            -- load because SetMacroDisplay returns false until the player exists
+            -- in the world.
+            CR.PublishAllDisplays()
+
             CR.lastUpdate = time
 
             -- FIX: Force refresh ALL Blizzard action buttons after initialization
@@ -5699,6 +5775,9 @@ function CleveRoids.RebuildMacros()
     -- updates out to Blizzard/pfUI/Bongos buttons.
     if CleveRoids.ready then
         CleveRoids.IndexActionBars()
+        -- Macros were re-parsed above, so every published value is stale. Covers
+        -- macros that aren't on a bar, which IndexActionBars never visits.
+        CleveRoids.PublishAllDisplays()
     end
 
     if CleveRoidMacros.realtime == 0 then
