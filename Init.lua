@@ -39,6 +39,7 @@ CleveRoids.useClassicAPIDisplay =
 CleveRoids.ClassicAPIMacroDisplay = CleveRoids.useClassicAPIDisplay
 
 CleveRoids.ParsedMsg = {}
+CleveRoids.ExpandedGroups = {}
 CleveRoids.Items     = {}
 CleveRoids.Spells    = {}
 CleveRoids.PetSpells = {}

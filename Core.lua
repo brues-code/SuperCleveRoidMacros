@@ -779,7 +779,7 @@ function CleveRoids.TestForActiveAction(actions)
     else
         -- First pass: find first action with conditionals that passes
         for _, action in ipairs(actions.list) do
-            local result = CleveRoids.TestAction(action.cmd, action.args)
+            local result, passedClause = CleveRoids.TestAction(action.cmd, action.args)
 
             -- Check if action has conditionals
             local _, conditionals = CleveRoids.GetParsedMsg(action.args)
@@ -806,6 +806,13 @@ function CleveRoids.TestForActiveAction(actions)
                     if not newActiveAction then hasActive = false end
                 else
                     newActiveAction = action
+                    -- Range/usable checks read the passing group's @unit, which for a
+                    -- multi-group clause need not be group 1's (action.conditionals).
+                    action.activeConditionals = nil
+                    if passedClause and passedClause ~= action.args then
+                        local _, passedConds = CleveRoids.GetParsedMsg(passedClause)
+                        action.activeConditionals = passedConds
+                    end
                     -- Resolve nested macro references for #showtooltip propagation
                     -- If inner macro doesn't resolve, continue to next action
                     local macroName = CleveRoids.GetMacroNameFromAction(action.action)
@@ -880,7 +887,8 @@ function CleveRoids.TestForActiveAction(actions)
 
             -- Enhanced nampower range check with spell ID support
 			if IsSpellInRange then
-                local unit = actions.active.conditionals and actions.active.conditionals.target or "target"
+                local conds = actions.active.activeConditionals or actions.active.conditionals
+                local unit = conds and conds.target or "target"
 				if unit == "focus" then
 					unit = CleveRoids.GetFocusUnitId()
 				elseif unit == "focustarget" then
@@ -1930,12 +1938,20 @@ function CleveRoids.ParseMsg(msg)
     conditionals.ignoretooltip = ignorecount
     CleveRoids._ignoretooltip  = ignorecount
 
-    -- capture a single [...] conditional block if present
-    local _, cbEnd, conditionBlock = string.find(msg, "%[(.+)%]")
+    -- Leading [group] blocks and the action after them. A clause with several
+    -- groups (`[a][b] Spell`) parses here as group 1 plus the shared action:
+    -- DoWithConditionals and TestAction expand such a clause into one-group
+    -- variants before parsing, so the callers that do parse a multi-group
+    -- clause directly only rely on the action and on conditionals being non-nil.
+    local _, groups, restStart = CleveRoids.ScanBracketGroups(msg)
+    local conditionBlock = nil
+    if groups.n > 0 then
+        conditionBlock = string.sub(groups[1], 2, -2)
+    end
 
-    -- split off flags/action after the condition block (or from start if none)
+    -- split off flags/action after the groups (or from the start if there are none)
     local _, _, noSpam, cancelAura, action = string.find(
-        string.sub(msg, (cbEnd or 0) + 1),
+        groups.n > 0 and string.sub(msg, restStart) or msg,
         "^%s*(!?)(~?)([^!~]+.*)"
     )
     action = CleveRoids.Trim(action or "")
@@ -2294,6 +2310,17 @@ function CleveRoids.AdvanceSequence(sequence)
 end
 
 function CleveRoids.TestAction(cmd, args)
+    -- `[a][b] Spell`: first passing group wins. The second return names the
+    -- clause that passed so the display path can read that group's @unit.
+    local variants = CleveRoids.ExpandBracketGroups(args)
+    if variants then
+        for i = 1, variants.n do
+            local r, passed = CleveRoids.TestAction(cmd, variants[i])
+            if r then return r, passed end
+        end
+        return
+    end
+
     local msg, conditionals = CleveRoids.GetParsedMsg(args)
 
     -- Nil-safe guards
@@ -2377,7 +2404,7 @@ function CleveRoids.TestAction(cmd, args)
 
     CleveRoids._isTestingAction = false
     conditionals.target = origTarget
-    return CleveRoids.GetMacroNameFromAction(msg) or msg
+    return CleveRoids.GetMacroNameFromAction(msg) or msg, args
 end
 
 function CleveRoids.DoWithConditionals(msg, hook, fixEmptyTargetFunc, targetBeforeAction, action)
@@ -2387,6 +2414,17 @@ function CleveRoids.DoWithConditionals(msg, hook, fixEmptyTargetFunc, targetBefo
     -- Check macro stop flags (skip non-control commands when flag is set)
     -- This enables /stopmacro, /skipmacro, /firstaction, /nofirstaction to work without SuperMacro for vanilla macros
     if (CleveRoids.stopMacroFlag or CleveRoids.skipMacroFlag) and action ~= "STOPMACRO" and action ~= "SKIPMACRO" and action ~= "FIRSTACTION" and action ~= "NOFIRSTACTION" then
+        return false
+    end
+
+    -- `[a][b] Spell`: try each group as its own clause, first pass wins -- the
+    -- same walk DoCast makes over `[a] Spell; [b] Spell`.
+    local variants = CleveRoids.ExpandBracketGroups(msg)
+    if variants then
+        for i = 1, variants.n do
+            local r = CleveRoids.DoWithConditionals(variants[i], hook, fixEmptyTargetFunc, targetBeforeAction, action)
+            if r then return r end
+        end
         return false
     end
 
@@ -2710,22 +2748,38 @@ local function ResolvePfCastUnit()
     return nil
 end
 
+-- One /pfcast clause. If conditionals are present but no explicit @unit, inject the
+-- pfUI-resolved unit so all conditionals ([help], [nodebuff:X], etc.) evaluate against
+-- the same unit pfUI would cast on, and the final CastSpellByName gets the correct
+-- unit token. Module-level to avoid a closure per call.
+local function PfCastClause(v)
+    if string.find(v, "%[") and not string.find(v, "@") then
+        local unit = ResolvePfCastUnit()
+        if unit then
+            v = string.gsub(v, "%[", "[@" .. unit .. ",", 1)
+        end
+    end
+    return CleveRoids.DoWithConditionals(v, CleveRoids.Hooks.PFCAST_SlashCmd, CleveRoids.FixEmptyTarget, false, CastSpellByName)
+end
+
 -- /pfcast with CleveRoids conditionals: evaluate conditionals then cast via pfUI's mouseover chain.
 -- Called from the SlashCmdList.PFCAST hook (set up by Extensions/Mouseover/pfUI.lua after pfUI loads).
 function CleveRoids.DoPfCast(msg)
     local parts = CleveRoids.splitStringIgnoringQuotes(msg)
     for i = 1, table.getn(parts) do
-        local v = parts[i]
-        -- If conditionals are present but no explicit @unit, inject the pfUI-resolved unit so
-        -- all conditionals ([help], [nodebuff:X], etc.) evaluate against the same unit pfUI
-        -- would cast on, and the final CastSpellByName gets the correct unit token.
-        if string.find(v, "%[") and not string.find(v, "@") then
-            local unit = ResolvePfCastUnit()
-            if unit then
-                v = string.gsub(v, "%[", "[@" .. unit .. ",", 1)
+        -- Expand `[a][b] Spell` here rather than leaving it to DoWithConditionals so
+        -- every group without its own @unit gets the injection, not just the first.
+        local variants = CleveRoids.ExpandBracketGroups(parts[i])
+        local handled
+        if variants then
+            for j = 1, variants.n do
+                handled = PfCastClause(variants[j])
+                if handled then break end
             end
+        else
+            handled = PfCastClause(parts[i])
         end
-        if CleveRoids.DoWithConditionals(v, CleveRoids.Hooks.PFCAST_SlashCmd, CleveRoids.FixEmptyTarget, false, CastSpellByName) then
+        if handled then
             if CleveRoids.stopOnCastFlag then
                 CleveRoids.stopMacroFlag = true
             end
@@ -2761,6 +2815,27 @@ function CleveRoids.DoTarget(msg)
     -- Check macro stop flags
     if CleveRoids.stopMacroFlag or CleveRoids.skipMacroFlag then
         return false
+    end
+
+    -- Conditional /target takes `;` clauses and `[a][b]` groups like /cast does:
+    -- the first clause or group that finds a unit wins. A single-group clause
+    -- falls through to the resolution below.
+    if msg and string.find(msg, "%[") then
+        local parts = CleveRoids.splitStringIgnoringQuotes(msg)
+        local n = table.getn(parts)
+        if n > 1 then
+            for i = 1, n do
+                if CleveRoids.DoTarget(parts[i]) then return true end
+            end
+            return false
+        end
+        local variants = CleveRoids.ExpandBracketGroups(parts[1])
+        if variants then
+            for i = 1, variants.n do
+                if CleveRoids.DoTarget(variants[i]) then return true end
+            end
+            return false
+        end
     end
 
     local action, conditionals = CleveRoids.GetParsedMsg(msg)
@@ -5288,6 +5363,7 @@ end
 function CleveRoids.RebuildMacros()
     CleveRoids.currentSequence = nil
     CleveRoids.ParsedMsg = {}
+    CleveRoids.ExpandedGroups = {}
     CleveRoids.Macros = {}
     CleveRoids.Actions = {}
     CleveRoids.Sequences = {}

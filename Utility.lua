@@ -614,6 +614,76 @@ function CleveRoids.splitStringIgnoringQuotes(str, separator)
     return result
 end
 
+-- Splits a macro clause into its leading run of [group] blocks and the action
+-- that follows, Blizzard-style: `[a][b] Spell` is two groups sharing one action.
+-- Returns prefix (the leading whitespace and ? ! ~ flag characters, kept so a
+-- variant re-parses exactly like the original), groups (array with .n, each
+-- entry including its brackets) and restStart (index of the action text; 1 when
+-- there are no groups). Quote-aware for " so a ] inside a quoted argument does
+-- not close a group; not nesting-aware. An unclosed [ ends the scan at that [,
+-- which is what the old greedy "%[(.+)%]" produced for such input.
+function CleveRoids.ScanBracketGroups(msg)
+    local groups = { n = 0 }
+    if not msg then return "", groups, 1 end
+
+    local len = string.len(msg)
+    local _, prefixEnd = string.find(msg, "^[%s%?!~]*")
+    local prefix = string.sub(msg, 1, prefixEnd)
+    local i = prefixEnd + 1
+
+    while i <= len and string.sub(msg, i, i) == "[" do
+        local close = nil
+        local inQuotes = false
+        for j = i + 1, len do
+            local c = string.sub(msg, j, j)
+            if c == "\"" then
+                inQuotes = not inQuotes
+            elseif c == "]" and not inQuotes then
+                close = j
+                break
+            end
+        end
+        if not close then break end
+
+        groups.n = groups.n + 1
+        groups[groups.n] = string.sub(msg, i, close)
+        local _, wsEnd = string.find(msg, "^%s*", close + 1)
+        i = wsEnd + 1
+    end
+
+    if groups.n == 0 then
+        return prefix, groups, 1
+    end
+    return prefix, groups, i
+end
+
+-- Single-group variants of a multi-group clause: `[a][b] Spell` becomes
+-- { "[a] Spell", "[b] Spell", n = 2 }. nil for anything with fewer than two
+-- groups so callers take their normal path without allocating. Memoised per
+-- clause string in CleveRoids.ExpandedGroups (false marks "nothing to expand").
+function CleveRoids.ExpandBracketGroups(msg)
+    if not msg or not string.find(msg, "%[") then return nil end
+
+    local cached = CleveRoids.ExpandedGroups[msg]
+    if cached ~= nil then
+        return cached or nil
+    end
+
+    local variants = nil
+    local prefix, groups, restStart = CleveRoids.ScanBracketGroups(msg)
+    if groups.n > 1 then
+        local rest = string.sub(msg, restStart)
+        if rest ~= "" then rest = " " .. rest end
+        variants = { n = groups.n }
+        for i = 1, groups.n do
+            variants[i] = prefix .. groups[i] .. rest
+        end
+    end
+
+    CleveRoids.ExpandedGroups[msg] = variants or false
+    return variants
+end
+
 function CleveRoids.Print(...)
     local c = "|cFF4477FFCleveR|r|cFFFFFFFFoid :: |r"
     local out = ""
