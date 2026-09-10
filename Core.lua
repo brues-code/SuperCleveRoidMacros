@@ -1636,37 +1636,6 @@ function CleveRoids.FixEmptyTargetSetTarget(conditionals, name, hook)
     return false
 end
 
--- Returns the name of the focus target or nil
-function CleveRoids.GetFocusName()
-    return UnitName('focus')
-end
-
--- Attempts to target the focus target.
--- returns: Whether or not it succeeded
-function CleveRoids.TryTargetFocus()
-    -- ClassicAPI native focus token: exact target switch, no name matching.
-    if UnitExists("focus") then
-        TargetUnit("focus")
-        return UnitExists("target")
-    end
-
-    -- Fallback: pfUI / name-based focus.
-    local name = CleveRoids.GetFocusName()
-
-    if not name then
-        return false
-    end
-
-    TargetByName(name, true)
-
-    if not UnitExists("target") or (string.lower(UnitName("target")) ~= name) then
-        -- The target switch failed (out of range, LoS, etc.)
-        return false
-    end
-
-    return true
-end
-
 -- Returns the resolved token, or nil when no focus is set so @focus clauses
 -- silently fall through to the next macro alternative (no warning spam).
 function CleveRoids.GetFocusUnitId()
@@ -2349,26 +2318,12 @@ function CleveRoids.TestAction(cmd, args)
         return
     end
 
-    if conditionals.target == "focus" then
+    -- ClassicAPI's native focus token. No focus set: the clause fails quietly,
+    -- exactly as the cast path does, so display and execution agree.
+    if conditionals.target == "focus" or conditionals.target == "focustarget" then
         local focusUnitId = CleveRoids.GetFocusUnitId()
-        if focusUnitId then
-            conditionals.target = focusUnitId
-        else
-            if not CleveRoids.GetFocusName() then
-                return
-            end
-            conditionals.target = "target"
-        end
-    elseif conditionals.target == "focustarget" then
-        local focusUnitId = CleveRoids.GetFocusUnitId()
-        if focusUnitId then
-            conditionals.target = focusUnitId .. "target"
-        else
-            if not CleveRoids.GetFocusName() then
-                return
-            end
-            conditionals.target = "targettarget"
-        end
+        if not focusUnitId then return end
+        conditionals.target = focusUnitId .. (conditionals.target == "focustarget" and "target" or "")
     end
 
     if conditionals.target == "mouseover" then
@@ -2499,26 +2454,17 @@ function CleveRoids.DoWithConditionals(msg, hook, fixEmptyTargetFunc, targetBefo
 
     -- CleveRoids.SetHelp(conditionals)
 
+    -- ClassicAPI's native focus token. No focus set: fail the clause quietly so
+    -- `[@focus,...] X; X` and `[@focus][] X` fall through like @mouseover does,
+    -- instead of announcing "Invalid target" on the way past.
     if conditionals.target == "focus" or conditionals.target == "focustarget" then
-        local isFocusTarget = conditionals.target == "focustarget"
         local focusUnitId = CleveRoids.GetFocusUnitId()
-
-        if focusUnitId then
-            -- Use the resolved pfUI unit token directly (avoids changing the player's target)
-            conditionals.target = focusUnitId .. (isFocusTarget and "target" or "")
-            needRetarget = false
-        else
-            -- return false if pfUI is installed and no focus is set instead of "invalid target"
-            if pfUI and pfUI.uf and (not pfUI.uf.focus or pfUI.uf.focus.label == nil or pfUI.uf.focus.label == "") then return false end
-            -- Fall back to targeting focus by name
-            if not CleveRoids.TryTargetFocus() then
-                UIErrorsFrame:AddMessage(SPELL_FAILED_BAD_TARGETS, 1.0, 0.0, 0.0, 1.0)
-                conditionals.target = origTarget
-                return false
-            end
-            conditionals.target = isFocusTarget and "targettarget" or "target"
-            needRetarget = true
+        if not focusUnitId then
+            conditionals.target = origTarget
+            return false
         end
+        conditionals.target = focusUnitId .. (conditionals.target == "focustarget" and "target" or "")
+        needRetarget = false
     end
 
     -- Resolve named raid marks (skull/cross/etc.) and mark1-mark8 to native mark# unit tokens

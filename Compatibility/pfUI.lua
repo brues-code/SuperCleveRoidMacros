@@ -22,19 +22,6 @@ function Extension.DLOG(msg)
     end
 end
 
-function Extension.FocusNameHook()
-    local hook = Extension.internal.memberHooks[CleveRoids]["GetFocusName"]
-    local target = hook.original()
-
-    if pfUI and pfUI.uf and pfUI.uf.focus and pfUI.uf.focus.unitname then
-        target = pfUI.uf.focus.unitname
-    end
-
-    --Extension.DLOG(target)
-
-    return target
-end
-
 -- Check if pfUI's macrotweak module is loaded
 function Extension.IsPfUIMacrotweakLoaded()
     if not pfUI then return false end
@@ -614,7 +601,6 @@ end
 
 function Extension.OnLoad()
     Extension.DLOG("Extension pfUI Loaded.")
-    Extension.HookMethod(CleveRoids, "GetFocusName", "FocusNameHook", true)
 
     -- Export extension for external access
     CleveRoids.Compatibility_pfUI = Extension
