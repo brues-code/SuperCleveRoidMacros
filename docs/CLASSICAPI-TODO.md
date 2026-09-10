@@ -25,10 +25,23 @@ API references are line numbers into `C:\Git\ClassicAPI\docs\API.md`.
   `applications` (stacks), `duration`.
 - **Unlocks:** `[dispellable]` / `[curse]` / `[magic]` target conditionals and
   spellID-based (rank/locale-proof) aura matching.
-- **Caveat:** `expirationTime` is only populated for `unit=="player"`; it's `0`
-  for target/focus (vanilla server limitation). Target debuff *timers* still
-  need the existing libdebuff tracking — only presence/stacks/school/spellId
-  are reliable cross-unit.
+- **~~Caveat: `expirationTime` is player-only~~ — NO LONGER TRUE.** This note said
+  target/focus `expirationTime` was always `0`, so debuff *timers* had to stay on
+  libdebuff. ClassicAPI has since added the `Aura::Source` cache: for a non-player
+  unit `expirationTime` is reconstructed from the observed `SMSG_SPELL_GO`, and
+  `duration` is the **caster-modified** value (talent extensions like Improved
+  Shadow Word: Pain included). It also handles combo-point finisher scaling
+  automatically (Rupture at 4 CP reads 14s, no registration) and ships Carnage's
+  roll-gated Rip/Rake refresh in the DLL (`src/turtle/Carnage.cpp`, exposed as
+  `RegisterAuraDurationModifierByTrigger`).
+- **Real remaining caveats** (all best-effort, from `docs/API.md`):
+  - Only auras observed *after login* carry caster/timing; older ones report
+    `expirationTime` 0 and `sourceUnit` nil.
+  - Max-stack refresh is a blind spot: re-applying at max stacks (Shadow Weaving
+    5→5) emits no client-visible change, so the entry elapses and evicts.
+  - Out-of-range group members are spell-ID only, with `applications` always 1.
+- **Consequence:** most of libdebuff is now redundant — see
+  "libdebuff retirement" below.
 
 - **DONE (slice 1 — dispel-type conditionals):** added `ClassicAPI.lua`
   detection module (`CleveRoids.ClassicAPI`, mirrors NampowerAPI's
@@ -150,11 +163,13 @@ Findings from the full Conditionals.lua audit. These look like ClassicAPI
 candidates but are **worse** than the current implementation — recorded so we
 don't re-investigate.
 
-- **Auras / `ValidateAura`** — `C_UnitAuras.expirationTime` is **player-only**
-  (`0` for every other unit). It cannot replace the nampower `GetUnitField`
-  batch read or the remote-duration tracking (libdebuff / overflow slots). The
-  dispel-*type* path already uses `C_UnitAuras` (that's the one thing it's good
-  for); aura *timing/stacks* on non-player units must stay on nampower/libdebuff.
+- ~~**Auras / `ValidateAura`** — `C_UnitAuras.expirationTime` is player-only~~ —
+  **STALE, do not trust this entry.** It was written before the `Aura::Source`
+  cache landed. Non-player `expirationTime`/`duration` now work (caster-modified,
+  talent extensions included), so this is no longer a reason to keep libdebuff's
+  remote-duration tracking. See Tier 1 §1 and "libdebuff retirement" for the
+  current picture and the real caveats. The nampower `GetUnitField` batch read is
+  a separate question and has not been re-examined.
 - **`GetCurrentShapeshiftIndex` form loop / `[stance]`·`[form]`** —
   `GetShapeshiftFormID()` returns the **DBC form id** (Cat=1, Bear=5,
   Shadowform=28…), NOT the 1-based **bar index** these conditionals compare
@@ -182,6 +197,39 @@ don't re-investigate.
 - Focus: `GetFocusUnitId`/`TryTargetFocus` use the native `"focus"` token;
   added `[focus]`/`[nofocus]`. `/focus` is provided by ClassicAPI's companion
   addon.
+
+## libdebuff retirement
+
+libdebuff exists because vanilla cannot report debuff durations on units other
+than the player. ClassicAPI's `Aura::Source` cache now does exactly that, so most
+of the library is redundant. This is a staged replacement, not a delete: measure
+first, then remove per group.
+
+Current footprint: 28 public `lib:` methods, ~726 internal references in
+`Utility.lua`, consumers in 8 files (`Conditionals.lua` 45, `Compatibility/pfUI.lua`
+39, `Core.lua` 9). Note pfUI did **not** delete its own libdebuff — v9.0.25 still
+ships ~1695 lines of it, re-based on `C_UnitAuras.GetAuraDataByIndex` /
+`GetAuraDataBySpellName`. "Re-base on C_UnitAuras", not "remove", is the precedent.
+
+**Group A — replaceable by `C_UnitAuras` (do these first):**
+`GetDuration`, `GetDebuffCaster`, `IsOurDebuff`, `UnitBuff`/`UnitDebuff`,
+`FindPlayerDebuff`/`FindPlayerBuff`, `GetAllDebuffsOnTarget`, `GetCachedIcon`,
+`ApplyCarnageRefresh`, and the Dark Harvest trio (`ApplyDarkHarvestStart`/`End`,
+`GetDarkHarvestReduction`, `GetTimeRemainingWithDarkHarvest`) — ClassicAPI ships
+Carnage refresh and Dark Harvest tick compression in the DLL.
+
+**Group B — no `C_UnitAuras` equivalent, keep:**
+`ShouldApplyDebuffRank`, `DidSpellFail`, `WasSpellReflected`, `DidTargetEvade`,
+`ProcessMissReason`, `IsPersonalDebuff`, `GetSpellRank`/`GetSpellBaseName`,
+`HasPendingCast`. These are miss/rank/learning logic, not aura state.
+
+**Gate before removing Group A:** confirm parity in-game on one spell where
+ClassicAPI does the hard part — Rip under Carnage. Compare
+`CleveRoids.libdebuff:GetDuration(spellID)` against
+`C_UnitAuras.GetUnitAuraBySpellID(unit, spellID).duration` and the derived
+remaining (`expirationTime - GetTime()`), on a target you have debuffed. If those
+agree across a Carnage proc, Group A can go. Watch the documented best-effort
+gaps: an aura cast before you logged in, and refresh-at-max-stacks.
 
 ## Marginal / optional follow-ups
 

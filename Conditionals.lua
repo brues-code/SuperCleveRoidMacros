@@ -3470,6 +3470,51 @@ function CleveRoids.ClearSpellNameCaches()
     _baseNameCacheSize = 0
 end
 
+-- Resolve one aura on `unit` straight from ClassicAPI. This is the source of truth
+-- for aura state: C_UnitAuras reads the unit's own descriptor, and its Aura::Source
+-- cache reconstructs duration/expirationTime for ANY unit from the observed
+-- SMSG_SPELL_GO -- caster-modified, so talent extensions and combo-point finisher
+-- scaling are already applied, and Carnage's roll-gated Rip/Rake refresh is handled
+-- in the DLL rather than mirrored here.
+--
+-- Matching stays ours: by spellID when the conditional gave a number, else by
+-- lowercased name (C_UnitAuras' own by-name lookup is case-sensitive and exact,
+-- which would miss [debuff:thunder_clap]).
+--
+-- Returns found, stacks, remaining, spellId. `remaining` is -1 for an aura with no
+-- duration (permanent), nil when ClassicAPI has no timing for it -- an aura cast
+-- before we logged in, or one refreshed at max stacks -- and seconds otherwise.
+-- Presence and stacks are always reliable; only timing is best-effort.
+local function ResolveUnitAuraViaClassicAPI(unit, searchID, searchName, isbuff)
+    local filter = isbuff and "HELPFUL" or "HARMFUL"
+    local i = 1
+    while i <= 48 do
+        local name, _, count, _, duration, expirationTime, _, _, _, spellId =
+            C_UnitAuras.UnitAura(unit, i, filter)
+        if not name then break end
+
+        local hit
+        if searchID then
+            hit = (spellId == searchID)
+        elseif searchName then
+            hit = (_string_lower(name) == searchName)
+        end
+
+        if hit then
+            local remaining
+            if expirationTime and expirationTime > 0 then
+                remaining = expirationTime - GetTime()
+                if remaining < 0 then remaining = 0 end
+            elseif duration == 0 then
+                remaining = -1  -- no duration: permanent aura
+            end
+            return true, count or 0, remaining, spellId
+        end
+        i = i + 1
+    end
+    return false
+end
+
 function CleveRoids.ValidateAura(unit, args, isbuff)
     if not args or not UnitExists(unit) then return false end
 
@@ -3803,73 +3848,31 @@ function CleveRoids.ValidateAura(unit, args, isbuff)
     local ops = CleveRoids.operators
     local cmp = CleveRoids.comparators
 
-    -- For non-player units with time comparisons, try to get time from tracking systems
+    -- Non-player aura timing, straight from ClassicAPI. This replaces the old
+    -- lib.allBuffAuras lookup and the AllCasterAuraTracking / FindAllCasterAuraByName
+    -- fallback beneath it: both existed only because vanilla cannot report a timer for
+    -- an aura on another unit, which the Aura::Source cache now does. It also drops
+    -- the libdebuff UnitBuff timeleft bug those comments worked around.
     local nonPlayerAuraTimeRemaining = nil
-    if not isPlayer and args.name then
-        -- NOTE: libdebuff's UnitBuff has a bug where timeleft returns incorrect values
-        -- (showing ~1000s instead of actual remaining time). Skip it for buff time checks
-        -- and rely on all-caster tracking from AURA_CAST events instead.
-
-        -- Fast path: Check lib.allBuffAuras (spellName-indexed, O(1) lookup)
-        -- More efficient than FindAllCasterAuraByName which does ID→name translation
-        if nonPlayerAuraTimeRemaining == nil and isbuff then
-            local lib = type(CleveRoids.libdebuff) == "table" and CleveRoids.libdebuff or nil
-            if lib and lib.allBuffAuras then
-                local targetGuid = CleveRoids.GetGUID(unit)
-                if targetGuid then
-                    local buffEntries = lib.allBuffAuras[targetGuid]
-                    if buffEntries then
-                        -- Try exact name match first
-                        local casters = buffEntries[args.name]
-                        -- Try lowercase match if exact didn't work
-                        if not casters and searchName then
-                            for bName, c in pairs(buffEntries) do
-                                if _string_lower(bName) == searchName then
-                                    casters = c
-                                    break
-                                end
-                            end
-                        end
-                        if casters then
-                            for _, cData in pairs(casters) do
-                                local elapsed = GetTime() - (cData.startTime or 0)
-                                local rem = cData.duration > 0 and (cData.duration - elapsed) or -1
-                                if rem == nil or rem > 0 or cData.duration <= 0 then
-                                    nonPlayerAuraTimeRemaining = rem
-                                    if not found then
-                                        found = true
-                                        stacks = 0
-                                    end
-                                    break
-                                end
-                            end
-                        end
-                    end
-                end
+    if not isPlayer and (searchID or searchName) then
+        local capFound, capStacks, capRemaining =
+            ResolveUnitAuraViaClassicAPI(unit, searchID, searchName, isbuff)
+        if capFound then
+            if not found then
+                found = true
+                stacks = capStacks or 0
             end
+            -- Left nil when ClassicAPI has no timing (aura predates login, or a
+            -- max-stack refresh); the caller then falls back to its found-and-0 default.
+            nonPlayerAuraTimeRemaining = capRemaining
         end
 
-        -- Second try: All-caster tracking from AURA_CAST events (works for any caster)
-        -- Only use if libdebuff didn't find it (libdebuff has more accurate timing for player casts)
-        if nonPlayerAuraTimeRemaining == nil then
-            local targetGuid = CleveRoids.GetGUID(unit)
-            if targetGuid then
-                local remaining, casterGuid = CleveRoids.FindAllCasterAuraByName(targetGuid, args.name)
-
-                -- Debug output when enabled
-                if CleveRoids.debug then
-                    local hasData = CleveRoids.AllCasterAuraTracking[targetGuid] ~= nil
-                    DEFAULT_CHAT_FRAME:AddMessage(string.format(
-                        "|cffff9900[AuraLookup]|r %s on GUID %s: hasData=%s, remaining=%s",
-                        tostring(args.name), string.sub(tostring(targetGuid), 1, 16),
-                        tostring(hasData), tostring(remaining)
-                    ))
-                end
-
-                if remaining then
-                    nonPlayerAuraTimeRemaining = remaining
-                end
-            end
+        if CleveRoids.debug then
+            DEFAULT_CHAT_FRAME:AddMessage(string.format(
+                "|cffff9900[AuraLookup]|r %s on %s: found=%s, stacks=%s, remaining=%s",
+                tostring(args.name), tostring(unit), tostring(capFound),
+                tostring(capStacks), tostring(capRemaining)
+            ))
         end
     end
 
