@@ -46,7 +46,7 @@ See the **[Wiki](https://github.com/brues-code/SuperCleveRoidMacros/wiki)** for 
 
 - **[Quick Start](https://github.com/brues-code/SuperCleveRoidMacros/wiki/Quick-Start)** — Syntax, multi-value logic, comparisons, special prefixes
 - **[Slash Commands](https://github.com/brues-code/SuperCleveRoidMacros/wiki/Slash-Commands)** — All 35+ commands, priority macros, UnitXP scanning
-- **[Conditionals](https://github.com/brues-code/SuperCleveRoidMacros/wiki/Conditionals)** — 70+ conditionals (player & target), extended unit tokens, multiscan
+- **[Conditionals](https://github.com/brues-code/SuperCleveRoidMacros/wiki/Conditionals)** — 150+ conditionals (player & target), short aliases, extended unit tokens, multiscan
 - **[Reference Tables](https://github.com/brues-code/SuperCleveRoidMacros/wiki/Reference-Tables)** — CC types, damage schools, stat types, swing types
 - **[Features](https://github.com/brues-code/SuperCleveRoidMacros/wiki/Features)** — Debuff timers, combo tracking, talent modifiers, TWoW mechanics
 - **[Overflow Buff Frame](https://github.com/brues-code/SuperCleveRoidMacros/wiki/Overflow-Buff-Frame)** — Hidden buff display for 32+ buffs
