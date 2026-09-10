@@ -779,14 +779,6 @@ CleveRoids.DownrankBlocked = CleveRoids.DownrankBlocked or {}
 function CleveRoids.GetAuraTrackingData(targetGuid)
     if not targetGuid then return nil, false end
 
-    -- pfUI path: read directly from pfUI's table (has downrank protection built-in)
-    if CleveRoids.hasPfUI76 and pfUI and pfUI.libdebuff_all_auras then
-        local data = pfUI.libdebuff_all_auras[targetGuid]
-        if data then return data, true end
-        -- Fall through: our table may have test entries even when pfUI is active
-    end
-
-    -- Standalone path (or pfUI had no data for this GUID)
     local data = CleveRoids.AllCasterAuraTracking[targetGuid]
     if data then return data, false end
     return nil, false
@@ -995,7 +987,7 @@ local function OnAutoAttackOther(attackerGuid, targetGuid, totalDamage, hitInfo,
                             end
 
                             -- Sync to pfUI if loaded (pre-7.6 only)
-                            if not CleveRoids.hasPfUI76 and pfUI and pfUI.api and pfUI.api.libdebuff then
+                            if pfUI and pfUI.api and pfUI.api.libdebuff then
                                 local spellName = C_Spell.GetSpellName(spellID) or nil
                                 local baseName = CleveRoids.StripRank(spellName)
                                 local targetName = (lib.guidToName and lib.guidToName[normalizedTarget]) or UnitName("target")
@@ -1175,7 +1167,7 @@ local function OnAuraCastOther(spellId, casterGuid, targetGuid, effect, effectAu
     -- full downrank protection — we read from that table via GetAuraTrackingData().
     if spellId and durationMs and durationMs > 0 then
         local spellName = C_Spell.GetSpellName(spellId)
-        if spellName and not CleveRoids.hasPfUI76 then
+        if spellName then
             CleveRoids._allCasterAuraDirty = true
             if not CleveRoids.AllCasterAuraTracking[targetGuid] then
                 CleveRoids.AllCasterAuraTracking[targetGuid] = {}
@@ -1378,7 +1370,7 @@ autoAttackFrame:SetScript("OnEvent", function()
         if spellId and spellId > 0 and durationMs and durationMs > 0 then
             local playerGUID = CleveRoids.GetGUID("player")
             local durSpellName = C_Spell.GetSpellName(spellId)
-            if playerGUID and durSpellName and not CleveRoids.hasPfUI76 then
+            if playerGUID and durSpellName then
                 CleveRoids._allCasterAuraDirty = true
                 if not CleveRoids.AllCasterAuraTracking[playerGUID] then
                     CleveRoids.AllCasterAuraTracking[playerGUID] = {}

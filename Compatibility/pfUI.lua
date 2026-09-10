@@ -123,16 +123,6 @@ function Extension.HookPfUILibdebuff()
 
     local pflib = pfUI.api.libdebuff
 
-    -- Check if pfUI 7.6+ with GetUnitField-based libdebuff is active
-    -- If so, pfUI handles combo durations and Carnage internally - we only override on mismatch
-    local hasPfUI76 = CleveRoids.hasPfUI76
-
-    -- pfUI 7.6+ handles all durations internally - no hooks needed
-    if hasPfUI76 then
-        Extension.DLOG("Skipped all libdebuff hooks (pfUI 7.6+ handles internally)")
-        return false
-    end
-
     -- Hook GetDuration if it exists
     -- pfUI's GetDuration signature: function(effect, rank) where effect is spell NAME
     if pflib.GetDuration and not Extension.pfLibDebuffHooked then
@@ -341,83 +331,6 @@ function Extension.HookPfUILibdebuff()
     end
 
     return Extension.pfLibDebuffHooked or Extension.pfLibAddEffectHooked or Extension.pfLibUnitDebuffHooked or Extension.pfLibUnitOwnDebuffHooked
-end
-
--- Synchronize combo durations to pfUI's libdebuff objects
--- NOTE: pfUI 7.6+ handles combo durations internally - skip sync entirely
-function Extension.SyncComboDurationToPfUI(guid, spellID, duration)
-    if not pfUI or not pfUI.api or not pfUI.api.libdebuff then
-        return
-    end
-
-    -- pfUI 7.6+ handles all durations internally
-    if CleveRoids.hasPfUI76 then
-        return
-    end
-
-    -- Get unit name from GUID
-    local unitName = nil
-    local unitLevel = 0
-
-    -- Check if this is the current target
-    local targetGUID = CleveRoids.GetGUID("target")
-    if targetGUID == guid then
-        unitName = UnitName("target")
-        unitLevel = UnitLevel("target") or 0
-    end
-
-    -- If we couldn't find the unit, use GUID to name mapping from libdebuff
-    if not unitName and CleveRoids.libdebuff and CleveRoids.libdebuff.guidToName then
-        unitName = CleveRoids.libdebuff.guidToName[guid]
-        -- Default to level 0 if we don't have the unit targeted
-        unitLevel = 0
-    end
-
-    if not unitName then
-        if CleveRoids.debug then
-            DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[pfUI Sync]|r Could not find unit name for GUID")
-        end
-        return
-    end
-
-    -- Get spell name from spell ID
-    local spellName = C_Spell.GetSpellName(spellID)
-    if not spellName then
-        if CleveRoids.debug then
-            DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[pfUI Sync]|r Could not find spell name for ID " .. spellID)
-        end
-        return
-    end
-
-    -- Remove rank from spell name to match pfUI's format
-    local effectName = CleveRoids.StripRank(spellName)
-
-    -- Update pfUI's stored debuff duration
-    local pflib = pfUI.api.libdebuff
-    if pflib.objects and pflib.objects[unitName] then
-        -- Try both the specific level and level 0 (fallback)
-        for _, level in ipairs({unitLevel, 0}) do
-            if pflib.objects[unitName][level] and pflib.objects[unitName][level][effectName] then
-                local old_duration = pflib.objects[unitName][level][effectName].duration
-                pflib.objects[unitName][level][effectName].duration = duration
-
-                if CleveRoids.debug then
-                    DEFAULT_CHAT_FRAME:AddMessage(
-                        string.format("|cff00ffaa[pfUI Sync]|r Updated %s on %s (L%d): %ds -> %ds",
-                            effectName, unitName, level, old_duration or 0, duration)
-                    )
-                end
-                return
-            end
-        end
-    end
-
-    if CleveRoids.debug then
-        DEFAULT_CHAT_FRAME:AddMessage(
-            string.format("|cffaaaa00[pfUI Sync]|r Effect not found in pfUI storage: %s on %s",
-                effectName, unitName)
-        )
-    end
 end
 
 -- Register action event handler for pfUI button updates
@@ -643,12 +556,6 @@ function Extension.SetupPfUIEventHooks(lib)
         ev:UnregisterEvent("BUFF_REMOVED_SELF")
         ev:UnregisterEvent("BUFF_REMOVED_OTHER")
 
-        -- pfUI 7.6+ also handles cast tracking internally
-        if lib.hasPfUI76 then
-            ev:UnregisterEvent("SPELL_START_OTHER")
-            ev:UnregisterEvent("SPELL_FAILED_OTHER")
-        end
-
         -- Keep registered: SPELL_START_SELF (channel duration capture before early return),
         -- UNIT_DIED (AllCasterAuraTracking + OverflowBuff cleanup), UNIT_CASTEVENT (SuperWoW),
         -- PLAYER_TARGET_CHANGED, UNIT_AURA (SeedUnit)
@@ -751,7 +658,7 @@ end
 
 function Extension.OnPlayerLogin()
     -- Ensure lib.objects is linked correctly (InitPfUIIntegration is idempotent).
-    if pfUI and not CleveRoids.hasPfUI76 then
+    if pfUI then
         local lib = CleveRoids.libdebuff
         if lib and lib.InitPfUIIntegration then
             lib:InitPfUIIntegration()
@@ -783,9 +690,6 @@ function Extension.OnPlayerLogin()
     -- Print startup status only if pfUI global exists and compatibility was set up
     if Extension.pfUILoaded and pfUI then
         local statusMsg = "|cff00ff00[SCRM]|r pfUI compatibility loaded"
-        if CleveRoids.hasPfUI76 then
-            statusMsg = statusMsg .. " (7.6+ GUID cast tracking)"
-        end
         -- statusMsg = statusMsg .. ". Use /pfuicd for debug."
         DEFAULT_CHAT_FRAME:AddMessage(statusMsg)
         if not Extension.actionHandlerRegistered then

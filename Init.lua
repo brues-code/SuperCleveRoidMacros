@@ -57,12 +57,10 @@ CleveRoids.unknownTexture = "Interface\\Icons\\INV_Misc_QuestionMark"
 
 CleveRoids.spell_tracking = {}
 
--- GUID-based cast tracking (populated by pfUI 7.6 or standalone SPELL_START events)
--- Format: [casterGuid] = {spellID, spellName, icon, startTime, duration, endTime}
+-- GUID-based cast tracking, populated from our own SPELL_START handlers and pruned
+-- in OnUpdate. Format: [casterGuid] = {spellID, spellName, icon, startTime, duration,
+-- endTime}
 CleveRoids.castTracking = {}
-
--- pfUI 7.6+ with Nampower 2.31.0+ detected (GUID-based cast tracking available)
-CleveRoids.hasPfUI76 = false
 
 -- Combo point tracking (initialized early for /cast hook)
 CleveRoids.lastComboPoints = 0

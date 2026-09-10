@@ -4205,18 +4205,30 @@ function CleveRoids.OnUpdate(self)
         guid, cast = nextGuid, nextGuid and spell_tracking[nextGuid]
     end
 
-    -- Clean stale castTracking entries (standalone mode only, pfUI 7.6 manages its own)
-    if not CR.hasPfUI76 then
-        local ct = CR.castTracking
-        local ctGuid, ctEntry = next(ct)
-        while ctGuid do
-            local nextCtGuid = next(ct, ctGuid)
-            if ctEntry.endTime and time > ctEntry.endTime + 0.5 then
+    -- Clean stale castTracking entries. Instant casts are stored with endTime = nil
+    -- (SPELL_START sets it only when the cast has a duration), so an endTime-only
+    -- check could never evict them and every instant cast by every unit in range
+    -- accumulated forever. Fall back to startTime for those: the matching SPELL_GO
+    -- lands within a frame or two, so anything still here after the grace period is
+    -- an entry whose completion we never observed.
+    local ct = CR.castTracking
+    local ctGuid, ctEntry = next(ct)
+    while ctGuid do
+        local nextCtGuid = next(ct, ctGuid)
+        if ctEntry then
+            if ctEntry.endTime then
+                if time > ctEntry.endTime + 0.5 then
+                    ct[ctGuid] = nil
+                end
+            elseif ctEntry.startTime and time > ctEntry.startTime + 1 then
+                -- No endTime: an instant cast. Its SPELL_GO lands within a frame or
+                -- two, so a second is generous, and anything older is an entry whose
+                -- completion we never saw.
                 ct[ctGuid] = nil
             end
-            ctGuid = nextCtGuid
-            ctEntry = nextCtGuid and ct[nextCtGuid]
         end
+        ctGuid = nextCtGuid
+        ctEntry = nextCtGuid and ct[nextCtGuid]
     end
 
     -- PERFORMANCE OPTIMIZATION: Run memory cleanup less frequently (every 5 seconds instead of every frame)
@@ -4607,7 +4619,7 @@ function CleveRoids.Frame:UNIT_CASTEVENT(caster,target,action,spell_id,cast_time
                                 end
 
                                 -- Also sync to pfUI if it's loaded (pre-7.6 only)
-                                if not CleveRoids.hasPfUI76 and pfUI and pfUI.api and pfUI.api.libdebuff then
+                                if pfUI and pfUI.api and pfUI.api.libdebuff then
                                     local targetName = (lib.guidToName and lib.guidToName[normalizedTarget]) or UnitName("target")
                                     local targetLevel = UnitLevel("target") or 0
 
@@ -6462,12 +6474,7 @@ SlashCmdList["CLEVEROID"] = function(msg)
         CleveRoids.Print("|cffffaa00Tracked Auras:|r")
         local trackingCount = 0
         local now = GetTime()
-        -- Determine which backing table to iterate
-        local isPfUI = CleveRoids.hasPfUI76 and pfUI and pfUI.libdebuff_all_auras
-        local backingTable = isPfUI and pfUI.libdebuff_all_auras or CleveRoids.AllCasterAuraTracking or {}
-        if isPfUI then
-            CleveRoids.Print("  (reading from pfUI.libdebuff_all_auras)")
-        end
+        local backingTable = CleveRoids.AllCasterAuraTracking or {}
         for targetGuid, spellNames in pairs(backingTable) do
             local unitName = nil
             -- Try to find unit name for this GUID (use pcall to handle invalid units like "focus")
