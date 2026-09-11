@@ -18,6 +18,6 @@ jobs:
           fetch-depth: 0
 
       - name: Package and release to GitHub
-        uses: BigWigsMods/packager@v2
+        uses: brues-code/packager@vCAPI
         env:
           GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}

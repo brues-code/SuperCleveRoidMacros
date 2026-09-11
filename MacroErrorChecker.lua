@@ -561,7 +561,6 @@ end
 local ERROR_TYPES = {
     INVALID_CONDITIONAL = "Invalid conditional",
     MISMATCHED_BRACKETS = "Mismatched brackets",
-    EMPTY_CONDITIONAL = "Empty conditional block",
     INVALID_OPERATOR = "Invalid operator",
     MISSING_ARGUMENT = "Missing argument",
     INVALID_COMMAND = "Unknown command",
@@ -849,16 +848,19 @@ local function validateLine(line, lineNum)
                 actionPart = "/" .. actionPart  -- Add leading slash if missing after split
             end
 
-            -- Parse conditionals if present - use non-greedy match
-            local condStart = safeStringFind(actionPart, "%[")
+            -- Parse the leading run of [conditional] blocks, if any. `[a][b] X` is
+            -- Blizzard-style OR chaining: every block is validated, and the action
+            -- is what follows the last one.
+            local blocks = {}
             local condEnd = nil
-            local conditionBlock = nil
+            local condStart = safeStringFind(actionPart, "%[")
+            local len = safeStringLen(actionPart)
 
-            if condStart then
+            while condStart do
                 -- Find matching closing bracket
                 local depth = 0
                 local inQuotes = false
-                local len = safeStringLen(actionPart)
+                local closePos = nil
 
                 for i = condStart, len do
                     local char = safeStringSub(actionPart, i, i)
@@ -872,23 +874,30 @@ local function validateLine(line, lineNum)
                         elseif char == "]" then
                             depth = depth - 1
                             if depth == 0 then
-                                condEnd = i
-                                conditionBlock = safeStringSub(actionPart, condStart + 1, i - 1)
+                                closePos = i
                                 break
                             end
                         end
                     end
                 end
+                if not closePos then break end
+
+                table.insert(blocks, safeStringSub(actionPart, condStart + 1, closePos - 1))
+                condEnd = closePos
+
+                -- Another block directly after this one (whitespace allowed)?
+                local _, wsEnd = safeStringFind(actionPart, "^%s*", closePos + 1)
+                local nextPos = (wsEnd or closePos) + 1
+                if safeStringSub(actionPart, nextPos, nextPos) == "[" then
+                    condStart = nextPos
+                else
+                    condStart = nil
+                end
             end
 
-            if conditionBlock then
-                if safeTrim(conditionBlock) == "" then
-                    table.insert(localErrors, {
-                        type = ERROR_TYPES.EMPTY_CONDITIONAL,
-                        line = lineNum,
-                        message = "Empty conditional block []"
-                    })
-                else
+            for _, conditionBlock in ipairs(blocks) do
+                -- `[]` is the always-true group; nothing to validate
+                if safeTrim(conditionBlock) ~= "" then
                     -- Check for invalid @ target syntax
                     local _, _, target = safeStringFind(conditionBlock, "(@[^%s,]+)")
                     if target and not safeStringFind(target, "^@[a-z]+%d*") then
@@ -936,7 +945,9 @@ local function validateLine(line, lineNum)
                         end
                     end
                 end
+            end
 
+            if condEnd then
                 -- Check for action after conditionals
                 -- Extract the command from this action part
                 local _, _, cmdFromAction = safeStringFind(actionPart, "^(/[a-z]+%d*)")

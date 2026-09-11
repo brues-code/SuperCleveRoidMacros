@@ -423,7 +423,9 @@ function CleveRoids.IndexActionSlot(slot)
             end
         end
     end
-    CleveRoids.TestForActiveAction(CleveRoids.GetAction(slot))
+    local actions = CleveRoids.GetAction(slot)
+    CleveRoids.TestForActiveAction(actions)
+    CleveRoids.PublishDisplay(actions)
     CleveRoids.SendEventForAction(slot, "ACTIONBAR_SLOT_CHANGED", slot)
 end
 

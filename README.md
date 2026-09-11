@@ -27,6 +27,7 @@ Enhanced macro addon for World of Warcraft 1.12.1 (Vanilla/Turtle WoW) with dyna
 - **Arguments** use colon: `[mod:alt]`, `[hp:>50]`
 - **Negation** with `no` prefix: `[nobuff]`, `[nomod:alt]`
 - **Target** with `@`: `[@mouseover,help]`, `[@party1,hp:<50]`
+- **Fallback groups**, Blizzard-style: `[@mouseover,help][@focus,help][] Rejuvenation` tries each `[...]` in order and the first that passes casts the shared spell; `[]` always passes. Mixes freely with `;`
 - **Spell names** with spaces: `"Mark of the Wild"` or `Mark_of_the_Wild`
 
 **Multi-value logic:**

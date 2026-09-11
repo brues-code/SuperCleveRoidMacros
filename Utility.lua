@@ -614,6 +614,76 @@ function CleveRoids.splitStringIgnoringQuotes(str, separator)
     return result
 end
 
+-- Splits a macro clause into its leading run of [group] blocks and the action
+-- that follows, Blizzard-style: `[a][b] Spell` is two groups sharing one action.
+-- Returns prefix (the leading whitespace and ? ! ~ flag characters, kept so a
+-- variant re-parses exactly like the original), groups (array with .n, each
+-- entry including its brackets) and restStart (index of the action text; 1 when
+-- there are no groups). Quote-aware for " so a ] inside a quoted argument does
+-- not close a group; not nesting-aware. An unclosed [ ends the scan at that [,
+-- which is what the old greedy "%[(.+)%]" produced for such input.
+function CleveRoids.ScanBracketGroups(msg)
+    local groups = { n = 0 }
+    if not msg then return "", groups, 1 end
+
+    local len = string.len(msg)
+    local _, prefixEnd = string.find(msg, "^[%s%?!~]*")
+    local prefix = string.sub(msg, 1, prefixEnd)
+    local i = prefixEnd + 1
+
+    while i <= len and string.sub(msg, i, i) == "[" do
+        local close = nil
+        local inQuotes = false
+        for j = i + 1, len do
+            local c = string.sub(msg, j, j)
+            if c == "\"" then
+                inQuotes = not inQuotes
+            elseif c == "]" and not inQuotes then
+                close = j
+                break
+            end
+        end
+        if not close then break end
+
+        groups.n = groups.n + 1
+        groups[groups.n] = string.sub(msg, i, close)
+        local _, wsEnd = string.find(msg, "^%s*", close + 1)
+        i = wsEnd + 1
+    end
+
+    if groups.n == 0 then
+        return prefix, groups, 1
+    end
+    return prefix, groups, i
+end
+
+-- Single-group variants of a multi-group clause: `[a][b] Spell` becomes
+-- { "[a] Spell", "[b] Spell", n = 2 }. nil for anything with fewer than two
+-- groups so callers take their normal path without allocating. Memoised per
+-- clause string in CleveRoids.ExpandedGroups (false marks "nothing to expand").
+function CleveRoids.ExpandBracketGroups(msg)
+    if not msg or not string.find(msg, "%[") then return nil end
+
+    local cached = CleveRoids.ExpandedGroups[msg]
+    if cached ~= nil then
+        return cached or nil
+    end
+
+    local variants = nil
+    local prefix, groups, restStart = CleveRoids.ScanBracketGroups(msg)
+    if groups.n > 1 then
+        local rest = string.sub(msg, restStart)
+        if rest ~= "" then rest = " " .. rest end
+        variants = { n = groups.n }
+        for i = 1, groups.n do
+            variants[i] = prefix .. groups[i] .. rest
+        end
+    end
+
+    CleveRoids.ExpandedGroups[msg] = variants or false
+    return variants
+end
+
 function CleveRoids.Print(...)
     local c = "|cFF4477FFCleveR|r|cFFFFFFFFoid :: |r"
     local out = ""
@@ -773,17 +843,10 @@ lib.iconCache = lib.iconCache or {}          -- [spellId] = texture (shared with
 -- Buff tracking tables (parallel to debuff tables, standalone Nampower mode only)
 -- Buff tables are NOT linked to pfUI — pfUI has no public buff tracking tables.
 -- They remain empty when hasPfUIEnhanced=true since all buff event handlers are gated by it.
-lib.ownBuffCasts = lib.ownBuffCasts or {}      -- [targetGUID][buffName] = {startTime, duration, spellId, casterGuid}
-                                               -- Player's own buff casts on self or others (AURA_CAST events)
-lib.allBuffAuras = lib.allBuffAuras or {}      -- [targetGUID][buffName][casterGuid] = {startTime, duration, rank}
-                                               -- All buffs from all casters on any unit (confirmed by BUFF_ADDED events)
-lib.pendingBuffCasts = lib.pendingBuffCasts or {} -- [targetGUID][spellId] = {casterGuid, duration, spellName, time}
-                                               -- Temp storage from AURA_CAST_ON_OTHER, consumed by BUFF_ADDED_OTHER
 
 -- Flag indicating whether enhanced pfUI tracking is available
 lib.hasPfUIEnhanced = false
 lib.hasStandaloneNampower = false
-lib.hasPfUI76 = false
 
 -- Check if pfUI v7.4.3+ with enhanced libdebuff is available
 function lib:HasEnhancedPfUILibdebuff()
@@ -844,33 +907,6 @@ function lib:HasEnhancedPfUILibdebuff()
   return true
 end
 
--- Check if pfUI v7.6+ with enhanced cast tracking is available
--- pfUI 7.6+ requires Nampower v2.37.0+ and exposes additional tables
-function lib:HasPfUI76()
-  if not pfUI then return false end
-
-  local v = pfUI.version
-  if not v or not v.major then return false end
-
-  -- Version comparison: 7.6+
-  if v.major < 7 then return false end
-  if v.major == 7 and (v.minor or 0) < 6 then return false end
-
-  -- Verify Nampower v2.40.0+ (pfUI 7.6+ hard requirement, bumped from 2.38 on 2026-02-21;
-  -- v2.40.0 fixes packed GUID parsing that caused target GUIDs to appear as 0x000000000
-  -- for some players, which directly affects cast tracking reliability)
-  if not GetNampowerVersion then return false end
-  local npMajor, npMinor, npPatch = GetNampowerVersion()
-  npPatch = npPatch or 0
-  if npMajor < 2 then return false end
-  if npMajor == 2 and npMinor < 40 then return false end
-
-  -- Verify the new tables exist
-  if not pfUI.libdebuff_casts then return false end
-  if not pfUI.libdebuff_objects_guid then return false end
-
-  return true
-end
 
 -- Icon caching helper: DBC lookup via GetSpellRecField
 function lib:GetCachedIcon(spellId)
@@ -904,19 +940,6 @@ function lib:InitPfUIIntegration()
     lib.hasPfUIEnhanced = true
     lib.hasStandaloneNampower = false
 
-    -- Check for pfUI 7.6+ additional tables (cast tracking, GUID objects, icon cache)
-    if lib:HasPfUI76() then
-      CleveRoids.hasPfUI76 = true
-      lib.hasPfUI76 = true
-      CleveRoids.castTracking = pfUI.libdebuff_casts
-      lib.iconCache = pfUI.libdebuff_icon_cache or lib.iconCache
-      -- lib.objects is already set by pfUI's CleveRoids.libdebuff = libdebuff override
-      -- but explicitly sync if pfUI.libdebuff_objects_guid is available
-      if pfUI.libdebuff_objects_guid then
-        lib.objects = pfUI.libdebuff_objects_guid
-      end
-    end
-
     -- Unregister chat log events since SPELL_GO provides miss detection
     if CleveRoidsLibDebuffLearnFrame then
       CleveRoidsLibDebuffLearnFrame:UnregisterEvent("CHAT_MSG_SPELL_SELF_DAMAGE")
@@ -933,10 +956,9 @@ function lib:InitPfUIIntegration()
 
     if CleveRoids.debug then
       local v = pfUI.version
-      local tierMsg = lib.hasPfUI76 and " (7.6+ cast tracking)" or ""
       DEFAULT_CHAT_FRAME:AddMessage(
-        string.format("|cff33ff99[libdebuff]|r pfUI v%d.%d.%d enhanced tracking enabled%s",
-          v.major, v.minor, v.fix or 0, tierMsg)
+        string.format("|cff33ff99[libdebuff]|r pfUI v%d.%d.%d enhanced tracking enabled",
+          v.major, v.minor, v.fix or 0)
       )
     end
 
@@ -1306,57 +1328,6 @@ function lib:CleanupStaleTrackingData()
     end
   end
 
-  -- Clean ownBuffCasts (player-cast buffs on targets)
-  if lib.ownBuffCasts then
-    for guid, buffs in pairs(lib.ownBuffCasts) do
-      for buffName, data in pairs(buffs) do
-        local elapsed = now - (data.startTime or 0)
-        local dur = data.duration or 0
-        -- Remove if expired (duration > 0 and past end time) or stale (no duration and old)
-        if (dur > 0 and elapsed > dur) or (dur <= 0 and elapsed > staleTime) then
-          buffs[buffName] = nil
-        end
-      end
-      if not next(buffs) then
-        lib.ownBuffCasts[guid] = nil
-      end
-    end
-  end
-
-  -- Clean allBuffAuras (all-caster buff tracking)
-  if lib.allBuffAuras then
-    for guid, buffs in pairs(lib.allBuffAuras) do
-      for buffName, casters in pairs(buffs) do
-        for cGuid, data in pairs(casters) do
-          local elapsed = now - (data.startTime or 0)
-          local dur = data.duration or 0
-          if (dur > 0 and elapsed > dur) or (dur <= 0 and elapsed > staleTime) then
-            casters[cGuid] = nil
-          end
-        end
-        if not next(casters) then
-          buffs[buffName] = nil
-        end
-      end
-      if not next(buffs) then
-        lib.allBuffAuras[guid] = nil
-      end
-    end
-  end
-
-  -- Clean pendingBuffCasts (short-lived correlation data, 2 second TTL)
-  if lib.pendingBuffCasts then
-    for guid, spells in pairs(lib.pendingBuffCasts) do
-      for spellId, data in pairs(spells) do
-        if (now - (data.time or 0)) > 2 then
-          spells[spellId] = nil
-        end
-      end
-      if not next(spells) then
-        lib.pendingBuffCasts[guid] = nil
-      end
-    end
-  end
 end
 
 -- Get the caster GUID for a debuff on a target
@@ -2141,7 +2112,7 @@ function lib:ShouldApplyDebuffRank(targetGUID, newSpellID)
     end
 
     -- Also clean up pfUI's tracking to prevent it from showing old ranks
-    if not CleveRoids.hasPfUI76 and pfUI and pfUI.api and pfUI.api.libdebuff and targetName then
+    if pfUI and pfUI.api and pfUI.api.libdebuff and targetName then
       local pflib = pfUI.api.libdebuff
 
       if pflib.objects and pflib.objects[targetName] then
@@ -2287,38 +2258,6 @@ function lib:AddEffect(guid, unitName, spellID, duration, stacks, caster)
           spellId = spellID,
           stacks = stacks or 1,
         }
-      end
-    end
-  end
-
-  -- PFUI INTEGRATION: Inject all tracked debuffs into pfUI's libdebuff (pre-7.6 only)
-  -- pfUI 7.6+ handles all duration tracking internally via GetUnitField
-  if pfUI and pfUI.api and pfUI.api.libdebuff and unitName and not CleveRoids.hasPfUI76 then
-    local pflib = pfUI.api.libdebuff
-    local spellName = C_Spell.GetSpellName(spellID)
-
-    if spellName and pflib.AddEffect then
-      -- Get target level for pfUI's tracking structure
-      local targetLevel = UnitLevel(guid) or UnitLevel("target") or 1
-
-      -- Strip rank from spell name for pfUI (it uses base names)
-      local baseName = CleveRoids.StripRank(spellName)
-
-      -- Also register the duration in pfUI's duration table
-      if pflib.debuffs then
-        pflib.debuffs[baseName] = duration
-      end
-
-      -- Add the effect to pfUI's tracking
-      -- Use "player" as caster for pfUI compatibility (it expects this format)
-      pflib:AddEffect(unitName, targetLevel, baseName, duration, "player")
-
-      if CleveRoids.debug then
-        local casterStr = (caster == "player") and "player" or "other"
-        DEFAULT_CHAT_FRAME:AddMessage(
-          string.format("|cff00ff00[pfUI Inject]|r %s (%ds) on %s (level %d) [caster: %s]",
-            baseName, duration, unitName, targetLevel, casterStr)
-        )
       end
     end
   end
@@ -2528,20 +2467,6 @@ local function SeedUnit(unit)
                 existing.start = GetTime()
                 existing.duration = duration
 
-                -- PFUI INTEGRATION: Inject refreshed timer into pfUI (pre-7.6 only)
-                if pfUI and pfUI.api and pfUI.api.libdebuff and unitName and not CleveRoids.hasPfUI76 then
-                  local pflib = pfUI.api.libdebuff
-                  local spellName = C_Spell.GetSpellName(spellID)
-                  if spellName and pflib.AddEffect then
-                    local targetLevel = UnitLevel(unit) or 1
-                    local baseName = CleveRoids.StripRank(spellName)
-                    if pflib.debuffs then
-                      pflib.debuffs[baseName] = duration
-                    end
-                    pflib:AddEffect(unitName, targetLevel, baseName, duration, "player")
-                  end
-                end
-
                 if CleveRoids.debug then
                   local spellName = C_Spell.GetSpellName(spellID) or "Unknown"
                   DEFAULT_CHAT_FRAME:AddMessage(
@@ -2616,20 +2541,6 @@ local function SeedUnit(unit)
               if (stacks or 0) > oldStacks then
                 existing.start = GetTime()
                 existing.duration = duration
-
-                -- PFUI INTEGRATION: Inject refreshed timer into pfUI (pre-7.6 only)
-                if pfUI and pfUI.api and pfUI.api.libdebuff and unitName and not CleveRoids.hasPfUI76 then
-                  local pflib = pfUI.api.libdebuff
-                  local spellName = C_Spell.GetSpellName(spellID)
-                  if spellName and pflib.AddEffect then
-                    local targetLevel = UnitLevel(unit) or 1
-                    local baseName = CleveRoids.StripRank(spellName)
-                    if pflib.debuffs then
-                      pflib.debuffs[baseName] = duration
-                    end
-                    pflib:AddEffect(unitName, targetLevel, baseName, duration, "player")
-                  end
-                end
 
                 if CleveRoids.debug then
                   local spellName = C_Spell.GetSpellName(spellID) or "Unknown"
@@ -2890,7 +2801,7 @@ function lib.ApplyCarnageRefresh(targetGUID, targetName, biteSpellID)
 
         -- DON'T call pfUI's AddEffect - just update the existing entry directly
         -- pfUI will pick up the new duration through our GetDuration/UnitDebuff hooks
-        if not CleveRoids.hasPfUI76 and pfUI and pfUI.api and pfUI.api.libdebuff then
+        if pfUI and pfUI.api and pfUI.api.libdebuff then
           local pflib = pfUI.api.libdebuff
           local ripSpellName = C_Spell.GetSpellName(ripSpellID)
           local baseName = CleveRoids.StripRank(ripSpellName) or "Rip"
@@ -3003,7 +2914,7 @@ function lib.ApplyCarnageRefresh(targetGUID, targetName, biteSpellID)
 
         -- DON'T call pfUI's AddEffect - just update the existing entry directly
         -- pfUI will pick up the new duration through our GetDuration/UnitDebuff hooks
-        if not CleveRoids.hasPfUI76 and pfUI and pfUI.api and pfUI.api.libdebuff then
+        if pfUI and pfUI.api and pfUI.api.libdebuff then
           local pflib = pfUI.api.libdebuff
           local rakeSpellName = C_Spell.GetSpellName(rakeSpellID)
           local baseName = CleveRoids.StripRank(rakeSpellName) or "Rake"
@@ -4227,7 +4138,6 @@ if CleveRoids.hasNampower then
 
     -- BUFF_ADDED/REMOVED events require v2.30+ for auraSlot and state args
     if npMajor > 2 or (npMajor == 2 and npMinor >= 30) then
-      ev:RegisterEvent("BUFF_ADDED_OTHER")
       ev:RegisterEvent("BUFF_REMOVED_SELF")
       ev:RegisterEvent("BUFF_REMOVED_OTHER")
     end
@@ -4586,7 +4496,7 @@ ev:SetScript("OnEvent", function()
 
               -- Update pfUI's duration database directly (pre-7.6 only)
               -- pfUI 7.6+ handles combo durations internally via GetStoredComboPoints()
-              if not CleveRoids.hasPfUI76 and pfUI and pfUI.api and pfUI.api.libdebuff and pfUI.api.libdebuff.debuffs then
+              if pfUI and pfUI.api and pfUI.api.libdebuff and pfUI.api.libdebuff.debuffs then
                 pfUI.api.libdebuff.debuffs[baseName] = duration
                 if CleveRoids.debug then
                   DEFAULT_CHAT_FRAME:AddMessage(
@@ -4842,12 +4752,6 @@ ev:SetScript("OnEvent", function()
             end
           end
 
-          -- Sync combo duration to pfUI if it's loaded
-          if comboPoints and CleveRoids.Compatibility_pfUI and
-             CleveRoids.Compatibility_pfUI.SyncComboDurationToPfUI then
-            CleveRoids.Compatibility_pfUI.SyncComboDurationToPfUI(targetGUID, spellID, duration)
-          end
-
           -- ALWAYS set up learning for combo spells (even if we have calculated duration)
           if comboPoints then
             lib.learnCastTimers[targetGUID] = lib.learnCastTimers[targetGUID] or {}
@@ -5008,7 +4912,6 @@ ev:SetScript("OnEvent", function()
     end
 
     -- pfUI 7.6 manages castTracking via its own SPELL_START handler
-    if lib.hasPfUI76 then return end
 
     local spellId = arg2
     local casterGuid = arg3
@@ -5055,7 +4958,6 @@ ev:SetScript("OnEvent", function()
 
   elseif event == "SPELL_FAILED_OTHER" then
     -- pfUI 7.6 manages castTracking cleanup itself
-    if lib.hasPfUI76 then return end
 
     local casterGuid = arg1
     if casterGuid and CleveRoids.castTracking[casterGuid] then
@@ -5074,17 +4976,22 @@ ev:SetScript("OnEvent", function()
   -- When pfUI is available, we use its tables directly instead.
 
   elseif event == "SPELL_GO_SELF" or event == "SPELL_GO_OTHER" then
-    -- Skip if pfUI enhanced tracking is active (it handles this)
-    if lib.hasPfUIEnhanced then return end
-
-    -- Clear cast tracking entry - cast completed/fired (standalone mode only).
+    -- Clear the cast tracking entry FIRST, before the hasPfUIEnhanced bail below.
+    -- We always own castTracking (SPELL_START populates it unconditionally), whereas
+    -- hasPfUIEnhanced only gates the miss/debuff work further down. Clearing used to
+    -- sit after that bail, so with pfUI's enhanced libdebuff tables present
+    -- SPELL_START kept adding entries while this cleanup never ran and castTracking
+    -- grew without bound.
     -- v2.40+: Save the SPELL_START targetGuid before clearing so we can fall back
     -- to it below when SPELL_GO arg4 is empty (e.g. AoE spells with no single target).
     local startTargetGuid
-    if not lib.hasPfUI76 and arg3 and CleveRoids.castTracking[arg3] then
+    if arg3 and CleveRoids.castTracking[arg3] then
       startTargetGuid = CleveRoids.castTracking[arg3].targetGuid
       CleveRoids.castTracking[arg3] = nil
     end
+
+    -- Skip the remaining miss/debuff work if pfUI enhanced tracking is active
+    if lib.hasPfUIEnhanced then return end
 
     local spellId = arg2
     local casterGuid = arg3
@@ -5524,15 +5431,9 @@ ev:SetScript("OnEvent", function()
               confirmed = true
             }
             -- Update pfUI's duration database directly (pre-7.6 only)
-            if not CleveRoids.hasPfUI76 and pfUI and pfUI.api and pfUI.api.libdebuff and pfUI.api.libdebuff.debuffs then
+            if pfUI and pfUI.api and pfUI.api.libdebuff and pfUI.api.libdebuff.debuffs then
               pfUI.api.libdebuff.debuffs[baseName] = debuffDuration
             end
-          end
-
-          -- Sync combo duration to pfUI
-          if debuffComboPoints and CleveRoids.Compatibility_pfUI and
-             CleveRoids.Compatibility_pfUI.SyncComboDurationToPfUI then
-            CleveRoids.Compatibility_pfUI.SyncComboDurationToPfUI(targetGuid, spellId, debuffDuration)
           end
 
           -- Set up learning for combo spells
@@ -5816,49 +5717,6 @@ ev:SetScript("OnEvent", function()
       end
     end
 
-  -- NAMPOWER v2.30+ BUFF_ADDED_OTHER - Confirm pending AURA_CAST_ON_OTHER data as buff
-  elseif event == "BUFF_ADDED_OTHER" then
-    if lib.hasPfUIEnhanced then return end
-
-    local guid    = CleveRoids.NormalizeGUID(arg1)
-    local spellId = arg3
-    local state   = arg7  -- 0=added, 1=removed, 2=modified
-
-    if not guid or not spellId then return end
-
-    -- Consume pending AURA_CAST data for this buff
-    local pending = lib.pendingBuffCasts[guid] and lib.pendingBuffCasts[guid][spellId]
-    if pending then
-      local spellName = pending.spellName or (C_Spell.GetSpellName(spellId))
-      if spellName then
-        local casterGuid = pending.casterGuid
-        local duration   = pending.duration
-        local now = GetTime()
-
-        -- allBuffAuras: confirmed buff from any caster
-        lib.allBuffAuras[guid] = lib.allBuffAuras[guid] or {}
-        lib.allBuffAuras[guid][spellName] = lib.allBuffAuras[guid][spellName] or {}
-        lib.allBuffAuras[guid][spellName][casterGuid or "unknown"] = {
-          startTime = now,
-          duration  = duration or 0,
-          rank      = 0,
-        }
-
-        -- ownBuffCasts: only if player is the caster
-        local playerGuid = CleveRoids.GetGUID("player")
-        if playerGuid and casterGuid == playerGuid then
-          lib.ownBuffCasts[guid] = lib.ownBuffCasts[guid] or {}
-          lib.ownBuffCasts[guid][spellName] = {
-            startTime  = now,
-            duration   = duration or 0,
-            spellId    = spellId,
-            casterGuid = casterGuid,
-          }
-        end
-      end
-      lib.pendingBuffCasts[guid][spellId] = nil
-    end
-
   -- NAMPOWER v2.30+ BUFF_REMOVED_SELF - Player's own buffs removed
   elseif event == "BUFF_REMOVED_SELF" then
     if lib.hasPfUIEnhanced then return end
@@ -5869,22 +5727,6 @@ ev:SetScript("OnEvent", function()
     if state == 2 then return end  -- Stack decrease only, not full removal
 
     local spellName = C_Spell.GetSpellName(spellId)
-    local playerGuid = CleveRoids.GetGUID("player")
-
-    if spellName and playerGuid then
-      if lib.ownBuffCasts[playerGuid] then
-        lib.ownBuffCasts[playerGuid][spellName] = nil
-        if not next(lib.ownBuffCasts[playerGuid]) then
-          lib.ownBuffCasts[playerGuid] = nil
-        end
-      end
-      if lib.allBuffAuras[playerGuid] then
-        lib.allBuffAuras[playerGuid][spellName] = nil
-        if not next(lib.allBuffAuras[playerGuid]) then
-          lib.allBuffAuras[playerGuid] = nil
-        end
-      end
-    end
 
     -- Also prune from OverflowBuffs (existing system)
     if spellId and CleveRoids.OverflowBuffs and CleveRoids.OverflowBuffs[spellId] then
@@ -5910,28 +5752,6 @@ ev:SetScript("OnEvent", function()
     if state == 2 then return end  -- Stack decrease only, not full removal
 
     local spellName = C_Spell.GetSpellName(spellId)
-    if spellName then
-      if lib.allBuffAuras[guid] then
-        lib.allBuffAuras[guid][spellName] = nil
-        if not next(lib.allBuffAuras[guid]) then
-          lib.allBuffAuras[guid] = nil
-        end
-      end
-      if lib.ownBuffCasts[guid] then
-        lib.ownBuffCasts[guid][spellName] = nil
-        if not next(lib.ownBuffCasts[guid]) then
-          lib.ownBuffCasts[guid] = nil
-        end
-      end
-    end
-
-    -- Clean pending correlation data
-    if lib.pendingBuffCasts[guid] then
-      lib.pendingBuffCasts[guid][spellId] = nil
-      if not next(lib.pendingBuffCasts[guid]) then
-        lib.pendingBuffCasts[guid] = nil
-      end
-    end
 
     -- Also clean AllCasterAuraTracking (keyed by spellName)
     if spellName and CleveRoids.AllCasterAuraTracking[guid] then
@@ -5983,18 +5803,9 @@ ev:SetScript("OnEvent", function()
     end
 
     -- Clean up buff tracking tables
-    if lib.ownBuffCasts[guid] then
-      lib.ownBuffCasts[guid] = nil
-    end
-    if lib.allBuffAuras[guid] then
-      lib.allBuffAuras[guid] = nil
-    end
-    if lib.pendingBuffCasts[guid] then
-      lib.pendingBuffCasts[guid] = nil
-    end
 
     -- Clean up cast tracking for this unit (they can't be casting if dead)
-    if not lib.hasPfUI76 and CleveRoids.castTracking[guid] then
+    if CleveRoids.castTracking[guid] then
       CleveRoids.castTracking[guid] = nil
     end
 
@@ -6359,7 +6170,7 @@ evLearn:SetScript("OnEvent", function()
 
                   -- Sync refresh to pfUI
                   local targetName = lib.guidToName[targetGUID]
-                  if not CleveRoids.hasPfUI76 and pfUI and pfUI.api and pfUI.api.libdebuff and targetName then
+                  if pfUI and pfUI.api and pfUI.api.libdebuff and targetName then
                     local pflib = pfUI.api.libdebuff
                     local spellName = C_Spell.GetSpellName(flameShockID)
                     if spellName and pflib.AddEffect then
@@ -6411,15 +6222,7 @@ evCleanup:SetScript("OnEvent", function()
     if event == "PLAYER_ENTERING_WORLD" or event == "PLAYER_DEAD" then
         -- Keep only current target's data
         local currentGUID = CleveRoids.GetGUID("target")
-        if lib.hasPfUI76 then
-            -- pfUI76: lib.objects is pfUI.libdebuff_objects_guid - never replace the reference!
-            -- pfUI handles its own cleanup; just clear SCRM-side entries
-            for guid in pairs(lib.objects) do
-                if guid ~= currentGUID then
-                    lib.objects[guid] = nil
-                end
-            end
-        elseif currentGUID then
+        if currentGUID then
             local temp = lib.objects[currentGUID]
             lib.objects = {}
             if temp then
@@ -6536,7 +6339,7 @@ evJudgement:SetScript("OnEvent", function()
         end
 
         -- Also sync to pfUI if it's loaded (pre-7.6 only)
-        if not CleveRoids.hasPfUI76 and pfUI and pfUI.api and pfUI.api.libdebuff then
+        if pfUI and pfUI.api and pfUI.api.libdebuff then
           local targetName = lib.guidToName[targetGUID] or UnitName("target")
           local targetLevel = UnitLevel("target") or 0
           local spellName = C_Spell.GetSpellName(spellID)
@@ -9246,52 +9049,20 @@ function CleveRoids.ParseReactiveCombatLog(lowerMsg)
     end
 end
 
--- Clear reactive proc when spell is cast
-function CleveRoids.ClearReactiveProcOnCast(spellName)
-    if not spellName then return end
-
-    -- Check if this is a reactive spell
-    if CleveRoids.reactiveSpells and CleveRoids.reactiveSpells[spellName] then
-        CleveRoids.ClearReactiveProc(spellName)
-        CleveRoids.QueueActionUpdate()
-    end
-end
-
--- Hook UNIT_CASTEVENT to clear reactive procs
-local originalUnitCastEvent = CleveRoids.Frame and CleveRoids.Frame.UNIT_CASTEVENT
-if originalUnitCastEvent then
-    CleveRoids.Frame.UNIT_CASTEVENT = function(...)
-        -- Call original handler first
-        if type(originalUnitCastEvent) == "function" then
-            originalUnitCastEvent(unpack(arg))
-        end
-
-        -- Clear reactive proc and resist state on spell cast start
-        if arg1 == "player" and arg2 == "START" and arg4 then
-            CleveRoids.ClearReactiveProcOnCast(arg4)
-            CleveRoids.ClearResistState()
-        end
-    end
-end
-
--- Hook SPELL_START_SELF to clear reactive procs (Nampower fallback when SuperWoW not available)
-local originalSpellStartSelf = CleveRoids.Frame and CleveRoids.Frame.SPELL_START_SELF
-if originalSpellStartSelf and not CleveRoids.hasSuperwow then
-    CleveRoids.Frame.SPELL_START_SELF = function(...)
-        -- Call original handler first
-        if type(originalSpellStartSelf) == "function" then
-            originalSpellStartSelf(unpack(arg))
-        end
-
-        -- Clear reactive proc and resist state on spell cast start
-        -- SPELL_START_SELF args: casterGuid, targetGuid, spellId, ...
-        local spellId = arg[3]
-        if spellId then
-            CleveRoids.ClearReactiveProcOnCast(spellId)
-            CleveRoids.ClearResistState()
-        end
-    end
-end
+-- Removed: ClearReactiveProcOnCast plus wrappers around Frame.UNIT_CASTEVENT and
+-- Frame.SPELL_START_SELF that tried to clear a reactive proc when its spell was cast.
+-- The feature never worked, for three independent reasons:
+--   1. Both wrappers guarded on `CleveRoids.Frame and CleveRoids.Frame.<handler>`,
+--      but CleveRoids.Frame is created in Core.lua, which loads AFTER this file, so
+--      the guard was always false and neither wrapper was ever installed.
+--   2. The UNIT_CASTEVENT wrapper tested arg2 == "START", but that signature is
+--      (caster, target, action, spell_id, cast_time) -- the action is arg3, so it was
+--      comparing the target.
+--   3. Both passed a spell *ID* to a function that looks the name up in
+--      CleveRoids.reactiveSpells, which is keyed by name, so nothing could match.
+-- They also each allocated an `arg` table per call and unpack()'d it. Deleting is
+-- behaviour-preserving; if clearing a reactive proc on cast is still wanted it needs
+-- to be written fresh against the real handler signatures.
 
 -- NAMPOWER v2.24+ AUTO_ATTACK EVENT HANDLER FOR REACTIVE ABILITIES
 -- Uses native events for dodge/parry/block detection when available.

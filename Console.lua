@@ -358,14 +358,15 @@ SlashCmdList.RUNMACRO = function(msg)
     return CleveRoids.ExecuteMacroByName(CleveRoids.Trim(msg))
 end
 
--- Global RunMacro wrapper for user convenience (delegates to namespaced internal function)
--- This pattern ensures internal logic uses CleveRoids.ExecuteMacroByName and won't break
--- if another addon overwrites the global RunMacro
--- NOTE: When SuperMacro is also loaded, Compatibility/SuperMacro.lua redirects this to
--- SuperMacro_RunMacro so macros go through RunLine (where CRM commands are intercepted)
-function RunMacro(name)
-    return CleveRoids.ExecuteMacroByName(name)
-end
+-- The global RunMacro is installed by Core.lua, which loads before this file. Do not
+-- redefine it here: Core's hook accepts a macro index as well as a name (Blizzard's
+-- RunMacro takes either), delegates to SuperMacro when that is driving execution,
+-- falls back to the saved Blizzard original when a macro will not resolve, and clears
+-- the stop/skip flags at the start of a top-level run, which is what lets /stopmacro,
+-- /skipmacro and /firstaction work across parent/child macro boundaries. A plain
+-- name-only wrapper here silently replaced all of that.
+-- When SuperMacro is loaded, Compatibility/SuperMacro.lua redirects the global to
+-- SuperMacro_RunMacro so macros go through RunLine (where CRM commands are intercepted).
 
 SLASH_RETARGET1 = "/retarget"
 SlashCmdList.RETARGET = function(msg)

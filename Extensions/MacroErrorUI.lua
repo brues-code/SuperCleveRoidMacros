@@ -697,30 +697,9 @@ local function EnsureCondHighlightPool()
     end
 end
 
--- Test whether conditionals pass for a given command + alternative text.
--- Returns: true (passes), false (fails), nil (unconditional / no conditionals)
-local function TestConditionalPasses(cmd, alternative)
-    -- Strip ? tooltip hints (irrelevant for conditional evaluation)
-    if string.find(alternative, "?", 1, true) then
-        alternative = string.gsub(alternative, "%?", "")
-    end
-
-    local hasConditional = string.find(alternative, "%[") ~= nil
-
-    -- Dynamic commands: delegate to TestAction
-    if CleveRoids.dynamicCmds[cmd] then
-        local result = CleveRoids.TestAction(cmd, alternative)
-        if not hasConditional then
-            return nil  -- unconditional
-        end
-        return result ~= nil and result ~= false
-    end
-
-    -- Non-dynamic commands: parse and evaluate Keywords manually
-    if not hasConditional then
-        return nil  -- unconditional
-    end
-
+-- Evaluate one single-group clause of a non-dynamic command against Keywords.
+-- Returns: true (passes), false (fails), nil (could not parse)
+local function EvaluateNonDynamic(alternative)
     local ok, action, conditionals = pcall(CleveRoids.GetParsedMsg, alternative)
     if not ok or not conditionals then
         return nil
@@ -743,6 +722,43 @@ local function TestConditionalPasses(cmd, alternative)
 
     CleveRoids._isTestingAction = false
     return passes
+end
+
+-- Test whether conditionals pass for a given command + alternative text.
+-- Returns: true (passes), false (fails), nil (unconditional / no conditionals)
+local function TestConditionalPasses(cmd, alternative)
+    -- Strip ? tooltip hints (irrelevant for conditional evaluation)
+    if string.find(alternative, "?", 1, true) then
+        alternative = string.gsub(alternative, "%?", "")
+    end
+
+    local hasConditional = string.find(alternative, "%[") ~= nil
+
+    -- Dynamic commands: delegate to TestAction
+    if CleveRoids.dynamicCmds[cmd] then
+        local result = CleveRoids.TestAction(cmd, alternative)
+        if not hasConditional then
+            return nil  -- unconditional
+        end
+        return result ~= nil and result ~= false
+    end
+
+    -- Non-dynamic commands: evaluate Keywords manually. `[a][b] X` passes when
+    -- any of its groups does.
+    if not hasConditional then
+        return nil  -- unconditional
+    end
+
+    local variants = CleveRoids.ExpandBracketGroups(alternative)
+    if not variants then
+        return EvaluateNonDynamic(alternative)
+    end
+    for i = 1, variants.n do
+        if EvaluateNonDynamic(variants[i]) then
+            return true
+        end
+    end
+    return false
 end
 
 -- Find character offset ranges for each semicolon-separated alternative.

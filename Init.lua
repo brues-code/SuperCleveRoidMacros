@@ -24,7 +24,22 @@ CleveRoids.hasSuperwow = SetAutoloot and true or false
 CleveRoids.hasTurtle   = (type(_G.TURTLE_WOW_VERSION) ~= "nil")
 CleveRoids.supported   = CleveRoids.hasTurtle
 
+-- ClassicAPI macro display (C_Macro.SetMacroDisplay): hand ClassicAPI the resolved
+-- action per macro instead of replacing the action-bar globals in Lua, so the icon,
+-- tooltip, cooldown sweep, range and usable state all come from the client -- including
+-- the drag cursor and the macro window grid, which Lua cannot reach.
+--
+-- Feature-detect rather than version-check: the API is unreleased, so
+-- CLASSIC_API_VERSION reports the dev sentinel. ClassicAPI stands down from macro
+-- display entirely when it sees this addon loaded; ClassicAPIMacroDisplay is what
+-- tells it we drive it instead. A fork that leaves the flag unset keeps the old
+-- behavior -- both must never drive the same buttons.
+CleveRoids.useClassicAPIDisplay =
+    (type(C_Macro) == "table" and C_Macro.SetMacroDisplay ~= nil) and true or false
+CleveRoids.ClassicAPIMacroDisplay = CleveRoids.useClassicAPIDisplay
+
 CleveRoids.ParsedMsg = {}
+CleveRoids.ExpandedGroups = {}
 CleveRoids.Items     = {}
 CleveRoids.Spells    = {}
 CleveRoids.PetSpells = {}
@@ -43,12 +58,10 @@ CleveRoids.unknownTexture = "Interface\\Icons\\INV_Misc_QuestionMark"
 
 CleveRoids.spell_tracking = {}
 
--- GUID-based cast tracking (populated by pfUI 7.6 or standalone SPELL_START events)
--- Format: [casterGuid] = {spellID, spellName, icon, startTime, duration, endTime}
+-- GUID-based cast tracking, populated from our own SPELL_START handlers and pruned
+-- in OnUpdate. Format: [casterGuid] = {spellID, spellName, icon, startTime, duration,
+-- endTime}
 CleveRoids.castTracking = {}
-
--- pfUI 7.6+ with Nampower 2.31.0+ detected (GUID-based cast tracking available)
-CleveRoids.hasPfUI76 = false
 
 -- Combo point tracking (initialized early for /cast hook)
 CleveRoids.lastComboPoints = 0
