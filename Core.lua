@@ -1173,7 +1173,11 @@ end
 -- Hand every macro back to ClassicAPI's own parser and stop claiming ownership.
 function CleveRoids.ReleaseDisplays()
     if not CleveRoids.ClassicAPIMacroDisplay then return end
-    for i = 1, 36 do
+    -- Sweep the whole index space rather than the macros we know we published:
+    -- PublishAllDisplays clears that record on every re-parse, so a macro claimed
+    -- before one and gone after it would keep our last value forever. Releasing a
+    -- slot we never claimed costs nothing, and this runs once.
+    for i = 1, CleveRoids.MAX_MACRO_SLOTS do
         C_Macro.SetMacroDisplay(i, nil)
     end
     publishedDisplay = {}

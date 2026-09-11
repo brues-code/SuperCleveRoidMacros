@@ -19,6 +19,15 @@ CleveRoids.mouseOverResolvers  = {}
 CleveRoids.mouseoverUnit = CleveRoids.mouseoverUnit or nil
 CleveRoids.mouseOverUnit = nil
 
+-- Every macro slot the client can hold: 18 account-wide (1-18) followed by 18
+-- character-specific (19-36). This is the index space GetMacroInfo and
+-- C_Macro.SetMacroDisplay address, and it is fixed -- GetNumMacros() returns how
+-- many of each tab are *used*, which cannot be summed into a range, because the
+-- character block starts at 19 no matter how few account macros exist. Blizzard's
+-- own MAX_MACROS is no help either: it lives in the load-on-demand Blizzard_MacroUI
+-- and is nil until the player opens the macro window.
+CleveRoids.MAX_MACRO_SLOTS = 36
+
 -- Environment flags
 CleveRoids.hasSuperwow = SetAutoloot and true or false
 CleveRoids.hasTurtle   = (type(_G.TURTLE_WOW_VERSION) ~= "nil")

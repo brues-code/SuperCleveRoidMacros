@@ -1096,17 +1096,7 @@ function CleveRoids.ValidateAllMacros()
     local results = {}
     local totalErrors = 0
 
-    -- Account-wide macros are indexed from 1 up to GetNumMacros().
-    -- Character-specific macros occupy the slots immediately following the account-wide ones.
-    -- In Classic clients, the macro UI has 18 General (Account) slots and 18 Character-Specific slots.
-    local numAccountMacros = GetNumMacros()
-
-    -- The WoW API GetMacroInfo(index) supports indexing up to 36 (1-18 for General, 19-36 for Character)
-    -- in Classic clients, even though the total is GetNumMacros() + GetNumCharacterMacros() in Retail.
-    -- To ensure we check all 36 possible slots:
-    local totalSlots = 36
-
-    for i = 1, totalSlots do
+    for i = 1, CleveRoids.MAX_MACRO_SLOTS do
         local nameSuccess, name = pcall(GetMacroInfo, i)
 
         -- Check if GetMacroInfo returned a name (i.e., the slot is used)

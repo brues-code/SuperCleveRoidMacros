@@ -1180,7 +1180,7 @@ local function ReportAllMacroErrors()
 
     -- Collect body (syntax) errors per macro. Macro names are no longer
     -- restricted (slot/index-based identification), so no name checks here.
-    for i = 1, 36 do
+    for i = 1, CleveRoids.MAX_MACRO_SLOTS do
         local nameOk, name = pcall(GetMacroInfo, i)
         if nameOk and name and name ~= "" then
             local errors = {}
