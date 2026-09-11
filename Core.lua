@@ -591,6 +591,10 @@ frame:SetScript("OnEvent", function()
     if type(CleveRoidMacros.macrocheck) ~= "number" then
         CleveRoidMacros.macrocheck = 1  -- enabled by default
     end
+
+    -- The saved realtime setting is only readable now; the unit streams were
+    -- registered at load assuming event-driven mode.
+    CleveRoids.ApplyUnitStreamEvents()
 end)
 
 -- Queues a full update of all action bars.
@@ -4464,18 +4468,36 @@ if type(C_LossOfControl) == "table" then
     CleveRoids.Frame:RegisterEvent("LOSS_OF_CONTROL_ADDED")
     CleveRoids.Frame:RegisterEvent("LOSS_OF_CONTROL_UPDATE")
 end
--- Use GUID events when available (v2.39+), fall back to standard per-token events
+-- The unit state streams that drive icon refresh: GUID events when Nampower
+-- provides them (v2.39+, one event per unit change rather than one per token),
+-- else the stock per-token events. These cannot become RegisterUnitEvent calls
+-- -- the handlers ignore the unit and refresh every macro, because a conditional
+-- may name any unit ([@party3,hp:<50], @focus, @mouseover), so narrowing the
+-- token set would leave those icons stale.
+local unitStreamEvents
 if CleveRoids.NampowerAPI.features.hasUnitGuidEvents then
-    CleveRoids.Frame:RegisterEvent("UNIT_AURA_GUID")
-    CleveRoids.Frame:RegisterEvent("UNIT_HEALTH_GUID")
-    CleveRoids.Frame:RegisterEvent("UNIT_MANA_GUID")
-    CleveRoids.Frame:RegisterEvent("UNIT_RAGE_GUID")
-    CleveRoids.Frame:RegisterEvent("UNIT_ENERGY_GUID")
+    unitStreamEvents = { "UNIT_AURA_GUID", "UNIT_HEALTH_GUID", "UNIT_MANA_GUID", "UNIT_RAGE_GUID", "UNIT_ENERGY_GUID" }
 else
-    CleveRoids.Frame:RegisterEvent("UNIT_AURA")
-    CleveRoids.Frame:RegisterEvent("UNIT_HEALTH")
-    CleveRoids.Frame:RegisterEvent("UNIT_POWER")
+    unitStreamEvents = { "UNIT_AURA", "UNIT_HEALTH", "UNIT_POWER" }
 end
+
+-- They do fire continuously for every unit in range, and in realtime mode their
+-- handlers do nothing at all: the OnUpdate refreshes on every throttled tick and
+-- QueueActionUpdate no-ops. Rather than pay a Lua dispatch per event to return
+-- early, drop the registrations entirely while realtime is on. Re-applied at
+-- VARIABLES_LOADED (when the saved value is first known) and whenever
+-- `/cleveroid realtime` flips it.
+function CleveRoids.ApplyUnitStreamEvents()
+    local eventDriven = not CleveRoidMacros or CleveRoidMacros.realtime == 0
+    for i = 1, table.getn(unitStreamEvents) do
+        if eventDriven then
+            CleveRoids.Frame:RegisterEvent(unitStreamEvents[i])
+        else
+            CleveRoids.Frame:UnregisterEvent(unitStreamEvents[i])
+        end
+    end
+end
+CleveRoids.ApplyUnitStreamEvents()
 if CleveRoids.hasSuperwow then
   CleveRoids.Frame:RegisterEvent("UNIT_CASTEVENT")
 end
@@ -5808,6 +5830,8 @@ SlashCmdList["CLEVEROID"] = function(msg)
         local num = tonumber(val)
         if num == 0 or num == 1 then
             CleveRoidMacros.realtime = num
+            -- The unit streams are only worth receiving in event-driven mode.
+            CleveRoids.ApplyUnitStreamEvents()
             CleveRoids.Print("realtime set to " .. num)
         else
             CleveRoids.Print("Usage: /cleveroid realtime 0 or 1 - Force realtime updates rather than event based updates (Default: 0. 1 = on, increases CPU load.)")

@@ -745,7 +745,7 @@ function Extension.OnLoad()
     Extension.RegisterEvent("SPELLCAST_FAILED", "OnSpellcastFailed")
     Extension.RegisterEvent("SPELLCAST_INTERRUPTED", "OnSpellcastInterrupted")
     Extension.RegisterEvent("PLAYER_TARGET_CHANGED", "OnTargetChanged")
-    Extension.RegisterEvent("UNIT_AURA", "OnUnitAura")
+    Extension.RegisterUnitEvent("UNIT_AURA", "OnUnitAura", "target", "player")
     Extension.RegisterEvent("PLAYER_COMBO_POINTS", "OnComboPointsChanged")
 
     -- PERFORMANCE OPTIMIZATION: Removed OnUpdate polling for combo points
@@ -765,10 +765,10 @@ function Extension.OnTargetChanged()
     CleveRoids.UpdateComboPoints()
 end
 
+-- Registered as a unit event for target and player, so arg1 is always one of
+-- those two -- no token check needed.
 function Extension.OnUnitAura()
-    if arg1 == "target" or arg1 == "player" then
-        CleveRoids.UpdateComboPoints()
-    end
+    CleveRoids.UpdateComboPoints()
 end
 
 function Extension.OnComboPointsChanged()

@@ -66,6 +66,10 @@ function CleveRoids.RegisterExtension(name)
         CleveRoids.RegisterEvent(name, eventName, callbackName)
     end
 
+    extension.RegisterUnitEvent = function(eventName, callbackName, ...)
+        CleveRoids.RegisterUnitEvent(name, eventName, callbackName, unpack(arg))
+    end
+
     extension.Hook = function(functionName, callbackName, dontCallOriginal)
         CleveRoids.RegisterHook(name, functionName, callbackName, dontCallOriginal)
     end
@@ -144,6 +148,20 @@ function CleveRoids.RegisterEvent(extensionName, eventName, callbackName)
     local extension = CleveRoids.Extensions[extensionName]
     extension.internal.eventHandlers[eventName] = callbackName
     extension.internal.frame:RegisterEvent(eventName)
+end
+
+-- Registers a callback for a UNIT_* event, filtered to the given unit tokens.
+-- The callback then only runs for those units: the client drops every other
+-- unit's copy, instead of all of them reaching Lua to be compared away. Use
+-- this over RegisterEvent whenever the handler starts by testing arg1.
+-- extensionName: The name of the extension trying to register the callback
+-- eventName: The UNIT_* event to register
+-- callbackName: The name of the callback that gets called when the event fires
+-- ...: the unit tokens to accept (e.g. "player", "target")
+function CleveRoids.RegisterUnitEvent(extensionName, eventName, callbackName, ...)
+    local extension = CleveRoids.Extensions[extensionName]
+    extension.internal.eventHandlers[eventName] = callbackName
+    extension.internal.frame:RegisterUnitEvent(eventName, unpack(arg))
 end
 
 -- Hooks the given function by it's name

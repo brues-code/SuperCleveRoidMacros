@@ -4115,7 +4115,7 @@ end)
 
 local ev = CreateFrame("Frame", "CleveRoidsLibDebuffFrame", UIParent)
 ev:RegisterEvent("PLAYER_TARGET_CHANGED")
-ev:RegisterEvent("UNIT_AURA")
+ev:RegisterUnitEvent("UNIT_AURA", "target")
 ev:RegisterEvent("ADDON_LOADED")  -- For pfUI integration initialization
 ev:RegisterEvent("ZONE_CHANGED_NEW_AREA")  -- Clear known enemy GUIDs on zone change
 
@@ -4214,7 +4214,7 @@ ev:SetScript("OnEvent", function()
     end
     SeedUnit("target")
 
-  elseif event == "UNIT_AURA" and arg1 == "target" then
+  elseif event == "UNIT_AURA" then
     SeedUnit("target")
 
   elseif event == "UNIT_CASTEVENT" then
