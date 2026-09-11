@@ -2262,38 +2262,6 @@ function lib:AddEffect(guid, unitName, spellID, duration, stacks, caster)
     end
   end
 
-  -- PFUI INTEGRATION: Inject all tracked debuffs into pfUI's libdebuff (pre-7.6 only)
-  -- pfUI 7.6+ handles all duration tracking internally via GetUnitField
-  if pfUI and pfUI.api and pfUI.api.libdebuff and unitName then
-    local pflib = pfUI.api.libdebuff
-    local spellName = C_Spell.GetSpellName(spellID)
-
-    if spellName and pflib.AddEffect then
-      -- Get target level for pfUI's tracking structure
-      local targetLevel = UnitLevel(guid) or UnitLevel("target") or 1
-
-      -- Strip rank from spell name for pfUI (it uses base names)
-      local baseName = CleveRoids.StripRank(spellName)
-
-      -- Also register the duration in pfUI's duration table
-      if pflib.debuffs then
-        pflib.debuffs[baseName] = duration
-      end
-
-      -- Add the effect to pfUI's tracking
-      -- Use "player" as caster for pfUI compatibility (it expects this format)
-      pflib:AddEffect(unitName, targetLevel, baseName, duration, "player")
-
-      if CleveRoids.debug then
-        local casterStr = (caster == "player") and "player" or "other"
-        DEFAULT_CHAT_FRAME:AddMessage(
-          string.format("|cff00ff00[pfUI Inject]|r %s (%ds) on %s (level %d) [caster: %s]",
-            baseName, duration, unitName, targetLevel, casterStr)
-        )
-      end
-    end
-  end
-
   if CleveRoids.debug then
     local spellName = C_Spell.GetSpellName(spellID) or "Unknown"
     CleveRoids.DebugChanged("addeffect_" .. spellID .. "_" .. tostring(guid),
@@ -2499,20 +2467,6 @@ local function SeedUnit(unit)
                 existing.start = GetTime()
                 existing.duration = duration
 
-                -- PFUI INTEGRATION: Inject refreshed timer into pfUI (pre-7.6 only)
-                if pfUI and pfUI.api and pfUI.api.libdebuff and unitName then
-                  local pflib = pfUI.api.libdebuff
-                  local spellName = C_Spell.GetSpellName(spellID)
-                  if spellName and pflib.AddEffect then
-                    local targetLevel = UnitLevel(unit) or 1
-                    local baseName = CleveRoids.StripRank(spellName)
-                    if pflib.debuffs then
-                      pflib.debuffs[baseName] = duration
-                    end
-                    pflib:AddEffect(unitName, targetLevel, baseName, duration, "player")
-                  end
-                end
-
                 if CleveRoids.debug then
                   local spellName = C_Spell.GetSpellName(spellID) or "Unknown"
                   DEFAULT_CHAT_FRAME:AddMessage(
@@ -2587,20 +2541,6 @@ local function SeedUnit(unit)
               if (stacks or 0) > oldStacks then
                 existing.start = GetTime()
                 existing.duration = duration
-
-                -- PFUI INTEGRATION: Inject refreshed timer into pfUI (pre-7.6 only)
-                if pfUI and pfUI.api and pfUI.api.libdebuff and unitName then
-                  local pflib = pfUI.api.libdebuff
-                  local spellName = C_Spell.GetSpellName(spellID)
-                  if spellName and pflib.AddEffect then
-                    local targetLevel = UnitLevel(unit) or 1
-                    local baseName = CleveRoids.StripRank(spellName)
-                    if pflib.debuffs then
-                      pflib.debuffs[baseName] = duration
-                    end
-                    pflib:AddEffect(unitName, targetLevel, baseName, duration, "player")
-                  end
-                end
 
                 if CleveRoids.debug then
                   local spellName = C_Spell.GetSpellName(spellID) or "Unknown"
