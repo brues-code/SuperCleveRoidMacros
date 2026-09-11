@@ -3,11 +3,16 @@
 
     ClassicAPI is a client mod (sibling to Nampower/SuperWoW) that backports the
     modern C_* API into the 1.12.1 Lua environment. It is a HARD REQUIREMENT of
-    this addon (ClassicAPI v1.12.1+, which added the positional
-    C_UnitAuras.UnitAura), so the wrappers below call the API directly — no
-    fallbacks. The load-time requirement check (Core.lua) uses IsAvailable() to
-    warn when the DLL is missing and HasMinimumVersion() when it's too old; users
-    who don't want ClassicAPI should run the upstream addon.
+    this addon (ClassicAPI v1.15.0+, which added frame:RegisterUnitEvent), so the
+    wrappers below call the API directly — no fallbacks. The load-time requirement
+    check (Core.lua) uses IsAvailable() to warn when the DLL is missing and
+    HasMinimumVersion() when it's too old; users who don't want ClassicAPI should
+    run the upstream addon.
+
+    The minimum is not advisory: Utility.lua calls frame:RegisterUnitEvent at file
+    scope, so an older ClassicAPI aborts that chunk and leaves most of the addon
+    undefined. Raise the Core.lua minimum in step with any new API adopted at file
+    scope.
 
     Detection: the global CLASSIC_API_VERSION is defined once the client has
     booted, encoded as X*10000 + Y*100 + Z for a vX.Y.Z tag (untagged dev builds
@@ -37,6 +42,14 @@ function API.GetVersionNumber()
     return CLASSIC_API_VERSION or 0
 end
 
+-- Returns the loaded version as major, minor, patch (0, 0, 0 if absent).
+function API.GetVersion()
+    local v = CLASSIC_API_VERSION or 0
+    local major = math.floor(v / 10000)
+    local minor = math.floor(v / 100) - major * 100
+    return major, minor, v - math.floor(v / 100) * 100
+end
+
 -- True if the ClassicAPI client mod is loaded at all.
 function API.IsAvailable()
     return CLASSIC_API_VERSION ~= nil
@@ -56,7 +69,7 @@ end
 
 -- Scan one aura range of `unit` (filter = "HELPFUL" or "HARMFUL") for an aura
 -- matching the dispel type. Uses the positional C_UnitAuras.UnitAura (added in
--- ClassicAPI v1.12.1, this addon's minimum) -- no table allocated per slot, with
+-- ClassicAPI v1.12.1, below this addon's minimum) -- no table allocated per slot, with
 -- dispelName as the 4th return. The filtered index self-terminates at the end of
 -- the range (nil name); 48 is a backstop over vanilla's 32 helpful / 16 harmful slots.
 local function scanDispel(unit, filter, dispelType, wantAny)

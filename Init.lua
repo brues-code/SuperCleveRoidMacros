@@ -29,14 +29,17 @@ CleveRoids.supported   = CleveRoids.hasTurtle
 -- tooltip, cooldown sweep, range and usable state all come from the client -- including
 -- the drag cursor and the macro window grid, which Lua cannot reach.
 --
--- Feature-detect rather than version-check: the API is unreleased, so
--- CLASSIC_API_VERSION reports the dev sentinel. ClassicAPI stands down from macro
--- display entirely when it sees this addon loaded; ClassicAPIMacroDisplay is what
--- tells it we drive it instead. A fork that leaves the flag unset keeps the old
--- behavior -- both must never drive the same buttons.
-CleveRoids.useClassicAPIDisplay =
+-- ClassicAPI stands down from macro display entirely when it sees this addon loaded;
+-- ClassicAPIMacroDisplay is what tells it we drive it instead, and ReleaseDisplays
+-- clears it to hand every macro back. A fork that leaves the flag unset keeps the old
+-- behavior -- both must never drive the same buttons. It doubles as the internal
+-- "may we call C_Macro.SetMacroDisplay" guard, so the two can never disagree.
+--
+-- Feature-detect rather than version-check: SetMacroDisplay ships in ClassicAPI
+-- v1.15.0, this addon's minimum, so a nil here means the client mod is missing
+-- outright -- the case Core.lua's requirement check warns about but keeps running.
+CleveRoids.ClassicAPIMacroDisplay =
     (type(C_Macro) == "table" and C_Macro.SetMacroDisplay ~= nil) and true or false
-CleveRoids.ClassicAPIMacroDisplay = CleveRoids.useClassicAPIDisplay
 
 CleveRoids.ParsedMsg = {}
 CleveRoids.ExpandedGroups = {}

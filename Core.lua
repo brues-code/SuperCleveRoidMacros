@@ -198,10 +198,12 @@ requirementCheckFrame:SetScript("OnEvent", function()
     local hasNampower30 = hasNampower and CleveRoids.NampowerAPI
         and CleveRoids.NampowerAPI.HasMinimumVersion(3, 0, 0)
     local hasClassicAPI = CleveRoids.ClassicAPI and CleveRoids.ClassicAPI.IsAvailable()
-    -- v1.12.1 added the positional C_UnitAuras.UnitAura the dispel conditionals use.
-    local hasClassicAPI1121 = hasClassicAPI and CleveRoids.ClassicAPI.HasMinimumVersion(1, 12, 1)
+    -- v1.15.0 added frame:RegisterUnitEvent, which Utility.lua calls at file scope.
+    -- On an older build that call raises, aborting the rest of the chunk -- so this
+    -- is not a degraded-features warning, it's "the addon did not finish loading".
+    local hasClassicAPI1150 = hasClassicAPI and CleveRoids.ClassicAPI.HasMinimumVersion(1, 15, 0)
 
-    if not hasNampower30 or not hasUnitXP or not hasClassicAPI or not hasClassicAPI1121 then
+    if not hasNampower30 or not hasUnitXP or not hasClassicAPI or not hasClassicAPI1150 then
         -- Show warnings (don't disable — tearing down a partially-initialized addon causes hangs)
         if not hasNampower then
             CleveRoids.Print("|cFFFF9900WARNING:|r |cFF00FFFFAvitasia's Nampower v3.0.0+|r is required:")
@@ -221,10 +223,11 @@ requirementCheckFrame:SetScript("OnEvent", function()
             CleveRoids.Print("|cFFFF9900WARNING:|r |cFF00FFFFClassicAPI|r is required:")
             CleveRoids.Print("https://github.com/brues-code/ClassicAPI")
             CleveRoids.Print("Dispel-type and movement conditionals will be unavailable without it.")
-        elseif not hasClassicAPI1121 then
-            CleveRoids.Print("|cFFFF9900WARNING:|r |cFF00FFFFClassicAPI v1.12.1+|r is required:")
+        elseif not hasClassicAPI1150 then
+            local major, minor, patch = CleveRoids.ClassicAPI.GetVersion()
+            CleveRoids.Print(format("|cFFFF9900WARNING:|r |cFF00FFFFClassicAPI v1.15.0+|r is required (you have v%d.%d.%d):", major, minor, patch))
             CleveRoids.Print("https://github.com/brues-code/ClassicAPI")
-            CleveRoids.Print("Dispel-type conditionals will be unavailable with this older version.")
+            CleveRoids.Print("The addon cannot finish loading on this version -- update ClassicAPI.")
         end
     end
 
@@ -1139,7 +1142,7 @@ local publishedDisplay = {}
 -- nothing matched" and shows the question mark. Skipping the call instead would hand
 -- the macro back to ClassicAPI's own #showtooltip parser.
 function CleveRoids.PublishDisplay(actions)
-    if not CleveRoids.useClassicAPIDisplay then return end
+    if not CleveRoids.ClassicAPIMacroDisplay then return end
     local macroID = actions and actions.macroID
     if not macroID then return end  -- SuperMacro macros have no Blizzard index
 
@@ -1154,7 +1157,7 @@ end
 -- ClassicAPI re-evaluates nothing for us. Covers macros that aren't on a bar too,
 -- which is what keeps the macro window grid's icons correct.
 function CleveRoids.PublishAllDisplays()
-    if not CleveRoids.useClassicAPIDisplay then return end
+    if not CleveRoids.ClassicAPIMacroDisplay then return end
     -- Forget what we published so every macro republishes once. Callers reach here
     -- after login and after a re-parse, where a cached value could otherwise
     -- suppress the publish a freshly rebuilt macro still needs.
@@ -1169,13 +1172,12 @@ end
 
 -- Hand every macro back to ClassicAPI's own parser and stop claiming ownership.
 function CleveRoids.ReleaseDisplays()
-    if not CleveRoids.useClassicAPIDisplay then return end
+    if not CleveRoids.ClassicAPIMacroDisplay then return end
     for i = 1, 36 do
         C_Macro.SetMacroDisplay(i, nil)
     end
     publishedDisplay = {}
     CleveRoids.ClassicAPIMacroDisplay = false
-    CleveRoids.useClassicAPIDisplay = false
 end
 
 -- PERFORMANCE: Static buffer references for hot path
@@ -1221,17 +1223,10 @@ function CleveRoids.TestForAllActiveActions()
         local slots = actionsToSlots[actions]
         local stateChanged = CleveRoids.TestForActiveAction(actions)
         if stateChanged then
-            if CleveRoids.useClassicAPIDisplay then
-                -- Publishing repaints every slot holding this macro through the
-                -- client's own notifier, so the per-slot fan-out below is redundant.
-                CleveRoids.PublishDisplay(actions)
-            else
-                -- Send event to ALL slots that use this macro
-                local count = slots._count
-                for j = 1, count do
-                    CleveRoids.SendEventForAction(slots[j], "ACTIONBAR_SLOT_CHANGED", slots[j])
-                end
-            end
+            -- Publishing repaints every slot holding this macro through the client's
+            -- own notifier, so there is no per-slot fan-out to do here. It no-ops once
+            -- ReleaseDisplays has handed the macros back.
+            CleveRoids.PublishDisplay(actions)
         end
         -- Clear for reuse (reset count and clear buffer reference)
         for j = 1, slots._count do
