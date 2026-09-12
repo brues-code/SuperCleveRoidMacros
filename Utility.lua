@@ -2137,56 +2137,59 @@ function lib:AddEffect(guid, unitName, spellID, duration, stacks, caster)
   end
 end
 
--- Unpack one AuraData into libdebuff's return shape:
---   name, rank, texture, stacks, dispelType, duration, timeleft, caster
 -- timeleft is -1 when the aura's timing is unknown -- ClassicAPI reports
 -- expirationTime 0 for an aura whose cast it never saw (one that predates login,
 -- or a max-stack refresh whose cache entry has elapsed). -1 is what the manual
 -- store returned for an untracked aura, so callers testing `timeleft > 0` are
 -- unaffected; it means "no timer", not "expired".
-local function UnpackAura(aura)
-  local timeleft = -1
-  if aura.expirationTime and aura.expirationTime > 0 then
-    timeleft = aura.expirationTime - GetTime()
+local function RemainingFrom(expirationTime)
+  if expirationTime and expirationTime > 0 then
+    return expirationTime - GetTime()
   end
-  return aura.name, nil, aura.icon, aura.applications, aura.dispelName,
-         aura.duration, timeleft, aura.sourceUnit
+  return -1
 end
 
--- Query debuff data by index. The index space is C_UnitAuras' dense HARMFUL
--- range, so it is walked to the first nil at any index -- no 16-debuff /
--- 32-buff split and no overflow rule, because isHarmful is the aura's real
--- polarity and a debuff parked in a buff slot still reads harmful.
+-- Query debuff data by index, in libdebuff's return shape:
+--   name, rank, texture, stacks, dispelType, duration, timeleft, caster
+-- The index space is C_UnitAuras' dense HARMFUL range, walked to the first nil
+-- at any index -- no 16-debuff / 32-buff split and no overflow rule, because
+-- isHarmful is the aura's real polarity and a debuff parked in a buff slot
+-- still reads harmful. The positional form allocates nothing per slot.
 function lib:UnitDebuff(unit, id, filterCaster)
-  local aura = C_UnitAuras.GetAuraDataByIndex(unit, id, "HARMFUL")
-  if not aura then return nil end
-  if filterCaster and aura.sourceUnit ~= filterCaster then return nil end
-  return UnpackAura(aura)
+  local name, icon, count, dispelType, duration, expirationTime, source =
+    C_UnitAuras.UnitDebuff(unit, id)
+  if not name then return nil end
+  if filterCaster and source ~= filterCaster then return nil end
+  return name, nil, icon, count, dispelType, duration, RemainingFrom(expirationTime), source
 end
 
 -- Query buff data by index (helpful range).
 function lib:UnitBuff(unit, id, filterCaster)
-  local aura = C_UnitAuras.GetAuraDataByIndex(unit, id, "HELPFUL")
-  if not aura then return nil end
-  if filterCaster and aura.sourceUnit ~= filterCaster then return nil end
-  return UnpackAura(aura)
+  local name, icon, count, dispelType, duration, expirationTime, source =
+    C_UnitAuras.UnitBuff(unit, id)
+  if not name then return nil end
+  if filterCaster and source ~= filterCaster then return nil end
+  return name, nil, icon, count, dispelType, duration, RemainingFrom(expirationTime), source
 end
 
 -- Find a player-cast debuff by spell ID. The PLAYER filter matches on
 -- ClassicAPI's cached caster GUID, so an aura whose cast was never observed is
 -- excluded -- the same answer the store's `caster == "player"` test gave, since
--- an unobserved cast was never recorded there either.
+-- an unobserved cast was never recorded there either. One lookup, not a scan,
+-- so the AuraData table it returns costs a single allocation.
 function lib:FindPlayerDebuff(unit, spellID)
   local aura = C_UnitAuras.GetUnitAuraBySpellID(unit, spellID, "HARMFUL|PLAYER")
   if not aura then return nil end
-  return UnpackAura(aura)
+  return aura.name, nil, aura.icon, aura.applications, aura.dispelName,
+         aura.duration, RemainingFrom(aura.expirationTime), aura.sourceUnit
 end
 
 -- Find a player-cast buff by spell ID.
 function lib:FindPlayerBuff(unit, spellID)
   local aura = C_UnitAuras.GetUnitAuraBySpellID(unit, spellID, "HELPFUL|PLAYER")
   if not aura then return nil end
-  return UnpackAura(aura)
+  return aura.name, nil, aura.icon, aura.applications, aura.dispelName,
+         aura.duration, RemainingFrom(aura.expirationTime), aura.sourceUnit
 end
 
 local function SeedUnit(unit)
