@@ -8391,6 +8391,20 @@ local function ParseAfflictedCombatLog()
     end
 end
 
+-- True if the recorded immunity data makes `targetName` immune to `school` right
+-- now: outright when the entry is permanent, or only while it holds the buff the
+-- entry names. The buff test is one by-name lookup across the unit's auras via
+-- C_UnitAuras -- no slot scan, and it finds the aura wherever it sits.
+local function SchoolImmune(unitId, school, targetName)
+    local schoolData = school and CleveRoids_ImmunityData[school]
+    local data = schoolData and schoolData[targetName]
+    if not data then return false end
+    if data == true then return true end
+    if type(data) ~= "table" then return false end
+    if not data.buff then return true end
+    return CleveRoids.ClassicAPI.GetAuraDataBySpellName(unitId, data.buff, "HELPFUL") and true or false
+end
+
 -- Check if a unit is immune to a spell, damage school, or CC type
 -- Supports: CheckImmunity(unitId, "Flame Shock") or CheckImmunity(unitId, "fire") or CheckImmunity(unitId, "stun")
 function CleveRoids.CheckImmunity(unitId, spellOrSchool)
@@ -8487,53 +8501,10 @@ function CleveRoids.CheckImmunity(unitId, spellOrSchool)
             local initialSchool = splitData.initial
             local debuffSchool = splitData.debuff
 
-            -- Check initial school immunity (e.g., physical for Rake's initial hit)
-            local initialImmune = false
-            if initialSchool and CleveRoids_ImmunityData[initialSchool] then
-                local initialImmunityData = CleveRoids_ImmunityData[initialSchool][targetName]
-                if initialImmunityData == true then
-                    initialImmune = true
-                elseif type(initialImmunityData) == "table" and not initialImmunityData.buff then
-                    initialImmune = true
-                elseif type(initialImmunityData) == "table" and initialImmunityData.buff then
-                    -- Check if target has the immunity-granting buff
-                    for i = 1, 32 do
-                        local texture, stacks, spellID = UnitBuff(unitId, i)
-                        if not texture then break end
-                        if spellID then
-                            local buffName = C_Spell.GetSpellName(spellID)
-                            if buffName and buffName == initialImmunityData.buff then
-                                initialImmune = true
-                                break
-                            end
-                        end
-                    end
-                end
-            end
-
-            -- Check debuff school immunity (e.g., bleed for Rake's DoT)
-            local debuffImmune = false
-            if debuffSchool and CleveRoids_ImmunityData[debuffSchool] then
-                local debuffImmunityData = CleveRoids_ImmunityData[debuffSchool][targetName]
-                if debuffImmunityData == true then
-                    debuffImmune = true
-                elseif type(debuffImmunityData) == "table" and not debuffImmunityData.buff then
-                    debuffImmune = true
-                elseif type(debuffImmunityData) == "table" and debuffImmunityData.buff then
-                    -- Check if target has the immunity-granting buff
-                    for i = 1, 32 do
-                        local texture, stacks, spellID = UnitBuff(unitId, i)
-                        if not texture then break end
-                        if spellID then
-                            local buffName = C_Spell.GetSpellName(spellID)
-                            if buffName and buffName == debuffImmunityData.buff then
-                                debuffImmune = true
-                                break
-                            end
-                        end
-                    end
-                end
-            end
+            -- Initial school (e.g. physical for Rake's opening hit), then the DoT's
+            -- school (e.g. bleed). Immunity to either component skips the spell.
+            local initialImmune = SchoolImmune(unitId, initialSchool, targetName)
+            local debuffImmune = SchoolImmune(unitId, debuffSchool, targetName)
 
             -- Return true if immune to EITHER component
             if initialImmune or debuffImmune then
