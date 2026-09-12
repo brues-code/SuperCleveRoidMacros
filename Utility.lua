@@ -1330,139 +1330,6 @@ function lib:CleanupStaleTrackingData()
 
 end
 
--- Get the caster GUID for a debuff on a target
--- Returns: casterGuid or nil
-function lib:GetDebuffCaster(unit, spellName)
-  if not spellName then return nil end
-
-  local guid = CleveRoids.GetGUID(unit)
-  if not guid then return nil end
-
-  -- Check own debuffs first
-  if lib.ownDebuffs[guid] and lib.ownDebuffs[guid][spellName] then
-    local playerGuid = CleveRoids.GetGUID("player")
-    return playerGuid
-  end
-
-  -- Check slotOwnership (pfUI 7.6+ GetUnitField edition) for caster info
-  if lib.slotOwnership[guid] then
-    for auraSlot, slotData in pairs(lib.slotOwnership[guid]) do
-      if slotData.spellName == spellName then
-        return slotData.casterGuid
-      end
-    end
-  end
-
-  -- LEGACY: Check allSlots for caster info (pre-pfUI 7.6)
-  if lib.allSlots[guid] then
-    for slot, slotData in pairs(lib.allSlots[guid]) do
-      if slotData.spellName == spellName then
-        return slotData.casterGuid
-      end
-    end
-  end
-
-  -- Check allAuraCasts
-  if lib.allAuraCasts[guid] and lib.allAuraCasts[guid][spellName] then
-    -- Return first caster found (there should typically be only one for unique debuffs)
-    for casterGuid, _ in pairs(lib.allAuraCasts[guid][spellName]) do
-      return casterGuid
-    end
-  end
-
-  return nil
-end
-
--- Check if a debuff on a target is from the player
--- Returns: true if player's debuff, false otherwise
-function lib:IsOurDebuff(unit, spellName)
-  if not spellName then return false end
-
-  local guid = CleveRoids.GetGUID(unit)
-  if not guid then return false end
-
-  -- Check own debuffs
-  if lib.ownDebuffs[guid] and lib.ownDebuffs[guid][spellName] then
-    return true
-  end
-
-  -- Check slotOwnership (pfUI 7.6+ GetUnitField edition) for isOurs flag
-  if lib.slotOwnership[guid] then
-    for auraSlot, slotData in pairs(lib.slotOwnership[guid]) do
-      if slotData.spellName == spellName then
-        return slotData.isOurs == true
-      end
-    end
-  end
-
-  -- LEGACY: Check allSlots for isOurs flag (pre-pfUI 7.6)
-  if lib.allSlots[guid] then
-    for slot, slotData in pairs(lib.allSlots[guid]) do
-      if slotData.spellName == spellName then
-        return slotData.isOurs == true
-      end
-    end
-  end
-
-  return false
-end
-
--- Get all tracked debuffs on a target
--- Returns: table of {spellName = {duration, timeleft, casterGuid, isOurs, stacks}}
-function lib:GetAllDebuffsOnTarget(guid)
-  if not guid then return {} end
-  guid = CleveRoids.NormalizeGUID(guid)
-
-  local result = {}
-  local now = GetTime()
-
-  -- Gather from ownDebuffs
-  if lib.ownDebuffs[guid] then
-    for spellName, data in pairs(lib.ownDebuffs[guid]) do
-      if data.startTime and data.duration then
-        local timeleft = (data.startTime + data.duration) - now
-        if timeleft > 0 then
-          result[spellName] = {
-            duration = data.duration,
-            timeleft = timeleft,
-            casterGuid = nil, -- Player's own, get from UnitExists("player")
-            isOurs = true,
-            stacks = 1,
-            rank = data.rank,
-            slot = data.slot,
-          }
-        end
-      end
-    end
-  end
-
-  -- Gather from allAuraCasts (other players' debuffs)
-  if lib.allAuraCasts[guid] then
-    for spellName, casterTable in pairs(lib.allAuraCasts[guid]) do
-      if not result[spellName] then
-        for casterGuid, data in pairs(casterTable) do
-          if data.startTime and data.duration then
-            local timeleft = (data.startTime + data.duration) - now
-            if timeleft > 0 then
-              result[spellName] = {
-                duration = data.duration,
-                timeleft = timeleft,
-                casterGuid = casterGuid,
-                isOurs = false,
-                stacks = 1,
-                rank = data.rank,
-              }
-              break  -- Only store first active caster's data
-            end
-          end
-        end
-      end
-    end
-  end
-
-  return result
-end
-
 -- Check if a pending cast exists for a spell on a target
 function lib:HasPendingCast(targetGuid, spellName)
   if not targetGuid or not spellName then return false end
@@ -2270,167 +2137,56 @@ function lib:AddEffect(guid, unitName, spellID, duration, stacks, caster)
   end
 end
 
+-- Unpack one AuraData into libdebuff's return shape:
+--   name, rank, texture, stacks, dispelType, duration, timeleft, caster
+-- timeleft is -1 when the aura's timing is unknown -- ClassicAPI reports
+-- expirationTime 0 for an aura whose cast it never saw (one that predates login,
+-- or a max-stack refresh whose cache entry has elapsed). -1 is what the manual
+-- store returned for an untracked aura, so callers testing `timeleft > 0` are
+-- unaffected; it means "no timer", not "expired".
+local function UnpackAura(aura)
+  local timeleft = -1
+  if aura.expirationTime and aura.expirationTime > 0 then
+    timeleft = aura.expirationTime - GetTime()
+  end
+  return aura.name, nil, aura.icon, aura.applications, aura.dispelName,
+         aura.duration, timeleft, aura.sourceUnit
+end
+
+-- Query debuff data by index. The index space is C_UnitAuras' dense HARMFUL
+-- range, so it is walked to the first nil at any index -- no 16-debuff /
+-- 32-buff split and no overflow rule, because isHarmful is the aura's real
+-- polarity and a debuff parked in a buff slot still reads harmful.
 function lib:UnitDebuff(unit, id, filterCaster)
-  local guid = CleveRoids.GetGUID(unit)
-  if not guid then return nil end
-
-  local texture, stacks, dtype, spellID = nil, nil, nil, nil
-
-  -- SuperWoW debuff slots: 1-16 are regular debuffs, 17-48 overflow to buff slots 1-32
-  -- See: https://forum.turtle-wow.org/viewtopic.php?t=13281
-  if id <= 16 then
-    -- Regular debuff slot
-    texture, stacks, dtype, spellID = UnitDebuff(unit, id)
-  else
-    -- Overflow debuff in buff slot: debuff index 17 = buff index 1, etc.
-    local buffIndex = id - 16
-    if buffIndex <= 32 then
-      texture, stacks, spellID = UnitBuff(unit, buffIndex)
-      -- Only accept buffs that are known debuffs (either static or learned durations, including combo durations)
-      if texture and spellID and lib:GetDuration(spellID) <= 0 then
-        return nil
-      end
-    end
-  end
-
-  if not texture or not spellID then return nil end
-
-  local name = C_Spell.GetSpellName(spellID)
-  local duration, timeleft, caster = nil, -1, nil
-
-  local rec = lib.objects[guid] and lib.objects[guid][spellID]
-
-  if rec and rec.duration and rec.start then
-    local remaining = rec.duration + rec.start - GetTime()
-    if remaining > 0 then
-      duration = rec.duration
-      timeleft = remaining
-      caster = rec.caster
-      stacks = rec.stacks or stacks
-
-      -- Filter by caster if requested
-      -- Since personal debuffs are only tracked via UNIT_CASTEVENT (player only),
-      -- this filter only applies to shared debuffs where multiple casters can apply
-      if filterCaster and caster ~= filterCaster then
-        return nil
-      end
-    else
-      lib.objects[guid][spellID] = nil
-    end
-  elseif filterCaster then
-    -- No tracking record exists. This means either:
-    -- 1. Personal debuff from another player (wasn't tracked via UNIT_CASTEVENT)
-    -- 2. Shared debuff that expired from tracking
-    -- In both cases, if filtering by caster, we should reject it
-    return nil
-  end
-
-  return name, nil, texture, stacks, dtype, duration, timeleft, caster
+  local aura = C_UnitAuras.GetAuraDataByIndex(unit, id, "HARMFUL")
+  if not aura then return nil end
+  if filterCaster and aura.sourceUnit ~= filterCaster then return nil end
+  return UnpackAura(aura)
 end
 
--- Query buff data with duration and caster tracking (buff slots only)
+-- Query buff data by index (helpful range).
 function lib:UnitBuff(unit, id, filterCaster)
-  local guid = CleveRoids.GetGUID(unit)
-  if not guid then return nil end
-
-  -- Only check buff slots
-  local texture, stacks, spellID = UnitBuff(unit, id)
-
-  if not texture or not spellID then return nil end
-
-  local name = C_Spell.GetSpellName(spellID)
-  local duration, timeleft, caster = nil, -1, nil
-
-  local rec = lib.objects[guid] and lib.objects[guid][spellID]
-
-  if rec and rec.duration and rec.start then
-    local remaining = rec.duration + rec.start - GetTime()
-    if remaining > 0 then
-      duration = rec.duration
-      timeleft = remaining
-      caster = rec.caster
-      stacks = rec.stacks or stacks
-
-      -- Filter by caster if requested
-      if filterCaster and caster ~= filterCaster then
-        return nil
-      end
-    else
-      lib.objects[guid][spellID] = nil
-    end
-  elseif filterCaster then
-    -- No tracking record exists - reject when filtering by caster
-    return nil
-  end
-
-  return name, nil, texture, stacks, nil, duration, timeleft, caster
+  local aura = C_UnitAuras.GetAuraDataByIndex(unit, id, "HELPFUL")
+  if not aura then return nil end
+  if filterCaster and aura.sourceUnit ~= filterCaster then return nil end
+  return UnpackAura(aura)
 end
 
--- Find a player-cast debuff by spell ID (searches all slots including buff slots)
+-- Find a player-cast debuff by spell ID. The PLAYER filter matches on
+-- ClassicAPI's cached caster GUID, so an aura whose cast was never observed is
+-- excluded -- the same answer the store's `caster == "player"` test gave, since
+-- an unobserved cast was never recorded there either.
 function lib:FindPlayerDebuff(unit, spellID)
-  local guid = CleveRoids.GetGUID(unit)
-  if not guid then return nil end
-
-  -- Check if we're tracking this spell for this unit
-  local rec = lib.objects[guid] and lib.objects[guid][spellID]
-  if not rec then return nil end
-
-  -- Only return if it was cast by player
-  if rec.caster ~= "player" then return nil end
-
-  -- Check if it's still active
-  local remaining = rec.duration + rec.start - GetTime()
-  if remaining <= 0 then
-    lib.objects[guid][spellID] = nil
-    return nil
-  end
-
-  -- Find the texture/stacks via one by-ID lookup (walks both debuff and buff
-  -- ranges), replacing the 16 debuff + 32 buff slot scan.
-  local texture, stacks = nil, rec.stacks
-  local aura = CleveRoids.ClassicAPI.GetUnitAuraBySpellID(unit, spellID)
-  if aura then
-    texture = aura.icon
-    stacks = aura.applications or stacks
-  end
-
-  if not texture then return nil end
-
-  local name = C_Spell.GetSpellName(spellID)
-  return name, nil, texture, stacks, nil, rec.duration, remaining, rec.caster
+  local aura = C_UnitAuras.GetUnitAuraBySpellID(unit, spellID, "HARMFUL|PLAYER")
+  if not aura then return nil end
+  return UnpackAura(aura)
 end
 
--- Find a player-cast buff by spell ID (searches buff slots only)
+-- Find a player-cast buff by spell ID.
 function lib:FindPlayerBuff(unit, spellID)
-  local guid = CleveRoids.GetGUID(unit)
-  if not guid then return nil end
-
-  -- Check if we're tracking this spell for this unit
-  local rec = lib.objects[guid] and lib.objects[guid][spellID]
-  if not rec then return nil end
-
-  -- Only return if it was cast by player
-  if rec.caster ~= "player" then return nil end
-
-  -- Check if it's still active
-  local remaining = rec.duration + rec.start - GetTime()
-  if remaining <= 0 then
-    lib.objects[guid][spellID] = nil
-    return nil
-  end
-
-  -- Find the texture/stacks via one by-ID lookup restricted to buffs.
-  local texture, stacks = nil, rec.stacks
-  local aura = CleveRoids.ClassicAPI.GetUnitAuraBySpellID(unit, spellID, "HELPFUL")
-  if aura then
-    texture = aura.icon
-    stacks = aura.applications or stacks
-  end
-
-  if not texture then return nil end
-
-  local name = C_Spell.GetSpellName(spellID)
-  return name, nil, texture, stacks, nil, rec.duration, remaining, rec.caster
+  local aura = C_UnitAuras.GetUnitAuraBySpellID(unit, spellID, "HELPFUL|PLAYER")
+  if not aura then return nil end
+  return UnpackAura(aura)
 end
 
 local function SeedUnit(unit)
