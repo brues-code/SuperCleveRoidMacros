@@ -1772,43 +1772,6 @@ lib.sharedDebuffs = lib.sharedDebuffs or {
   [5209] = 6,     -- Challenging Roar
 }
 
--- JUDGEMENT SPELLS: These are refreshed by the paladin's melee attacks
--- Track them by spell ID for refresh detection
-lib.judgementSpells = lib.judgementSpells or {
-  -- Vanilla IDs
-  [20184] = true,   -- Judgement of Justice
-  [20185] = true,   -- Judgement of Light (Rank 1)
-  [20267] = true,   -- Judgement of Light (Rank 2)
-  [20268] = true,   -- Judgement of Light (Rank 3)
-  [20271] = true,   -- Judgement of Light (Rank 4)
-  [20186] = true,   -- Judgement of Wisdom (Rank 1)
-  [20354] = true,   -- Judgement of Wisdom (Rank 2)
-  [20355] = true,   -- Judgement of Wisdom (Rank 3)
-  [21183] = true,   -- Judgement of the Crusader (Rank 1)
-  [20183] = true,   -- Judgement of the Crusader (Rank 2)
-  [20300] = true,   -- Judgement of the Crusader (Rank 3)
-  [20301] = true,   -- Judgement of the Crusader (Rank 4)
-  [20302] = true,   -- Judgement of the Crusader (Rank 5)
-  [20303] = true,   -- Judgement of the Crusader (Rank 6)
-
-  -- Turtle WoW custom judgement IDs (debuff IDs only, not cast spells)
-  [51751] = true,   -- Judgement of Wisdom (Rank 4) - Turtle WoW
-  [51752] = true,   -- Judgement of Wisdom (Rank 5) - Turtle WoW
-  -- Auto-detection will discover other Turtle WoW judgement debuffs at runtime
-}
-
--- Pending judgement casts: Map cast spell ID to target for debuff ID detection
--- When paladin casts Judgement, we need to find what debuff actually appears
-lib.pendingJudgements = lib.pendingJudgements or {}
-
--- Detected judgement debuff IDs: Maps debuff name patterns to spell IDs
--- This gets populated as we discover what debuffs actually appear after casting
-lib.detectedJudgementDebuffIDs = lib.detectedJudgementDebuffIDs or {}
-
--- NOTE: Judgement refresh on melee hits is handled by evJudgement (below)
--- It only uses chat-based detection when SuperWoW is unavailable;
--- otherwise Core.lua handles it via UNIT_CASTEVENT (MAINHAND/OFFHAND)
-
 -- Combined table for backwards compatibility (will be deprecated)
 lib.durations = lib.durations or {}
 for k, v in pairs(lib.personalDebuffs) do
@@ -2413,7 +2376,6 @@ local _table_insert = table.insert  -- Lua 5.0 compatible
 
 -- PERFORMANCE: Static buffers for removal tracking - reused every frame
 -- Using mark-and-sweep pattern instead of table.remove() for O(1) removal
-local _pendingJudgementsBuffer = {}
 local _pendingPersonalBuffer = {}
 local _pendingCCBuffer = {}
 local _pendingSharedBuffer = {}
@@ -2539,7 +2501,6 @@ delayedTrackingFrame:SetScript("OnUpdate", function()
   -- PERFORMANCE: Early exit if all queues are empty
   -- NOTE: Use next() instead of [1] to handle array holes from table.remove()
   -- Array holes can occur when combat log handlers remove entries mid-iteration
-  local hasJudgements = lib.pendingJudgements and _next(lib.pendingJudgements)
   local hasPersonal = lib.pendingPersonalDebuffs and _next(lib.pendingPersonalDebuffs)
   local hasCC = lib.pendingCCDebuffs and _next(lib.pendingCCDebuffs)
   local hasShared = lib.pendingSharedDebuffs and _next(lib.pendingSharedDebuffs)
@@ -2565,7 +2526,7 @@ delayedTrackingFrame:SetScript("OnUpdate", function()
     end
   end
 
-  if not (hasJudgements or hasPersonal or hasCC or hasShared or hasOverrides) then
+  if not (hasPersonal or hasCC or hasShared or hasOverrides) then
     return
   end
 
@@ -2588,69 +2549,6 @@ delayedTrackingFrame:SetScript("OnUpdate", function()
       return "target"
     end
     return nil
-  end
-
-  -- Process pending judgement scans to detect actual debuff IDs
-  if hasJudgements then
-    local writeIdx = 0
-    local pendingList = lib.pendingJudgements
-
-    for i = 1, _getn(pendingList) do
-      local pending = pendingList[i]
-      -- Guard against nil entries (can occur if combat log events remove items during iteration)
-      if pending then
-      local elapsed = currentTime - pending.timestamp
-
-      -- Scan target after 0.5 seconds to find the actual judgement debuff
-      if elapsed >= 0.5 then
-        -- Check if this is still the current target
-        local currentTargetGUID = CleveRoids.GetGUID("target")
-
-        if currentTargetGUID == pending.targetGUID then
-          -- Scan all debuffs on target to find judgement-type debuffs
-          for slot = 1, 16 do
-            local _, _, _, debuffSpellID = _UnitDebuff("target", slot)
-            if not debuffSpellID then break end
-
-            local debuffName = C_Spell.GetSpellName(debuffSpellID)
-            -- Check if this is a judgement debuff (name starts with "Judgement")
-            if debuffName and _string_find(debuffName, "^Judgement") then
-              -- Found a judgement debuff! Store it for refresh tracking
-              if not lib.detectedJudgementDebuffIDs[debuffSpellID] then
-                lib.detectedJudgementDebuffIDs[debuffSpellID] = true
-                lib.judgementSpells[debuffSpellID] = true  -- Add to refresh list
-                -- Also register as shared debuff so [debuff]/[nodebuff] fallback detection works
-                -- for custom Turtle WoW spell IDs not in the hardcoded sharedDebuffs table
-                if not lib.sharedDebuffs[debuffSpellID] then
-                  lib.sharedDebuffs[debuffSpellID] = 10  -- Standard judgement duration
-                  CleveRoids.InvalidateSpellNameCache()
-                end
-
-                if debug then
-                  DEFAULT_CHAT_FRAME:AddMessage(
-                    _string_format("|cff00ffff[Judgement Detect]|r Found debuff %s (ID:%d) from cast (ID:%d) - added to refresh + shared list",
-                      debuffName, debuffSpellID, pending.castSpellID)
-                  )
-                end
-              end
-            end
-          end
-        end
-        -- Item processed, don't copy to output
-      else
-        -- Item not ready, keep it
-        writeIdx = writeIdx + 1
-        if writeIdx ~= i then
-          pendingList[writeIdx] = pending
-        end
-      end
-      end -- if pending
-    end
-
-    -- PERFORMANCE: Clear remaining slots and update length
-    for i = writeIdx + 1, _getn(pendingList) do
-      pendingList[i] = nil
-    end
   end
 
   -- Process pending personal debuffs
@@ -3864,22 +3762,6 @@ ev:SetScript("OnEvent", function()
                 comboPoints = comboPoints
               })
 
-              -- If this is a Judgement spell cast by a Paladin, schedule a scan to find the actual debuff ID
-              -- Check by ID (known judgement debuffs) OR by name (Turtle WoW custom cast spell IDs)
-              local isJudgementCast = lib.judgementSpells[spellID]
-              if not isJudgementCast and CleveRoids.playerClass == "PALADIN" then
-                local castName = C_Spell.GetSpellName(spellID)
-                isJudgementCast = castName and _string_find(castName, "^Judgement")
-              end
-              if CleveRoids.playerClass == "PALADIN" and isJudgementCast then
-                table.insert(lib.pendingJudgements, {
-                  timestamp = GetTime(),
-                  castSpellID = spellID,
-                  targetGUID = targetGUID,
-                  targetName = targetName
-                })
-              end
-
               if CleveRoids.debug then
                 local spellName = C_Spell.GetSpellName(trackingSpellID) or "Unknown"
                 DEFAULT_CHAT_FRAME:AddMessage(
@@ -4576,21 +4458,6 @@ ev:SetScript("OnEvent", function()
               comboPoints = debuffComboPoints,
               spellGoHit = true,  -- Already confirmed hit from SPELL_GO
             })
-
-            -- Judgement scan for Paladins
-            local isJudgementCast = lib.judgementSpells[spellId]
-            if not isJudgementCast and CleveRoids.playerClass == "PALADIN" then
-              local castName = C_Spell.GetSpellName(spellId)
-              isJudgementCast = castName and string.find(castName, "^Judgement")
-            end
-            if CleveRoids.playerClass == "PALADIN" and isJudgementCast then
-              table.insert(lib.pendingJudgements, {
-                timestamp = GetTime(),
-                castSpellID = spellId,
-                targetGUID = targetGuid,
-                targetName = targetName
-              })
-            end
 
             if CleveRoids.debug then
               local trackingName = C_Spell.GetSpellName(trackingSpellID) or "Unknown"
@@ -5439,91 +5306,6 @@ evCleanup:SetScript("OnEvent", function()
             end
         end
     end
-end)
-
--- Judgement refresh on melee hits
--- Priority: SuperWoW UNIT_CASTEVENT > Nampower AUTO_ATTACK_OTHER > Chat log fallback
--- This chat-based fallback is only used if neither SuperWoW nor Nampower v2.24+ is available
-local evJudgement = CreateFrame("Frame", "CleveRoidsLibDebuffJudgementRefreshFrame", UIParent)
-
--- Only use chat-based detection if SuperWoW and Nampower auto-attack events are not available
-local hasAutoAttackEvents = CleveRoids.NampowerAPI and CleveRoids.NampowerAPI.features
-  and CleveRoids.NampowerAPI.features.hasAutoAttackEvents
-if not CleveRoids.hasSuperwow and not hasAutoAttackEvents then
-  evJudgement:RegisterEvent("CHAT_MSG_COMBAT_SELF_HITS")
-  evJudgement:RegisterEvent("CHAT_MSG_COMBAT_SELF_MISSES")
-end
-
-evJudgement:SetScript("OnEvent", function()
-  -- Skip if SuperWoW or Nampower auto-attack events handle this
-  if CleveRoids.hasSuperwow then return end
-  if hasAutoAttackEvents then return end
-  -- Only process for paladins
-  if CleveRoids.playerClass ~= "PALADIN" then return end
-
-  if not arg1 then return end
-
-  -- Debug: Show all combat hit events if debug is enabled
-  if CleveRoids.debug and event == "CHAT_MSG_COMBAT_SELF_HITS" then
-    DEFAULT_CHAT_FRAME:AddMessage("|cffaaaaaa[Combat Hit Event]|r " .. arg1)
-  end
-
-  -- Check if this is a melee hit (not a spell hit)
-  -- CHAT_MSG_COMBAT_SELF_HITS contains both melee and spell hits
-  -- Filter out spell hits by checking for spell names in parentheses or common patterns
-  -- Melee hits look like: "You hit Target for X." or "You crit Target for X."
-  local isSpellHit = string.find(arg1, "%(") -- Spell hits often have parentheses
-  if isSpellHit then return end
-
-  -- Must contain "hit" or "crit" to be a valid melee attack
-  local lowerMsg = string.lower(arg1)
-  local hasHit = string.find(lowerMsg, "hit") or string.find(lowerMsg, "crit")
-  if not hasHit then return end
-
-  -- Get current target
-  local targetGUID = CleveRoids.GetGUID("target")
-  if not targetGUID then return end
-
-  if not lib.objects[targetGUID] then return end
-
-  -- Refresh all active Judgements on the target
-  for spellID, rec in pairs(lib.objects[targetGUID]) do
-    if lib.judgementSpells[spellID] and rec.start and rec.duration then
-      -- Only refresh if the Judgement is still active and was cast by player
-      local remaining = rec.duration + rec.start - GetTime()
-      if remaining > 0 and rec.caster == "player" then
-        -- Refresh the Judgement by updating the start time
-        rec.start = GetTime()
-
-        if CleveRoids.debug then
-          local spellName = C_Spell.GetSpellName(spellID) or "Unknown"
-          DEFAULT_CHAT_FRAME:AddMessage(
-            string.format("|cff00ffaa[Judgement Refresh]|r Refreshed %s (ID:%d) on melee hit - new duration: %ds",
-              spellName, spellID, rec.duration)
-          )
-        end
-
-        -- Also sync to pfUI if it's loaded (pre-7.6 only)
-        if pfUI and pfUI.api and pfUI.api.libdebuff then
-          local targetName = lib.guidToName[targetGUID] or UnitName("target")
-          local targetLevel = UnitLevel("target") or 0
-          local spellName = C_Spell.GetSpellName(spellID)
-
-          if spellName and targetName then
-            local effectName = CleveRoids.StripRank(spellName)
-            pfUI.api.libdebuff:AddEffect(targetName, targetLevel, effectName, rec.duration, "player")
-
-            if CleveRoids.debug then
-              DEFAULT_CHAT_FRAME:AddMessage(
-                string.format("|cff00ffaa[pfUI Judgement Refresh]|r Synced %s refresh to pfUI",
-                  effectName)
-              )
-            end
-          end
-        end
-      end
-    end
-  end
 end)
 
 -- TALENT MODIFIER SYSTEM

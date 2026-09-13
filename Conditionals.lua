@@ -897,43 +897,6 @@ local function OnAutoAttackOther(attackerGuid, targetGuid, totalDamage, hitInfo,
     CleveRoids.LastSwing.resistAmount = totalResist or 0
     CleveRoids.LastSwing.targetGuid = targetGuid
 
-    -- Paladin: refresh active Judgements on melee hit (Nampower fallback for UNIT_CASTEVENT)
-    if CleveRoids.playerClass == "PALADIN" and targetGuid then
-        local lib = type(CleveRoids.libdebuff) == "table" and CleveRoids.libdebuff or nil
-        if lib and lib.objects then
-            local normalizedTarget = CleveRoids.NormalizeGUID(targetGuid)
-            if normalizedTarget and lib.objects[normalizedTarget] then
-                for spellID, rec in pairs(lib.objects[normalizedTarget]) do
-                    if lib.judgementSpells and lib.judgementSpells[spellID] and rec.start and rec.duration then
-                        local remaining = rec.duration + rec.start - GetTime()
-                        if remaining > 0 and rec.caster == "player" then
-                            rec.start = GetTime()
-
-                            if CleveRoids.debug then
-                                local spellName = C_Spell.GetSpellName(spellID) or "Unknown"
-                                local baseName = CleveRoids.StripRank(spellName) or "Unknown"
-                                DEFAULT_CHAT_FRAME:AddMessage(
-                                    string.format("|cff00ffaa[Judgement Refresh]|r Refreshed %s (ID:%d) on melee hit - new duration: %ds",
-                                        baseName, spellID, rec.duration)
-                                )
-                            end
-
-                            -- Sync to pfUI if loaded (pre-7.6 only)
-                            if pfUI and pfUI.api and pfUI.api.libdebuff then
-                                local spellName = C_Spell.GetSpellName(spellID) or nil
-                                local baseName = CleveRoids.StripRank(spellName)
-                                local targetName = (lib.guidToName and lib.guidToName[normalizedTarget]) or UnitName("target")
-                                local targetLevel = UnitLevel("target") or 0
-                                if targetName and baseName then
-                                    pfUI.api.libdebuff:AddEffect(targetName, targetLevel, baseName, rec.duration, "player")
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
 end
 
 -- Process AUTO_ATTACK_SELF event (player being attacked)

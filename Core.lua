@@ -4616,58 +4616,11 @@ function CleveRoids.Frame:ADDON_LOADED(addon)
 end
 
 function CleveRoids.Frame:UNIT_CASTEVENT(caster,target,action,spell_id,cast_time)
-    -- Handle melee swings for judgement refresh
+    -- Melee swings carry no spell to resolve. ClassicAPI mirrors the server's
+    -- paladin judgement-refresh rule off SMSG_ATTACKERSTATEUPDATE in the DLL
+    -- (src/aura/JudgementRefresh.cpp), so there is nothing to do here.
     if action == "MAINHAND" or action == "OFFHAND" then
-        -- Only process if this is the player's melee swing
-        if caster == CleveRoids.playerGuid and CleveRoids.playerClass == "PALADIN" then
-            -- Refresh judgements on the target
-            -- Defensive: verify libdebuff is a table before accessing properties
-            local lib = type(CleveRoids.libdebuff) == "table" and CleveRoids.libdebuff or nil
-            if target and lib and lib.objects then
-                local normalizedTarget = CleveRoids.NormalizeGUID(target)
-                if normalizedTarget and lib.objects[normalizedTarget] then
-                    -- Refresh all active Judgements on the target
-                    for spellID, rec in pairs(lib.objects[normalizedTarget]) do
-                        -- Check if this is a judgement by spell ID
-                        if lib.judgementSpells and lib.judgementSpells[spellID] and rec.start and rec.duration then
-                            -- Only refresh if the Judgement is still active and was cast by player
-                            local remaining = rec.duration + rec.start - GetTime()
-                            if remaining > 0 and rec.caster == "player" then
-                                -- Refresh the Judgement by updating the start time
-                                rec.start = GetTime()
-
-                                local spellName = C_Spell.GetSpellName(spellID)
-                                local baseName = CleveRoids.StripRank(spellName) or "Unknown"
-
-                                if CleveRoids.debug then
-                                    DEFAULT_CHAT_FRAME:AddMessage(
-                                        string.format("|cff00ffaa[Judgement Refresh]|r Refreshed %s (ID:%d) on %s hit - new duration: %ds",
-                                            baseName, spellID, action, rec.duration)
-                                    )
-                                end
-
-                                -- Also sync to pfUI if it's loaded (pre-7.6 only)
-                                if pfUI and pfUI.api and pfUI.api.libdebuff then
-                                    local targetName = (lib.guidToName and lib.guidToName[normalizedTarget]) or UnitName("target")
-                                    local targetLevel = UnitLevel("target") or 0
-
-                                    if targetName then
-                                        pfUI.api.libdebuff:AddEffect(targetName, targetLevel, baseName, rec.duration, "player")
-
-                                        if CleveRoids.debug then
-                                            DEFAULT_CHAT_FRAME:AddMessage(
-                                                string.format("|cff00ffaa[pfUI Judgement Refresh]|r Synced %s refresh to pfUI", baseName)
-                                            )
-                                        end
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-        return  -- Still return early after processing melee
+        return
     end
 
     -- Debug channel tracking
