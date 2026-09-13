@@ -2347,74 +2347,6 @@ local function SeedUnit(unit)
   end
 end
 
--- WARLOCK DARK HARVEST: Duration Acceleration System (TWoW Custom)
--- Credits: Avitasia / Cursive addon
--- Dark Harvest is a channeled spell that accelerates DoT tick rate by 30%
--- While channeling, DoTs on the target expire 30% faster
-
--- Calculate Dark Harvest reduction for a debuff record
--- Returns the amount of time to subtract from remaining duration
-function lib.GetDarkHarvestReduction(rec)
-  if not rec or not rec.dhStartTime then
-    return 0
-  end
-
-  local endTime = rec.dhEndTime or GetTime()
-  local dhActiveTime = endTime - rec.dhStartTime
-  if dhActiveTime > 0 then
-    return dhActiveTime * 0.3  -- 30% acceleration
-  end
-  return 0
-end
-
--- Track Dark Harvest start for all DoTs on target
-function lib.ApplyDarkHarvestStart(targetGUID)
-  if not lib.objects[targetGUID] then return end
-
-  local now = GetTime()
-  for spellID, rec in pairs(lib.objects[targetGUID]) do
-    if type(rec) == "table" and rec.duration and rec.start then
-      -- Only affect DoTs (debuffs with duration > 0 that tick)
-      -- Skip if already has dhStartTime (avoid double-tracking)
-      if not rec.dhStartTime then
-        rec.dhStartTime = now
-        rec.dhEndTime = nil  -- Clear any previous end time
-      end
-    end
-  end
-
-  if CleveRoids.debug then
-    DEFAULT_CHAT_FRAME:AddMessage(
-      string.format("|cff9482c9[Dark Harvest]|r Started accelerating DoTs on %s",
-        lib.guidToName[targetGUID] or "Unknown")
-    )
-  end
-end
-
--- Track Dark Harvest end for all DoTs on target
-function lib.ApplyDarkHarvestEnd(targetGUID)
-  if not lib.objects[targetGUID] then return end
-
-  local now = GetTime()
-  for spellID, rec in pairs(lib.objects[targetGUID]) do
-    if type(rec) == "table" and rec.dhStartTime and not rec.dhEndTime then
-      rec.dhEndTime = now
-    end
-  end
-end
-
--- Get time remaining for a debuff, accounting for Dark Harvest acceleration
-function lib.GetTimeRemainingWithDarkHarvest(rec)
-  if not rec or not rec.duration or not rec.start then
-    return 0
-  end
-
-  local baseRemaining = rec.duration + rec.start - GetTime()
-  local dhReduction = lib.GetDarkHarvestReduction(rec)
-
-  return baseRemaining - dhReduction
-end
-
 -- Personal debuff pending tracking system
 -- Stores personal debuffs to be added after 0.5s delay (to verify they weren't dodged/parried/blocked)
 -- Format: { [index] = { timestamp = GetTime(), targetGUID = guid, targetName = name, spellID = id, duration = X, comboPoints = CP } }
@@ -3715,31 +3647,6 @@ ev:SetScript("OnEvent", function()
           end
         end
 
-        -- WARLOCK DARK HARVEST: Track channeling for DoT acceleration (TWoW Custom)
-        -- Credits: Avitasia / Cursive addon
-        -- Dark Harvest accelerates DoT tick rate by 30% while channeling
-        if eventType == "CHANNEL" and CleveRoids.DarkHarvestSpellIDs and CleveRoids.DarkHarvestSpellIDs[spellID] then
-          -- Get channel duration from tooltip or use base duration (8 seconds)
-          local channelDuration = 8  -- Base Dark Harvest duration
-
-          CleveRoids.darkHarvestData = {
-            targetGUID = targetGUID,
-            spellID = spellID,
-            startTime = GetTime(),
-            channelDuration = channelDuration,
-            isActive = true
-          }
-
-          -- Apply Dark Harvest acceleration to all existing DoTs on target
-          lib.ApplyDarkHarvestStart(targetGUID)
-
-          if CleveRoids.debug then
-            DEFAULT_CHAT_FRAME:AddMessage(
-              string.format("|cff9482c9[Dark Harvest]|r Started channeling on %s (DoTs will tick 30%% faster)",
-                lib.guidToName[targetGUID] or "Unknown")
-            )
-          end
-        end
       end
     end
 
@@ -4259,26 +4166,6 @@ ev:SetScript("OnEvent", function()
           end
         end
 
-        -- WARLOCK DARK HARVEST: Track channeling for DoT acceleration (TWoW Custom)
-        local spellType = arg8
-        if spellType == 1 and CleveRoids.DarkHarvestSpellIDs and CleveRoids.DarkHarvestSpellIDs[spellID] then
-          local channelDuration = 8  -- Base Dark Harvest duration
-          CleveRoids.darkHarvestData = {
-            targetGUID = targetGuid,
-            spellID = spellID,
-            startTime = GetTime(),
-            channelDuration = channelDuration,
-            isActive = true
-          }
-          lib.ApplyDarkHarvestStart(targetGuid)
-
-          if CleveRoids.debug then
-            DEFAULT_CHAT_FRAME:AddMessage(
-              _string_format("|cff9482c9[Dark Harvest]|r Started channeling on %s (DoTs will tick 30%% faster)",
-                lib.guidToName[targetGuid] or "Unknown")
-            )
-          end
-        end
       end
     end
 

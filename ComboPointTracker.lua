@@ -146,14 +146,6 @@ CleveRoids.ImmolateSpellIDs = {
 }
 
 -- =============================================================================
--- WARLOCK: Dark Harvest Duration Acceleration (TWoW Custom)
--- Channeled spell that accelerates DoT tick rate by 30% while channeling
--- Complex tracking: debuff expires 30% faster while Dark Harvest is active
--- =============================================================================
--- TWoW custom (see MoltenBlast note).
-CleveRoids.DarkHarvestSpellIDs = RankSet(52550)
-
--- =============================================================================
 -- DRUID: Rake Debuff Cap Boss Whitelist
 -- These bosses are likely to hit the 48 debuff cap, causing Rake to get pushed off
 -- For mobs NOT in this list, we verify Rake is actually on the target before tracking
