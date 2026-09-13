@@ -15,23 +15,6 @@ CleveRoids.ComboPointTracking = CleveRoids.ComboPointTracking or {}
 -- Structure: CleveRoids_ComboDurations[spellID][comboPoints] = duration
 CleveRoids_ComboDurations = CleveRoids_ComboDurations or {}
 
--- Storage for last Rip cast (for Carnage talent mechanic)
--- Carnage talent: When Ferocious Bite procs Carnage, it refreshes Rip and Rake to their original duration
--- Detection: When combo points don't drop to 0 after FB (they stay at 1 = Carnage proc)
--- Talent Position: Tab 2 (Feral Combat), Talent 17
--- Rank 1: 10% per CP, Rank 2: 20% per CP
-CleveRoids.lastRipCast = CleveRoids.lastRipCast or {
-    duration = nil,
-    targetGUID = nil,
-    timestamp = 0
-}
-
-CleveRoids.lastRakeCast = CleveRoids.lastRakeCast or {
-    duration = nil,
-    targetGUID = nil,
-    timestamp = 0
-}
-
 -- Family membership without hardcoded rank lists. C_Spell.GetSpellName resolves
 -- ANY spellID from the client's Spell.dbc -- every rank (so no enumeration or
 -- spellbook scan) and TWoW's custom spells alike -- so "is this spellID a Rip?"
@@ -86,10 +69,8 @@ CleveRoids.ComboScalingSpellsByID = {
     [9896] = { base = 10, increment = 2, name = "Rip" },           -- Rank 6
 }
 
--- Ferocious Bite spell IDs (for Carnage talent mechanic)
--- Carnage talent: When FB procs Carnage, refreshes Rip and Rake back to their original duration
--- Proc detection: combo points stay at 1 after FB instead of dropping to 0
--- Talent Position: Tab 2 (Feral Combat), Talent 17
+-- Ferocious Bite spell IDs. A combo-point finisher, so the cast-time combo
+-- snapshot has to know it.
 CleveRoids.FerociousBiteSpellIDs = {
     [22557] = true,  -- Rank 1
     [22568] = true,  -- Rank 2
@@ -98,10 +79,6 @@ CleveRoids.FerociousBiteSpellIDs = {
     [22829] = true,  -- Rank 5
     [31018] = true,  -- Rank 6
 }
-
--- Rip / Rake families (for Carnage talent). Seeded by Rank 1; matches every rank.
-CleveRoids.RipSpellIDs = RankSet(1079)
-CleveRoids.RakeSpellIDs = RankSet(1822)
 
 -- Combined table for all bleed spells that need immunity detection
 -- Used when checking if a cast bleed failed to apply (indicates bleed immunity)
@@ -773,55 +750,6 @@ end
 
 function Extension.OnComboPointsChanged()
     CleveRoids.UpdateComboPoints()
-
-    -- CARNAGE PROC DETECTION (Cursive-style)
-    -- When Ferocious Bite is used, combo points should drop to 0
-    -- If Carnage procs, combo points will be 1 instead (the Carnage-granted combo point)
-    -- Check: After Ferocious Bite (within 0.5s), if combo points > 0, Carnage procced
-    if CleveRoids.lastFerociousBiteTime and CleveRoids.lastFerociousBiteTargetGUID then
-        local timeSinceBite = GetTime() - CleveRoids.lastFerociousBiteTime
-        if timeSinceBite < 0.5 then
-            local currentCP = CleveRoids.GetComboPoints()
-            if currentCP > 0 then
-                -- Carnage procced! Combo points didn't drop to 0 (or rose back to 1)
-                if CleveRoids.debug then
-                    DEFAULT_CHAT_FRAME:AddMessage(
-                        string.format("|cffff00ff[Carnage]|r PROC DETECTED! CP=%d after Ferocious Bite (%.2fs ago)",
-                            currentCP, timeSinceBite)
-                    )
-                end
-
-                -- Apply the Carnage refresh to Rip and Rake
-                local targetGUID = CleveRoids.lastFerociousBiteTargetGUID
-                local targetName = CleveRoids.lastFerociousBiteTargetName or "Unknown"
-                local biteSpellID = CleveRoids.lastFerociousBiteSpellID
-
-                -- Call the Carnage refresh function in Utility.lua
-                if CleveRoids.libdebuff and CleveRoids.libdebuff.ApplyCarnageRefresh then
-                    CleveRoids.libdebuff.ApplyCarnageRefresh(targetGUID, targetName, biteSpellID)
-                end
-
-                -- Clear the tracking to prevent multiple refreshes
-                CleveRoids.lastFerociousBiteTime = nil
-                CleveRoids.lastFerociousBiteTargetGUID = nil
-                CleveRoids.lastFerociousBiteTargetName = nil
-                CleveRoids.lastFerociousBiteSpellID = nil
-            end
-        else
-            -- Time window expired, clear tracking
-            if CleveRoids.lastFerociousBiteTime then
-                if CleveRoids.debug then
-                    DEFAULT_CHAT_FRAME:AddMessage(
-                        string.format("|cffff00ff[Carnage]|r No proc - time window expired (%.2fs)", timeSinceBite)
-                    )
-                end
-                CleveRoids.lastFerociousBiteTime = nil
-                CleveRoids.lastFerociousBiteTargetGUID = nil
-                CleveRoids.lastFerociousBiteTargetName = nil
-                CleveRoids.lastFerociousBiteSpellID = nil
-            end
-        end
-    end
 end
 
 -- Event handlers

@@ -2347,11 +2347,6 @@ local function SeedUnit(unit)
   end
 end
 
--- Carnage refresh system
--- NOTE: Carnage proc detection is now handled in ComboPointTracker.lua via PLAYER_COMBO_POINTS event
--- When Carnage procs, combo points don't drop to 0 after Ferocious Bite (they stay at 1)
--- The ApplyCarnageRefresh function below is called from ComboPointTracker when a proc is detected
-
 -- WARLOCK DARK HARVEST: Duration Acceleration System (TWoW Custom)
 -- Credits: Avitasia / Cursive addon
 -- Dark Harvest is a channeled spell that accelerates DoT tick rate by 30%
@@ -2466,264 +2461,7 @@ lib.trackedAfflictions = {
   ["Rend"] = { type = "school", value = "bleed" },
 }
 
--- Function to apply Carnage refresh (exposed for ComboPointTracker to call on proc detection)
-function lib.ApplyCarnageRefresh(targetGUID, targetName, biteSpellID)
-  if CleveRoids.debug then
-    -- Compare Carnage GUID with current target GUID
-    local currentTargetGUID = CleveRoids.GetGUID("target")
-    local guidMatch = (targetGUID == currentTargetGUID) and "MATCH" or "MISMATCH"
-    DEFAULT_CHAT_FRAME:AddMessage(
-      string.format("|cffff00ff[Carnage]|r ApplyCarnageRefresh called for %s (GUID:%s, current:%s, %s)",
-        targetName or "Unknown", tostring(targetGUID), tostring(currentTargetGUID), guidMatch)
-    )
-  end
-
-  -- Only refresh debuffs if they're currently active on the target
-  if not lib.objects[targetGUID] then
-    if CleveRoids.debug then
-      DEFAULT_CHAT_FRAME:AddMessage(
-        string.format("|cffff6600[Carnage]|r No tracking data for GUID %s", tostring(targetGUID))
-      )
-    end
-    return
-  end
-
-  -- Try to refresh Rip
-  if CleveRoids.lastRipCast and CleveRoids.lastRipCast.duration and CleveRoids.lastRipCast.spellID and
-     CleveRoids.lastRipCast.targetGUID == targetGUID then
-    -- Only refresh if the SAME rank that was cast is still active
-    local ripSpellID = CleveRoids.lastRipCast.spellID
-    local rec = lib.objects[targetGUID] and lib.objects[targetGUID][ripSpellID]
-    if rec and rec.duration and rec.start then
-      -- Check if Rip is still active (not expired)
-      local remaining = rec.duration + rec.start - GetTime()
-      if remaining > 0 then
-        -- Found the exact same rank active, refresh it with the saved duration
-        local ripDuration = CleveRoids.lastRipCast.duration
-        local ripComboPoints = CleveRoids.lastRipCast.comboPoints or 5
-
-        if CleveRoids.debug then
-          DEFAULT_CHAT_FRAME:AddMessage(
-            string.format("|cffff00ff[Carnage]|r About to refresh Rip: %ds on %s (spellID:%d)",
-              ripDuration, targetName or "Unknown", ripSpellID)
-          )
-        end
-
-        -- Store duration override for pfUI hooks (BEFORE updating tracking)
-        if not CleveRoids.carnageDurationOverrides then
-          CleveRoids.carnageDurationOverrides = {}
-        end
-        CleveRoids.carnageDurationOverrides[ripSpellID] = {
-          duration = ripDuration,
-          timestamp = GetTime(),
-          targetGUID = targetGUID
-        }
-
-        -- Update CleveRoids internal tracking
-        if lib.objects[targetGUID] and lib.objects[targetGUID][ripSpellID] then
-          local oldCaster = lib.objects[targetGUID][ripSpellID].caster
-          lib.objects[targetGUID][ripSpellID].duration = ripDuration
-          lib.objects[targetGUID][ripSpellID].start = GetTime()
-          lib.objects[targetGUID][ripSpellID].expiry = GetTime() + ripDuration
-          -- Ensure caster is preserved (required for personal debuff tracking)
-          if not lib.objects[targetGUID][ripSpellID].caster then
-            lib.objects[targetGUID][ripSpellID].caster = "player"
-          end
-
-          if CleveRoids.debug then
-            -- Verify the record was actually saved
-            local verifyRec = lib.objects[targetGUID] and lib.objects[targetGUID][ripSpellID]
-            if verifyRec then
-              local verifyRemaining = verifyRec.duration + verifyRec.start - GetTime()
-              DEFAULT_CHAT_FRAME:AddMessage(
-                string.format("|cffff00ff[Carnage]|r Updated CleveRoids tracking for Rip (GUID:%s, caster:%s->%s)",
-                  tostring(targetGUID), tostring(oldCaster), tostring(verifyRec.caster))
-              )
-              DEFAULT_CHAT_FRAME:AddMessage(
-                string.format("|cffff00ff[Carnage VERIFY]|r Rip record: dur=%s, start=%s, remaining=%.1fs",
-                  tostring(verifyRec.duration), tostring(verifyRec.start), verifyRemaining)
-              )
-            else
-              DEFAULT_CHAT_FRAME:AddMessage(
-                string.format("|cffff0000[Carnage ERROR]|r Rip record MISSING immediately after update!")
-              )
-            end
-          end
-        else
-          if CleveRoids.debug then
-            DEFAULT_CHAT_FRAME:AddMessage(
-              string.format("|cffff6600[Carnage]|r WARNING: Rip record not found! GUID:%s, objects[GUID]:%s",
-                tostring(targetGUID), tostring(lib.objects[targetGUID]))
-            )
-          end
-        end
-
-        -- DON'T call pfUI's AddEffect - just update the existing entry directly
-        -- pfUI will pick up the new duration through our GetDuration/UnitDebuff hooks
-        if pfUI and pfUI.api and pfUI.api.libdebuff then
-          local pflib = pfUI.api.libdebuff
-          local ripSpellName = C_Spell.GetSpellName(ripSpellID)
-          local baseName = CleveRoids.StripRank(ripSpellName) or "Rip"
-
-          if CleveRoids.debug then
-            DEFAULT_CHAT_FRAME:AddMessage(
-              string.format("|cffff00ff[Carnage]|r Updating existing pfUI entry for Rip directly")
-            )
-          end
-
-          -- Find and update the existing pfUI entry (don't create new ones)
-          if pflib.objects and pflib.objects[targetName] then
-            local updated = false
-            for level, effects in pairs(pflib.objects[targetName]) do
-              if type(effects) == "table" and effects[baseName] then
-                -- Update the existing entry
-                effects[baseName].start = GetTime()
-                effects[baseName].duration = ripDuration
-                effects[baseName].caster = "player"
-                updated = true
-
-                if CleveRoids.debug then
-                  DEFAULT_CHAT_FRAME:AddMessage(
-                    string.format("|cffff00ff[Carnage]|r Updated pfUI Rip at level %s", tostring(level))
-                  )
-                end
-                -- Only update the FIRST occurrence to avoid duplicates
-                break
-              end
-            end
-
-            if updated and pflib.UpdateUnits then
-              pflib:UpdateUnits()
-            end
-          end
-        end
-
-        if CleveRoids.debug then
-          DEFAULT_CHAT_FRAME:AddMessage(
-            string.format("|cffff00ff[Carnage]|r Finished refreshing Rip: %ds on %s",
-              ripDuration, targetName or "Unknown")
-          )
-        end
-      end
-    end
-  end
-
-  -- Try to refresh Rake
-  if CleveRoids.lastRakeCast and CleveRoids.lastRakeCast.duration and CleveRoids.lastRakeCast.spellID and
-     CleveRoids.lastRakeCast.targetGUID == targetGUID then
-    -- Only refresh if the SAME rank that was cast is still active
-    local rakeSpellID = CleveRoids.lastRakeCast.spellID
-    local rec = lib.objects[targetGUID] and lib.objects[targetGUID][rakeSpellID]
-    if rec and rec.duration and rec.start then
-      -- Check if Rake is still active (not expired)
-      local remaining = rec.duration + rec.start - GetTime()
-      if remaining > 0 then
-        -- Found the exact same rank active, refresh it with the saved duration
-        local rakeDuration = CleveRoids.lastRakeCast.duration
-        local rakeComboPoints = CleveRoids.lastRakeCast.comboPoints or 5
-
-        -- Store duration override for pfUI hooks (BEFORE updating tracking)
-        if not CleveRoids.carnageDurationOverrides then
-          CleveRoids.carnageDurationOverrides = {}
-        end
-        CleveRoids.carnageDurationOverrides[rakeSpellID] = {
-          duration = rakeDuration,
-          timestamp = GetTime(),
-          targetGUID = targetGUID
-        }
-
-        -- Update CleveRoids internal tracking
-        if lib.objects[targetGUID] and lib.objects[targetGUID][rakeSpellID] then
-          local oldCaster = lib.objects[targetGUID][rakeSpellID].caster
-          lib.objects[targetGUID][rakeSpellID].duration = rakeDuration
-          lib.objects[targetGUID][rakeSpellID].start = GetTime()
-          lib.objects[targetGUID][rakeSpellID].expiry = GetTime() + rakeDuration
-          -- Ensure caster is preserved (required for personal debuff tracking)
-          if not lib.objects[targetGUID][rakeSpellID].caster then
-            lib.objects[targetGUID][rakeSpellID].caster = "player"
-          end
-
-          if CleveRoids.debug then
-            -- Verify the record was actually saved
-            local verifyRec = lib.objects[targetGUID] and lib.objects[targetGUID][rakeSpellID]
-            if verifyRec then
-              local verifyRemaining = verifyRec.duration + verifyRec.start - GetTime()
-              DEFAULT_CHAT_FRAME:AddMessage(
-                string.format("|cffff00ff[Carnage]|r Updated CleveRoids tracking for Rake (GUID:%s, caster:%s->%s)",
-                  tostring(targetGUID), tostring(oldCaster), tostring(verifyRec.caster))
-              )
-              DEFAULT_CHAT_FRAME:AddMessage(
-                string.format("|cffff00ff[Carnage VERIFY]|r Rake record: dur=%s, remaining=%.1fs",
-                  tostring(verifyRec.duration), verifyRemaining)
-              )
-            else
-              DEFAULT_CHAT_FRAME:AddMessage(
-                string.format("|cffff0000[Carnage ERROR]|r Rake record MISSING immediately after update!")
-              )
-            end
-          end
-        else
-          if CleveRoids.debug then
-            DEFAULT_CHAT_FRAME:AddMessage(
-              string.format("|cffff6600[Carnage]|r WARNING: Rake record not found! GUID:%s",
-                tostring(targetGUID))
-            )
-          end
-        end
-
-        -- DON'T call pfUI's AddEffect - just update the existing entry directly
-        -- pfUI will pick up the new duration through our GetDuration/UnitDebuff hooks
-        if pfUI and pfUI.api and pfUI.api.libdebuff then
-          local pflib = pfUI.api.libdebuff
-          local rakeSpellName = C_Spell.GetSpellName(rakeSpellID)
-          local baseName = CleveRoids.StripRank(rakeSpellName) or "Rake"
-
-          if CleveRoids.debug then
-            DEFAULT_CHAT_FRAME:AddMessage(
-              string.format("|cffff00ff[Carnage]|r Updating existing pfUI entry for Rake directly")
-            )
-          end
-
-          -- Find and update the existing pfUI entry (don't create new ones)
-          if pflib.objects and pflib.objects[targetName] then
-            local updated = false
-            for level, effects in pairs(pflib.objects[targetName]) do
-              if type(effects) == "table" and effects[baseName] then
-                -- Update the existing entry
-                effects[baseName].start = GetTime()
-                effects[baseName].duration = rakeDuration
-                effects[baseName].caster = "player"
-                updated = true
-
-                if CleveRoids.debug then
-                  DEFAULT_CHAT_FRAME:AddMessage(
-                    string.format("|cffff00ff[Carnage]|r Updated pfUI Rake at level %s", tostring(level))
-                  )
-                end
-                -- Only update the FIRST occurrence to avoid duplicates
-                break
-              end
-            end
-
-            if updated and pflib.UpdateUnits then
-              pflib:UpdateUnits()
-            end
-          end
-        end
-
-        if CleveRoids.debug then
-          DEFAULT_CHAT_FRAME:AddMessage(
-            string.format("|cffff00ff[Carnage]|r Refreshed Rake: %ds on %s",
-              rakeDuration, targetName or "Unknown")
-          )
-        end
-      end
-    end
-  end
-end
-
 -- Frame for delayed personal debuff tracking and judgement scanning
--- NOTE: Carnage refresh is now handled via PLAYER_COMBO_POINTS event in ComboPointTracker.lua
 
 -- PERFORMANCE: Upvalues for frequently called functions
 local _GetTime = GetTime
@@ -3325,42 +3063,12 @@ delayedTrackingFrame:SetScript("OnUpdate", function()
             CleveRoids.RemoveSpellImmunity(pending.targetName, "bleed")
           end
 
-          -- CARNAGE TALENT: Mark Rake as verified for Ferocious Bite refresh
-          local isRakeSpell = CleveRoids.RakeSpellIDs and CleveRoids.RakeSpellIDs[pending.spellID]
-          if isRakeSpell and CleveRoids.lastRakeCast and CleveRoids.lastRakeCast.pending then
-            if CleveRoids.lastRakeCast.targetGUID == pending.targetGUID and
-               CleveRoids.lastRakeCast.spellID == pending.spellID then
-              CleveRoids.lastRakeCast.pending = nil  -- Mark as verified
-              if debug then
-                DEFAULT_CHAT_FRAME:AddMessage(
-                  _string_format("|cff00ff00[Carnage]|r Rake verified on %s - ready for Ferocious Bite refresh",
-                    pending.targetName or "Unknown")
-                )
-              end
-            end
-          end
-
           if debug then
             local spellName = C_Spell.GetSpellName(pending.spellID) or "Unknown"
             DEFAULT_CHAT_FRAME:AddMessage(
               _string_format("|cff00ff00[Delayed Track]|r Applied %s (ID:%d) to tracking on %s",
                 spellName, pending.spellID, pending.targetName or "Unknown")
             )
-          end
-        else
-          -- Bleed didn't land - clear pending Rake data for Carnage if applicable
-          local isRakeSpell = CleveRoids.RakeSpellIDs and CleveRoids.RakeSpellIDs[pending.spellID]
-          if isRakeSpell and CleveRoids.lastRakeCast and CleveRoids.lastRakeCast.pending then
-            if CleveRoids.lastRakeCast.targetGUID == pending.targetGUID and
-               CleveRoids.lastRakeCast.spellID == pending.spellID then
-              CleveRoids.lastRakeCast = nil  -- Clear invalid Rake data
-              if debug then
-                DEFAULT_CHAT_FRAME:AddMessage(
-                  _string_format("|cffff6600[Carnage]|r Rake failed to apply on %s - clearing tracking data",
-                    pending.targetName or "Unknown")
-                )
-              end
-            end
           end
         end
         -- Item processed, don't add to new list
@@ -4039,43 +3747,6 @@ ev:SetScript("OnEvent", function()
       local playerGUID = CleveRoids.GetGUID("player")
       if casterGUID == playerGUID and targetGUID then
 
-        -- DRUID CARNAGE TALENT: Track Ferocious Bite cast for proc detection
-        -- Carnage proc is detected in ComboPointTracker via PLAYER_COMBO_POINTS event
-        -- When Carnage procs, combo points don't decrease (or increase by 1)
-        if CleveRoids.FerociousBiteSpellIDs and CleveRoids.FerociousBiteSpellIDs[spellID] then
-          -- Check if player has Carnage talent (any rank)
-          -- Carnage: Tab 2 (Feral Combat), Talent 17
-          local _, _, _, _, rank = GetTalentInfo(2, 17)
-          local carnageRank = tonumber(rank) or 0
-
-          if carnageRank >= 1 then
-            local targetName = lib.guidToName[targetGUID]
-            if not targetName then
-              local currentTargetGUID = CleveRoids.GetGUID("target")
-              if currentTargetGUID == targetGUID then
-                targetName = UnitName("target")
-                lib.guidToName[targetGUID] = targetName
-              else
-                targetName = "Unknown"
-              end
-            end
-
-            -- Track Ferocious Bite cast for Carnage proc detection (via PLAYER_COMBO_POINTS)
-            -- Unlike the old system, we don't schedule a refresh here - we wait for the proc
-            CleveRoids.lastFerociousBiteTime = GetTime()
-            CleveRoids.lastFerociousBiteTargetGUID = targetGUID
-            CleveRoids.lastFerociousBiteTargetName = targetName
-            CleveRoids.lastFerociousBiteSpellID = spellID
-
-            if CleveRoids.debug then
-              DEFAULT_CHAT_FRAME:AddMessage(
-                string.format("|cffff00ff[Carnage]|r Tracking Ferocious Bite on %s (waiting for proc detection)",
-                  targetName or "Unknown")
-              )
-            end
-          end
-        end
-
         -- SHAMAN MOLTEN BLAST: Track for Flame Shock refresh detection (TWoW Custom)
         -- Credits: Avitasia / Cursive addon
         if CleveRoids.MoltenBlastSpellIDs and CleveRoids.MoltenBlastSpellIDs[spellID] then
@@ -4447,69 +4118,10 @@ ev:SetScript("OnEvent", function()
             timestamp = GetTime()
           }
 
-          -- DRUID CARNAGE TALENT: Save Rip cast duration for later refresh by Ferocious Bite
-          if CleveRoids.RipSpellIDs and CleveRoids.RipSpellIDs[spellID] then
-            -- Clear any stale Carnage duration override for this spell
-            -- New cast should use its own duration, not old Carnage refresh duration
-            if CleveRoids.carnageDurationOverrides and CleveRoids.carnageDurationOverrides[spellID] then
-              CleveRoids.carnageDurationOverrides[spellID] = nil
-              if CleveRoids.debug then
-                DEFAULT_CHAT_FRAME:AddMessage(
-                  string.format("|cff888888[Carnage]|r Cleared stale Rip override (new cast replaces)")
-                )
-              end
-            end
-
-            if CleveRoids.lastRipCast then
-              CleveRoids.lastRipCast.spellID = spellID
-              CleveRoids.lastRipCast.duration = duration
-              CleveRoids.lastRipCast.targetGUID = targetGUID
-              CleveRoids.lastRipCast.comboPoints = comboPoints or 0
-              CleveRoids.lastRipCast.timestamp = GetTime()
-              if CleveRoids.debug then
-                DEFAULT_CHAT_FRAME:AddMessage(
-                  string.format("|cff00ff00[Carnage]|r Saved Rip cast: %ds duration (%d CP) on target %s",
-                    duration, comboPoints or 0, targetName or "Unknown")
-                )
-              end
-            end
-          end
-
           -- NOTE: Bleed immunity detection is now handled in the delayed pending debuff
           -- processing system (see pendingPersonalDebuffs OnUpdate handler above).
           -- This prevents false positives from checking UnitDebuff() immediately after
           -- UNIT_CASTEVENT, before the server has synced the debuff to the client.
-
-          -- CARNAGE TALENT: Save Rake cast data for potential Ferocious Bite refresh
-          -- Verification that the bleed landed happens in the delayed tracking system
-          local isRakeSpell = CleveRoids.RakeSpellIDs and CleveRoids.RakeSpellIDs[spellID]
-          if isRakeSpell then
-            -- Clear any stale Carnage duration override for this spell
-            -- New cast should use its own duration, not old Carnage refresh duration
-            if CleveRoids.carnageDurationOverrides and CleveRoids.carnageDurationOverrides[spellID] then
-              CleveRoids.carnageDurationOverrides[spellID] = nil
-              if CleveRoids.debug then
-                DEFAULT_CHAT_FRAME:AddMessage(
-                  string.format("|cff888888[Carnage]|r Cleared stale Rake override (new cast replaces)")
-                )
-              end
-            end
-
-            if CleveRoids.lastRakeCast then
-              CleveRoids.lastRakeCast.spellID = spellID
-              CleveRoids.lastRakeCast.duration = duration
-              CleveRoids.lastRakeCast.targetGUID = targetGUID
-              CleveRoids.lastRakeCast.comboPoints = comboPoints or 0
-              CleveRoids.lastRakeCast.timestamp = GetTime()
-              CleveRoids.lastRakeCast.pending = true  -- Mark as pending verification
-              if CleveRoids.debug then
-                DEFAULT_CHAT_FRAME:AddMessage(
-                  string.format("|cff00ff00[Carnage]|r Saved Rake cast (pending verification): %ds duration (%d CP) on target %s",
-                    duration, comboPoints or 0, targetName or "Unknown")
-                )
-              end
-            end
-          end
 
           -- ALWAYS set up learning for combo spells (even if we have calculated duration)
           if comboPoints then
@@ -4955,19 +4567,6 @@ ev:SetScript("OnEvent", function()
     -- Nampower fallback: Cast-complete features from UNIT_CASTEVENT CAST
     -- Only needed when SuperWoW is not available and spell hit the target
     if isOurs and not CleveRoids.hasSuperwow and numHit > 0 then
-      -- DRUID CARNAGE TALENT: Track Ferocious Bite cast for proc detection
-      if CleveRoids.FerociousBiteSpellIDs and CleveRoids.FerociousBiteSpellIDs[spellId] then
-        local _, _, _, _, rank = GetTalentInfo(2, 17)
-        local carnageRank = tonumber(rank) or 0
-        if carnageRank >= 1 then
-          local targetName = lib.guidToName[targetGuid] or UnitName("target") or "Unknown"
-          CleveRoids.lastFerociousBiteTime = GetTime()
-          CleveRoids.lastFerociousBiteTargetGUID = targetGuid
-          CleveRoids.lastFerociousBiteTargetName = targetName
-          CleveRoids.lastFerociousBiteSpellID = spellId
-        end
-      end
-
       -- SHAMAN MOLTEN BLAST: Track for Flame Shock refresh detection
       if CleveRoids.MoltenBlastSpellIDs and CleveRoids.MoltenBlastSpellIDs[spellId] then
         CleveRoids.lastMoltenBlastTime = GetTime()
@@ -5015,20 +4614,6 @@ ev:SetScript("OnEvent", function()
           isHiddenCC = isHiddenCC,
           spellGoHit = true,  -- We already know it hit
         })
-      end
-
-      -- DRUID CARNAGE: Save Rip cast data for potential Ferocious Bite refresh
-      if CleveRoids.RipSpellIDs and CleveRoids.RipSpellIDs[spellId] then
-        if CleveRoids.carnageDurationOverrides and CleveRoids.carnageDurationOverrides[spellId] then
-          CleveRoids.carnageDurationOverrides[spellId] = nil
-        end
-      end
-
-      -- CARNAGE: Save Rake cast data for potential Ferocious Bite refresh
-      if CleveRoids.RakeSpellIDs and CleveRoids.RakeSpellIDs[spellId] then
-        if CleveRoids.carnageDurationOverrides and CleveRoids.carnageDurationOverrides[spellId] then
-          CleveRoids.carnageDurationOverrides[spellId] = nil
-        end
       end
 
       -- Track last player cast for miss/dodge/parry removal
@@ -5144,37 +4729,6 @@ ev:SetScript("OnEvent", function()
               DEFAULT_CHAT_FRAME:AddMessage(
                 string.format("|cffaaff00[SPELL_GO Pending]|r Scheduled rank preserve for %s (ID:%d, %.1fs remaining) on %s",
                   preserveName, rankCheck.preserve, rankCheck.timeRemaining, targetName)
-              )
-            end
-          end
-
-          -- Save Rip cast data for Ferocious Bite Carnage refresh
-          if CleveRoids.RipSpellIDs and CleveRoids.RipSpellIDs[spellId] and CleveRoids.lastRipCast then
-            CleveRoids.lastRipCast.spellID = spellId
-            CleveRoids.lastRipCast.duration = debuffDuration
-            CleveRoids.lastRipCast.targetGUID = targetGuid
-            CleveRoids.lastRipCast.comboPoints = debuffComboPoints or 0
-            CleveRoids.lastRipCast.timestamp = GetTime()
-            if CleveRoids.debug then
-              DEFAULT_CHAT_FRAME:AddMessage(
-                string.format("|cff00ff00[SPELL_GO Carnage]|r Saved Rip cast: %ds duration (%d CP) on target %s",
-                  debuffDuration, debuffComboPoints or 0, targetName)
-              )
-            end
-          end
-
-          -- Save Rake cast data for Ferocious Bite Carnage refresh
-          if CleveRoids.RakeSpellIDs and CleveRoids.RakeSpellIDs[spellId] and CleveRoids.lastRakeCast then
-            CleveRoids.lastRakeCast.spellID = spellId
-            CleveRoids.lastRakeCast.duration = debuffDuration
-            CleveRoids.lastRakeCast.targetGUID = targetGuid
-            CleveRoids.lastRakeCast.comboPoints = debuffComboPoints or 0
-            CleveRoids.lastRakeCast.timestamp = GetTime()
-            CleveRoids.lastRakeCast.pending = true
-            if CleveRoids.debug then
-              DEFAULT_CHAT_FRAME:AddMessage(
-                string.format("|cff00ff00[SPELL_GO Carnage]|r Saved Rake cast (pending verification): %ds duration (%d CP) on target %s",
-                  debuffDuration, debuffComboPoints or 0, targetName)
               )
             end
           end
@@ -5644,41 +5198,6 @@ evLearn:SetScript("OnEvent", function()
     end
 
     if spellName and targetName then
-      -- CARNAGE: Clear Ferocious Bite tracking if it was dodged/parried/blocked
-      -- This prevents false proc detection in edge cases
-      if CleveRoids.lastFerociousBiteTime then
-        -- Check if the failed spell is Ferocious Bite
-        local isFerociousBite = false
-        if CleveRoids.FerociousBiteSpellIDs then
-          for biteSpellID, _ in pairs(CleveRoids.FerociousBiteSpellIDs) do
-            local biteName = C_Spell.GetSpellName(biteSpellID)
-            if biteName then
-              biteName = CleveRoids.StripRank(biteName)
-              local messageSpellName = CleveRoids.StripRank(spellName)
-              if lower(biteName) == lower(messageSpellName) then
-                isFerociousBite = true
-                break
-              end
-            end
-          end
-        end
-
-        if isFerociousBite then
-          if CleveRoids.debug then
-            DEFAULT_CHAT_FRAME:AddMessage(
-              string.format("|cffff00ff[Carnage]|r Ferocious Bite avoided by %s - clearing tracking",
-                targetName or "Unknown")
-            )
-          end
-
-          -- Clear Ferocious Bite tracking (no proc possible since it was avoided)
-          CleveRoids.lastFerociousBiteTime = nil
-          CleveRoids.lastFerociousBiteTargetGUID = nil
-          CleveRoids.lastFerociousBiteTargetName = nil
-          CleveRoids.lastFerociousBiteSpellID = nil
-        end
-      end
-
       -- PERSONAL DEBUFFS: Cancel pending tracking if spell was dodged/parried/blocked
       if lib.pendingPersonalDebuffs then
         local messageSpellName = CleveRoids.StripRank(spellName)
@@ -6175,11 +5694,6 @@ CleveRoids.talentModifiers[8983] = { tab = 2, id = 4, talent = "Brutal Impact", 
 -- NOTE: Brutal Impact affects the STUN portion of Pounce (cast spell IDs 9005, 9823, 9827)
 -- The BLEED portion (triggered spell IDs 9007, 9824, 9826) is NOT affected by Brutal Impact
 -- We track the bleed for immunity detection, not the stun, so no talent modifiers needed here
-
--- NOTE: Carnage talent (Tab 2, ID 17) is NOT a duration modifier!
--- Carnage is a refresh mechanic: When Ferocious Bite procs Carnage, it refreshes Rip/Rake to original duration
--- Proc detection: Combo points stay at 1 after FB instead of dropping to 0
--- This is handled in ComboPointTracker.lua via PLAYER_COMBO_POINTS event
 
 -- WARRIOR talent modifiers
 -- Booming Voice: Increases duration of Battle Shout and Demoralizing Shout by 12% per rank (5 ranks max)

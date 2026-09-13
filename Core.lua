@@ -4260,20 +4260,6 @@ function CleveRoids.OnUpdate(self)
     if (time - CR.lastCleanupTime) >= CR.CLEANUP_INTERVAL then
         CR.lastCleanupTime = time
 
-        -- MEMORY: Clean up carnageDurationOverrides older than 30 seconds
-        -- PERFORMANCE: Use next() directly instead of pairs() to avoid iterator allocation
-        local carnageOverrides = CR.carnageDurationOverrides
-        if carnageOverrides then
-            local spellID, data = next(carnageOverrides)
-            while spellID do
-                local nextID = next(carnageOverrides, spellID)
-                if data.timestamp and (time - data.timestamp) > 30 then
-                    carnageOverrides[spellID] = nil
-                end
-                spellID, data = nextID, nextID and carnageOverrides[nextID]
-            end
-        end
-
         -- MEMORY: Clean up old ComboPointTracking entries (older than 60 seconds)
         -- PERFORMANCE: Use next() directly instead of pairs() to avoid iterator allocation
         local comboTracking = CR.ComboPointTracking
