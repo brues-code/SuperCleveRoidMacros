@@ -11,8 +11,9 @@ ccType          Exact DBC mechanic. Backs [cc:*] and CC landing verification.
                 Conditionals.lua, CleveRoids.CCMechanics
 
 immunityType    Exact DBC mechanic, recorded against an NPC name when a CC
-                spell comes back IMMUNE.
-                Utility.lua, MECHANIC_TO_IMMUNITY_TYPE / GetSpellImmunityType
+                spell comes back IMMUNE or its CC debuff never appears.
+                Utility.lua, MECHANIC_TO_CC_TYPE / GetSpellCCType /
+                GetAuraCCType
 
 DR type         The real Vanilla diminishing-return pool. Internal only.
                 Utility.lua, GetSpellImmunityDRType
@@ -179,6 +180,18 @@ or a damage shield — arrives as `DAMAGE_SHIELD_MISSED` (or
 skips one effect of a spell (`IsImmuneToSpellEffect` strips it from the effect
 mask), so Rake's bleed or Pounce's stun on an immune mob produces no event:
 those are learned by checking that the aura appeared.
+
+The two paths learn different things from the same Spell.dbc data:
+
+- An `IMMUNE` miss means the whole spell was stopped. `GetSpellCCType` names
+  the CC that does that: the spell-level mechanic, or a CC type shared by
+  every effect. A spell with any other effect (Frostbolt's damage beside its
+  snare) has none, and its `IMMUNE` is recorded against its school.
+- A missing debuff means one effect was stripped. `GetAuraCCType` names that
+  effect's CC (effect mechanic, else spell mechanic, else aura type), and a
+  bleed goes under `bleed`. A missing debuff with neither is not learned: a
+  stronger copy or an exclusive debuff (Demoralizing Shout and Roar) also
+  keeps it off.
 
 A tracked CC or bleed confirms that it landed through `SPELL_AURA_APPLIED`
 with `auraType` `"DEBUFF"` (`HandleAffliction`).

@@ -87,117 +87,6 @@ function CleveRoids.SetMacroThrottle(ms) end
 function CleveRoids.GetMacroThrottle() return 0 end
 
 -- ============================================================================
--- PERFORMANCE: Cache spell name -> spell ID mappings for debuff lookups
--- This avoids iterating personalDebuffs/sharedDebuffs and calling GetSpellRecField() repeatedly
-local _spellNameToIDs = {}  -- [spellName] = { spellID1, spellID2, ... }
-local _spellNameToIDsBuilt = false
-
--- Build the spell name to ID cache (called once on first debuff check)
-local function BuildSpellNameCache()
-    if _spellNameToIDsBuilt then return end
-    _spellNameToIDsBuilt = true
-
-    local lib = CleveRoids.libdebuff
-    if not lib then return end
-
-    local gsub = string.gsub
-
-    if lib.personalDebuffs then
-        for sid, _ in pairs(lib.personalDebuffs) do
-            local name = C_Spell.GetSpellName(sid)
-            if name then
-                name = CleveRoids.StripRank(name)
-                if not _spellNameToIDs[name] then
-                    _spellNameToIDs[name] = {}
-                end
-                table.insert(_spellNameToIDs[name], sid)
-            end
-        end
-    end
-
-    if lib.sharedDebuffs then
-        for sid, _ in pairs(lib.sharedDebuffs) do
-            local name = C_Spell.GetSpellName(sid)
-            if name then
-                name = CleveRoids.StripRank(name)
-                if not _spellNameToIDs[name] then
-                    _spellNameToIDs[name] = {}
-                end
-                -- Avoid duplicates
-                local found = false
-                for _, existingId in ipairs(_spellNameToIDs[name]) do
-                    if existingId == sid then found = true; break end
-                end
-                if not found then
-                    table.insert(_spellNameToIDs[name], sid)
-                end
-            end
-        end
-    end
-end
-
--- Get cached spell IDs for a spell name
-local function GetSpellIDsForName(spellName)
-    BuildSpellNameCache()
-    -- Strip rank from input spell name to match cache keys
-    -- This handles cases like "Faerie Fire (Feral)(Rank 4)" -> "Faerie Fire (Feral)"
-    if spellName then
-        spellName = CleveRoids.StripRank(spellName)
-        -- Convert underscores to spaces for matching (e.g., "Thunder_Clap" -> "Thunder Clap")
-        spellName = string.gsub(spellName, "_", " ")
-    end
-    return _spellNameToIDs[spellName]
-end
-
--- Invalidate cache (call if debuff lists change)
-function CleveRoids.InvalidateSpellNameCache()
-    _spellNameToIDs = {}
-    _spellNameToIDsBuilt = false
-end
-
--- Get the specific spell ID for a given spell name and rank number
--- Returns: spellID or nil (if rank not found, caller falls back to rank-agnostic matching)
-local function GetSpellIDForRank(baseName, rankNum)
-    local matchIDs = GetSpellIDsForName(baseName)
-    if not matchIDs then return nil end
-    local targetRank = "Rank " .. rankNum
-    for _, sid in ipairs(matchIDs) do
-        local rank = C_Spell.GetSpellSubtext(sid)
-        if rank and rank == targetRank then
-            return sid
-        end
-    end
-    return nil
-end
-
--- Check if a debuff is shared by spell ID or by name (for custom/Turtle WoW IDs).
--- Falls back to checking if the debuff NAME matches any known shared debuff name
--- in the spell name cache, even if the specific spell ID is unregistered.
-local function IsSharedDebuffByIdOrName(lib, spellID, debuffName)
-    if not lib then return false end
-    -- Direct ID check (fast path)
-    if lib.IsPersonalDebuff and lib:IsPersonalDebuff(spellID) == false then
-        return true
-    end
-    -- Name-based fallback: if ANY spell ID for this name is in sharedDebuffs, treat as shared.
-    -- This handles custom server spell IDs (e.g., Turtle WoW Judgement variants) that have
-    -- the same debuff name but different IDs from the hardcoded vanilla entries.
-    if debuffName then
-        local knownIDs = GetSpellIDsForName(debuffName)
-        if knownIDs then
-            for _, kid in ipairs(knownIDs) do
-                if lib.sharedDebuffs and lib.sharedDebuffs[kid] then
-                    -- Also register this new spell ID so future checks are fast
-                    lib.sharedDebuffs[spellID] = lib.sharedDebuffs[kid]
-                    return true
-                end
-            end
-        end
-    end
-    return false
-end
-
--- ============================================================================
 -- PERFORMANCE: Unified item location lookup using CleveRoids.Items cache
 -- Returns: { type="inventory"|"bag", inventoryID=N } or { type="bag", bag=N, slot=N }
 -- Returns nil if item not found
@@ -788,21 +677,6 @@ local function AuraStart(auraData, isPfUI)
     return auraData.start
 end
 
--- Helper: check if a spell is personal using lib:IsPersonalDebuff + name fallback
-local function IsPersonalAura(spellId, spellName)
-    local lib = CleveRoids.libdebuff
-    if not lib then return true end  -- Default personal (safer)
-    -- Direct ID check
-    if spellId and lib.IsPersonalDebuff then
-        return lib:IsPersonalDebuff(spellId)
-    end
-    -- Name-based fallback via IsSharedDebuffByIdOrName
-    if spellName and spellId then
-        return not IsSharedDebuffByIdOrName(lib, spellId, spellName)
-    end
-    return true  -- Default personal
-end
-
 -- Helper to get time remaining from all-caster tracking (by spellId)
 -- Returns player's entry for personal debuffs, any caster for shared auras.
 -- Reads from pfUI.libdebuff_all_auras when pfUI 7.6+ is active.
@@ -831,7 +705,7 @@ function CleveRoids.GetAllCasterAuraTimeRemaining(targetGuid, spellId)
     end
 
     -- Personal debuff and player has no active entry → don't use other players' data
-    if IsPersonalAura(spellId, spellName) then return nil end
+    if not CleveRoids.libdebuff.IsSharedDebuff(spellId, spellName) then return nil end
 
     -- Shared aura: return any active caster's entry
     for _, auraData in pairs(casters) do
@@ -3029,7 +2903,8 @@ end
 --
 -- Matching stays ours: by spellID when the conditional gave a number, else by
 -- lowercased name (C_UnitAuras' own by-name lookup is case-sensitive and exact,
--- which would miss [debuff:thunder_clap]).
+-- which would miss [debuff:thunder_clap]), and with `searchRank` ("Rank 4") only
+-- that rank.
 --
 -- With `ownPersonal`, a personal debuff (Rip, Corruption) only counts when the
 -- player or the player's pet cast it; another player's copy is skipped. A shared
@@ -3040,7 +2915,7 @@ end
 -- duration (permanent), nil when ClassicAPI has no timing for it -- an aura cast
 -- before we logged in, or one refreshed at max stacks -- and seconds otherwise.
 -- Presence and stacks are always reliable; only timing is best-effort.
-local function ResolveUnitAura(unit, searchID, searchName, isbuff, ownPersonal)
+local function ResolveUnitAura(unit, searchID, searchName, searchRank, isbuff, ownPersonal)
     local filter = isbuff and "HELPFUL" or "HARMFUL"
     local i = 1
     while true do
@@ -3053,9 +2928,10 @@ local function ResolveUnitAura(unit, searchID, searchName, isbuff, ownPersonal)
             hit = (spellId == searchID)
         elseif searchName then
             hit = (_string_lower(name) == searchName)
+                and (not searchRank or C_Spell.GetSpellSubtext(spellId) == searchRank)
         end
         if hit and ownPersonal and source ~= "player" and source ~= "pet"
-            and not IsSharedDebuffByIdOrName(CleveRoids.libdebuff, spellId, name) then
+            and not CleveRoids.libdebuff.IsSharedDebuff(spellId, name) then
             hit = false
         end
 
@@ -3085,11 +2961,11 @@ function CleveRoids.ValidateAura(unit, args, isbuff)
     local found = false
     local stacks, remaining
 
-    -- Extract rank before stripping (for rank-specific matching)
-    local rankNum
+    -- Extract rank before stripping: [mybuff:Mark_of_the_Wild(Rank 9)] only matches that rank
+    local searchRank
     if args.name then
         local _, _, rn = string.find(args.name, "%(Rank%s+(%d+)%)")
-        rankNum = rn
+        searchRank = rn and ("Rank " .. rn)
     end
 
     -- Strip rank suffix for consistent matching (e.g., "Faerie Fire (Feral)(Rank 4)" -> "Faerie Fire (Feral)")
@@ -3102,19 +2978,10 @@ function CleveRoids.ValidateAura(unit, args, isbuff)
     -- PERFORMANCE: Cache lowercased search name to avoid repeated string.lower calls
     -- Support spell ID matching: [mybuff:17941] matches by spell ID instead of name
     local searchID = args.name and tonumber(args.name)
-
-    -- Rank-specific matching: [mybuff:Mark_of_the_Wild(Rank 9)] only matches that exact rank
-    if rankNum and not searchID then
-        local rankSpecificID = GetSpellIDForRank(args.name, rankNum)
-        if rankSpecificID then
-            searchID = rankSpecificID
-        end
-    end
-
     local searchName = not searchID and args.name and _string_lower(args.name) or nil
 
     if searchID or searchName then
-        found, stacks, remaining = ResolveUnitAura(unit, searchID, searchName, isbuff)
+        found, stacks, remaining = ResolveUnitAura(unit, searchID, searchName, searchRank, isbuff)
     end
 
     -- Overflow buffs: past the player's 32 client buff slots a buff exists only on
@@ -3133,6 +3000,7 @@ function CleveRoids.ValidateAura(unit, args, isbuff)
                 elseif searchName then
                     local lowerName = GetLowercaseSpellName(spellId)
                     match = (lowerName and lowerName == searchName)
+                        and (not searchRank or C_Spell.GetSpellSubtext(spellId) == searchRank)
                 end
                 if match then
                     found = true
@@ -3253,13 +3121,9 @@ function CleveRoids.ValidateUnitDebuff(unit, args)
     end
     if not args.name then return false end
 
-    -- Extract rank before stripping (for rank-specific matching)
-    -- e.g., "Moonfire(Rank 10)" → rankNum = "10", then StripRank → "Moonfire"
-    local rankNum
-    do
-        local _, _, rn = string.find(args.name, "%(Rank%s+(%d+)%)")
-        rankNum = rn
-    end
+    -- Extract rank before stripping: [debuff:Moonfire(Rank 10)] only matches that rank
+    local _, _, rankNum = string.find(args.name, "%(Rank%s+(%d+)%)")
+    local searchRank = rankNum and ("Rank " .. rankNum)
 
     -- Strip rank suffix for consistent matching (e.g., "Faerie Fire (Feral)(Rank 4)" -> "Faerie Fire (Feral)")
     args.name = CleveRoids.StripRank(args.name)
@@ -3269,17 +3133,9 @@ function CleveRoids.ValidateUnitDebuff(unit, args)
     -- Support spell ID matching: [debuff:9904] matches by spell ID instead of name
     local searchID = tonumber(args.name)
 
-    -- Rank-specific matching: [debuff:Moonfire(Rank 10)] only matches that exact rank
-    if rankNum and not searchID then
-        local rankSpecificID = GetSpellIDForRank(args.name, rankNum)
-        if rankSpecificID then
-            searchID = rankSpecificID
-        end
-    end
-
     -- On another unit, a personal debuff counts only when it is the player's own
     local searchName = not searchID and _string_lower(args.name) or nil
-    local found, stacks, remaining = ResolveUnitAura(unit, searchID, searchName, false, unit ~= "player")
+    local found, stacks, remaining = ResolveUnitAura(unit, searchID, searchName, searchRank, false, unit ~= "player")
 
     -- Seconds left; 0 for a permanent debuff, and on another unit for one whose
     -- cast ClassicAPI never saw

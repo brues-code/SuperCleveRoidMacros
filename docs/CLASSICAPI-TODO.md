@@ -219,8 +219,8 @@ Each step leaves a working addon.
      setup. The **aura expectations** in `Utility.lua` replace the pending
      arrays: the player's hit (`SPELL_CAST_SUCCESS`, `SPELL_DAMAGE`,
      `RANGE_DAMAGE`) expects the debuff, `SPELL_AURA_APPLIED` / a miss / a
-     `C_UnitAuras` check settles it, and a personal debuff still missing after
-     0.4s records a bleed or school immunity behind the old guards. They also
+     `C_UnitAuras` check settles it, and a bleed or CC debuff still missing
+     after 0.4s records a bleed or CC immunity behind the old guards. They also
      answer `IsPendingDebuffCast` ("in flight"), and the player's CC landing
      counts DR (`recentCCHits`). The old CC and shared-debuff "missing aura"
      verifiers were dropped, not ported: with nampower's `SPELL_GO` they
@@ -312,8 +312,9 @@ don't re-investigate.
 libdebuff existed because vanilla cannot report debuff durations on units other
 than the player. ClassicAPI's `Aura::Source` cache now does exactly that, so the
 tracking was removed (steps 3a, 3b). What remains of `CleveRoids.libdebuff` is
-data and small helpers with no `C_UnitAuras` equivalent: the personal/shared
-debuff lists (`IsPersonalDebuff`), `GetSpellRank`/`GetSpellBaseName`,
+data and small helpers with no `C_UnitAuras` equivalent: the shared debuff
+set (`IsSharedDebuff`; Spell.dbc has no per-caster stacking flag),
+`GetSpellRank`/`GetSpellBaseName`,
 `trackedAfflictions`, `guidToName`, and the immunity guards `recentDeaths` and
 `recentCCHits`.
 

@@ -646,441 +646,103 @@ lib.recentDeaths = lib.recentDeaths or {}   -- [targetGUID] = GetTime() timestam
 local DR_RESET_WINDOW = 20
 lib.recentCCHits = lib.recentCCHits or {}   -- [targetGUID][drType] = {count, lastHitTime} for NPC DR safeguard
 
--- PERSONAL DEBUFFS: Each player can have their own instance of these debuffs on the same target
--- These are DoTs, poisons, stings, and most CC effects
-lib.personalDebuffs = lib.personalDebuffs or {
-  -- WARRIOR
-  [772] = 9,      -- Rend (Rank 1)
-  [6546] = 12,    -- Rend (Rank 2)
-  [6547] = 15,    -- Rend (Rank 3)
-  [6548] = 18,    -- Rend (Rank 4)
-  [11572] = 21,   -- Rend (Rank 5)
-  [11573] = 21,   -- Rend (Rank 6)
-  [11574] = 21,   -- Rend (Rank 7)
-
-  [7372] = 15,    -- Hamstring (Rank 1)
-  [7373] = 15,    -- Hamstring (Rank 2)
-  [1715] = 15,    -- Hamstring (Rank 3)
-
-  [12323] = 6,    -- Piercing Howl
-
-  -- ROGUE
-  [2094] = 10,    -- Blind
-  [21060] = 10,   -- Blind (alternate?)
-
-  [6770] = 25,    -- Sap (Rank 1)
-  [2070] = 35,    -- Sap (Rank 2)
-  [11297] = 45,   -- Sap (Rank 3)
-
-  [1776] = 4,     -- Gouge (Rank 1) - Scales with talent
-  [1777] = 4,     -- Gouge (Rank 2)
-  [8629] = 4,     -- Gouge (Rank 3)
-  [11285] = 4,    -- Gouge (Rank 4)
-  [11286] = 4,    -- Gouge (Rank 5)
-
-  [1943] = 8,     -- Rupture Rank 1
-  [8639] = 8,     -- Rupture Rank 2
-  [8640] = 8,     -- Rupture Rank 3
-  [11273] = 8,    -- Rupture Rank 4
-  [11274] = 8,    -- Rupture Rank 5
-  [11275] = 8,    -- Rupture Rank 6
-
-  [703] = 18,     -- Garrote (Rank 1)
-  [8631] = 18,    -- Garrote (Rank 2)
-  [8632] = 18,    -- Garrote (Rank 3)
-  [8633] = 18,    -- Garrote (Rank 4)
-  [11289] = 18,   -- Garrote (Rank 5)
-  [11290] = 18,   -- Garrote (Rank 6)
-
-  [2818] = 12,    -- Deadly Poison (Rank 1)
-  [2819] = 12,    -- Deadly Poison II (Rank 2)
-  [11353] = 12,   -- Deadly Poison III (Rank 3)
-  [11354] = 12,   -- Deadly Poison IV (Rank 4)
-  [25349] = 12,   -- Deadly Poison V (Rank 5)
-
-  [16511] = 15,   -- Hemorrhage
-
-  [1833] = 4,     -- Cheap Shot
-  [14902] = 4,    -- Cheap Shot (alternate?)
-
-  -- Rogue poisons (not in Cursive, estimates):
-  [3409] = 12,    -- Crippling Poison
-  [5760] = 16,    -- Mind-numbing Poison (Rank 1)
-  [8694] = 16,    -- Mind-numbing Poison (Rank 2)
-  [11399] = 16,   -- Mind-numbing Poison (Rank 3)
-  [13218] = 15,   -- Wound Poison (Rank 1)
-  [13222] = 15,   -- Wound Poison (Rank 2)
-  [13223] = 15,   -- Wound Poison (Rank 3)
-  [13224] = 15,   -- Wound Poison (Rank 4)
-
-  -- HUNTER
-  [3043] = 20,    -- Scorpid Sting (Rank 1)
-  [14275] = 20,   -- Scorpid Sting (Rank 2)
-  [14276] = 20,   -- Scorpid Sting (Rank 3)
-  [14277] = 20,   -- Scorpid Sting (Rank 4)
-
-  [1978] = 15,    -- Serpent Sting (Rank 1)
-  [13549] = 15,   -- Serpent Sting (Rank 2)
-  [13550] = 15,   -- Serpent Sting (Rank 3)
-  [13551] = 15,   -- Serpent Sting (Rank 4)
-  [13552] = 15,   -- Serpent Sting (Rank 5)
-  [13553] = 15,   -- Serpent Sting (Rank 6)
-  [13554] = 15,   -- Serpent Sting (Rank 7)
-  [13555] = 15,   -- Serpent Sting (Rank 8)
-  [25295] = 15,   -- Serpent Sting (Rank 9)
-
-  [3034] = 8,     -- Viper Sting (Rank 1)
-  [14279] = 8,    -- Viper Sting (Rank 2)
-  [14280] = 8,    -- Viper Sting (Rank 3)
-
-  [2974] = 10,    -- Wing Clip (Rank 1)
-  [14267] = 10,   -- Wing Clip (Rank 2)
-  [14268] = 10,   -- Wing Clip (Rank 3)
-
-  [5116] = 4,     -- Concussive Shot
-
-  [19386] = 12,   -- Wyvern Sting (Rank 1)
-  [24132] = 12,   -- Wyvern Sting (Rank 2)
-  [24133] = 12,   -- Wyvern Sting (Rank 3)
-
-  [19306] = 5,    -- Counterattack (Rank 1)
-  [20909] = 5,    -- Counterattack (Rank 2)
-  [20910] = 5,    -- Counterattack (Rank 3)
-
-  [1130] = 120,   -- Hunter's Mark (Rank 1)
-  [14323] = 120,  -- Hunter's Mark (Rank 2)
-  [14324] = 120,  -- Hunter's Mark (Rank 3)
-  [14325] = 120,  -- Hunter's Mark (Rank 4)
-
-  -- DRUID
-  [339] = 12,     -- Entangling Roots (Rank 1)
-  [1062] = 15,    -- Entangling Roots (Rank 2)
-  [5195] = 18,    -- Entangling Roots (Rank 3)
-  [5196] = 21,    -- Entangling Roots (Rank 4)
-  [9852] = 24,    -- Entangling Roots (Rank 5)
-  [9853] = 27,    -- Entangling Roots (Rank 6)
-
-  [700] = 20,     -- Sleep (Rank 1)
-  [1090] = 30,    -- Sleep (Rank 2)
-  [2937] = 40,    -- Sleep (Rank 3)
-
-  [770] = 40,     -- Faerie Fire (Rank 1)
-  [778] = 40,     -- Faerie Fire (Rank 2)
-  [9749] = 40,    -- Faerie Fire (Rank 3)
-  [9907] = 40,    -- Faerie Fire (Rank 4)
-
-  [16855] = 40,   -- Faerie Fire (Bear) (Rank 1)
-  [17387] = 40,   -- Faerie Fire (Bear) (Rank 2)
-  [17388] = 40,   -- Faerie Fire (Bear) (Rank 3)
-  [17389] = 40,   -- Faerie Fire (Bear) (Rank 4)
-
-  [16857] = 40,   -- Faerie Fire (Feral) (Rank 1)
-  [17390] = 40,   -- Faerie Fire (Feral) (Rank 2)
-  [17391] = 40,   -- Faerie Fire (Feral) (Rank 3)
-  [17392] = 40,   -- Faerie Fire (Feral) (Rank 4)
-
-  [2637] = 20,    -- Hibernate (Rank 1)
-  [18657] = 30,   -- Hibernate (Rank 2)
-  [18658] = 40,   -- Hibernate (Rank 3)
-
-  [5570] = 18,    -- Insect Swarm (Rank 1)
-  [24974] = 18,   -- Insect Swarm (Rank 2)
-  [24975] = 18,   -- Insect Swarm (Rank 3)
-  [24976] = 18,   -- Insect Swarm (Rank 4)
-  [24977] = 18,   -- Insect Swarm (Rank 5)
-
-  [8921] = 9,     -- Moonfire (Rank 1)
-  [8924] = 18,    -- Moonfire (Rank 2)
-  [8925] = 18,    -- Moonfire (Rank 3)
-  [8926] = 18,    -- Moonfire (Rank 4)
-  [8927] = 18,    -- Moonfire (Rank 5)
-  [8928] = 18,    -- Moonfire (Rank 6)
-  [8929] = 18,    -- Moonfire (Rank 7)
-  [9833] = 18,    -- Moonfire (Rank 8)
-  [9834] = 18,    -- Moonfire (Rank 9)
-  [9835] = 18,    -- Moonfire (Rank 10)
-
-  [1822] = 9,     -- Rake (Rank 1)
-  [1823] = 9,     -- Rake (Rank 2)
-  [1824] = 9,     -- Rake (Rank 3)
-  [9904] = 9,     -- Rake (Rank 4)
-
-  -- NOTE: Rip is a combo-scaling personal debuff (base 10s + 2s per CP)
-  [1079] = 10,    -- Rip (Rank 1)
-  [9492] = 10,    -- Rip (Rank 2)
-  [9493] = 10,    -- Rip (Rank 3)
-  [9752] = 10,    -- Rip (Rank 4)
-  [9894] = 10,    -- Rip (Rank 5)
-  [9896] = 10,    -- Rip (Rank 6)
-
-  [2908] = 15,    -- Soothe Animal (Rank 1)
-  [8955] = 15,    -- Soothe Animal (Rank 2)
-  [9901] = 15,    -- Soothe Animal (Rank 3)
-
-  [5211] = 2,     -- Bash (Rank 1)
-  [6798] = 3,     -- Bash (Rank 2)
-  [8983] = 4,     -- Bash (Rank 3)
-
-  [9007] = 18,    -- Pounce Bleed (Rank 1) - triggered by Pounce 9005
-  [9824] = 18,    -- Pounce Bleed (Rank 2) - triggered by Pounce 9823
-  [9826] = 18,    -- Pounce Bleed (Rank 3) - triggered by Pounce 9827
-
-  -- WARLOCK
-  [172] = 12,     -- Corruption (Rank 1)
-  [6222] = 15,    -- Corruption (Rank 2)
-  [6223] = 18,    -- Corruption (Rank 3)
-  [7648] = 18,    -- Corruption (Rank 4)
-  [11671] = 18,   -- Corruption (Rank 5)
-  [11672] = 18,   -- Corruption (Rank 6)
-  [25311] = 18,   -- Corruption (Rank 7)
-
-  [980] = 24,     -- Curse of Agony (Rank 1)
-  [1014] = 24,    -- Curse of Agony (Rank 2)
-  [6217] = 24,    -- Curse of Agony (Rank 3)
-  [11711] = 24,   -- Curse of Agony (Rank 4)
-  [11712] = 24,   -- Curse of Agony (Rank 5)
-  [11713] = 24,   -- Curse of Agony (Rank 6)
-
-  [18265] = 30,   -- Siphon Life (Rank 1)
-  [18879] = 30,   -- Siphon Life (Rank 2)
-  [18880] = 30,   -- Siphon Life (Rank 3)
-  [18881] = 30,   -- Siphon Life (Rank 4)
-
-  [52550] = 8,    -- Dark Harvest (Rank 1)
-  [52551] = 8,    -- Dark Harvest (Rank 2)
-  [52552] = 8,    -- Dark Harvest (Rank 3)
-
-  [603] = 60,     -- Curse of Doom
-
-  [704] = 120,    -- Curse of Recklessness (Rank 1)
-  [7658] = 120,   -- Curse of Recklessness (Rank 2)
-  [7659] = 120,   -- Curse of Recklessness (Rank 3)
-  [11717] = 120,  -- Curse of Recklessness (Rank 4)
-
-  [17862] = 300,  -- Curse of Shadow (Rank 1)
-  [17937] = 300,  -- Curse of Shadow (Rank 2)
-
-  [1490] = 300,   -- Curse of Elements (Rank 1)
-  [11721] = 300,  -- Curse of Elements (Rank 2)
-  [11722] = 300,  -- Curse of Elements (Rank 3)
-
-  [1714] = 30,    -- Curse of Tongues (Rank 1)
-  [11719] = 30,   -- Curse of Tongues (Rank 2)
-
-  [702] = 120,    -- Curse of Weakness (Rank 1)
-  [1108] = 120,   -- Curse of Weakness (Rank 2)
-  [6205] = 120,   -- Curse of Weakness (Rank 3)
-  [7646] = 120,   -- Curse of Weakness (Rank 4)
-  [11707] = 120,  -- Curse of Weakness (Rank 5)
-  [11708] = 120,  -- Curse of Weakness (Rank 6)
-
-  [18223] = 12,   -- Curse of Exhaustion
-
-  [348] = 15,     -- Immolate (Rank 1)
-  [707] = 15,     -- Immolate (Rank 2)
-  [1094] = 15,    -- Immolate (Rank 3)
-  [2941] = 15,    -- Immolate (Rank 4)
-  [11665] = 15,   -- Immolate (Rank 5)
-  [11667] = 15,   -- Immolate (Rank 6)
-  [11668] = 15,   -- Immolate (Rank 7)
-  [25309] = 15,   -- Immolate (Rank 8)
-
-  [6789] = 3,     -- Death Coil (Rank 1)
-  [17925] = 3,    -- Death Coil (Rank 2)
-  [17926] = 3,    -- Death Coil (Rank 3)
-
-  [710] = 20,     -- Banish (Rank 1)
-  [18647] = 30,   -- Banish (Rank 2)
-
-  [5782] = 10,    -- Fear (Rank 1)
-  [6213] = 15,    -- Fear (Rank 2)
-  [6215] = 20,    -- Fear (Rank 3)
-
-  -- MAGE
-  [118] = 20,     -- Polymorph (Rank 1)
-  [12824] = 30,   -- Polymorph (Rank 2)
-  [12825] = 40,   -- Polymorph (Rank 3)
-  [12826] = 50,   -- Polymorph (Rank 4)
-
-  [28270] = 50,   -- Polymorph: Cow
-  [28271] = 50,   -- Polymorph: Turtle
-  [28272] = 50,   -- Polymorph: Pig
-
-  [116] = 5,      -- Frostbolt slow
-  [120] = 5,      -- Cone of Cold slow
-  [6136] = 15,    -- Chilled
-  [12484] = 15,   -- Improved Blizzard slow
-  [12486] = 15,   -- Blizzard slow
-
-  -- PRIEST
-  [1425] = 30,    -- Shackle Undead (Rank 1)
-  [9486] = 40,    -- Shackle Undead (Rank 2)
-  [10956] = 50,   -- Shackle Undead (Rank 3)
-
-  [453] = 15,     -- Mind Soothe (Rank 1)
-  [8192] = 15,    -- Mind Soothe (Rank 2)
-  [10953] = 15,   -- Mind Soothe (Rank 3)
-
-  [605] = 60,     -- Mind Control (Rank 1)
-  [10911] = 30,   -- Mind Control (Rank 2)
-  [10912] = 30,   -- Mind Control (Rank 3)
-
-  [2944] = 24,    -- Devouring Plague (Rank 1)
-  [19276] = 24,   -- Devouring Plague (Rank 2)
-  [19277] = 24,   -- Devouring Plague (Rank 3)
-  [19278] = 24,   -- Devouring Plague (Rank 4)
-  [19279] = 24,   -- Devouring Plague (Rank 5)
-  [19280] = 24,   -- Devouring Plague (Rank 6)
-
-  [9035] = 120,   -- Hex of Weakness (Rank 1)
-  [19281] = 120,  -- Hex of Weakness (Rank 2)
-  [19282] = 120,  -- Hex of Weakness (Rank 3)
-  [19283] = 120,  -- Hex of Weakness (Rank 4)
-  [19284] = 120,  -- Hex of Weakness (Rank 5)
-  [19285] = 120,  -- Hex of Weakness (Rank 6)
-
-  [589] = 18,     -- Shadow Word: Pain (Rank 1)
-  [594] = 18,     -- Shadow Word: Pain (Rank 2)
-  [970] = 18,     -- Shadow Word: Pain (Rank 3)
-  [992] = 18,     -- Shadow Word: Pain (Rank 4)
-  [2767] = 18,    -- Shadow Word: Pain (Rank 5)
-  [10892] = 18,   -- Shadow Word: Pain (Rank 6)
-  [10893] = 18,   -- Shadow Word: Pain (Rank 7)
-  [10894] = 18,   -- Shadow Word: Pain (Rank 8)
-
-  [15286] = 60,   -- Vampiric Embrace
-
-  [14914] = 10,   -- Holy Fire (Rank 1)
-  [15262] = 10,   -- Holy Fire (Rank 2)
-  [15263] = 10,   -- Holy Fire (Rank 3)
-  [15264] = 10,   -- Holy Fire (Rank 4)
-  [15265] = 10,   -- Holy Fire (Rank 5)
-  [15266] = 10,   -- Holy Fire (Rank 6)
-  [15267] = 10,   -- Holy Fire (Rank 7)
-  [15261] = 10,   -- Holy Fire (Rank 8)
-
-  -- Mind Flay
-  [15407] = 3,    -- Mind Flay (Rank 1)
-  [17311] = 3,    -- Mind Flay (Rank 2)
-  [17312] = 3,    -- Mind Flay (Rank 3)
-  [17313] = 3,    -- Mind Flay (Rank 4)
-  [17314] = 3,    -- Mind Flay (Rank 5)
-  [18807] = 3,    -- Mind Flay (Rank 6)
-
-  -- PALADIN
-  [853] = 6,      -- Hammer of Justice (Rank 1)
-  [5588] = 6,     -- Hammer of Justice (Rank 2)
-  [5589] = 6,     -- Hammer of Justice (Rank 3)
-  [10308] = 6,    -- Hammer of Justice (Rank 4)
-
-  -- NOTE: Judgements moved to sharedDebuffs for proper target scanning
-  -- NOTE: 51750 is the CAST spell for Turtle WoW, not a debuff (debuff is 51752)
-
-  -- SHAMAN
-  -- NOTE: Flame Shock is 15s in Turtle WoW (was 12s in vanilla)
-  [8050] = 15,    -- Flame Shock (Rank 1)
-  [8052] = 15,    -- Flame Shock (Rank 2)
-  [8053] = 15,    -- Flame Shock (Rank 3)
-  [10447] = 15,   -- Flame Shock (Rank 4)
-  [10448] = 15,   -- Flame Shock (Rank 5)
-  [29228] = 15,   -- Flame Shock (Rank 6)
-
-  -- Frost Shock
-  [8056] = 8,     -- Frost Shock (Rank 1)
-  [8058] = 8,     -- Frost Shock (Rank 2)
-  [10472] = 8,    -- Frost Shock (Rank 3)
-  [10473] = 8,    -- Frost Shock (Rank 4)
-}
-
--- SHARED DEBUFFS: Only one instance exists on a target, shared/refreshed by all players
--- These are armor reductions, attack power reductions, and marks
-lib.sharedDebuffs = lib.sharedDebuffs or {
-  -- PALADIN JUDGEMENTS (tracked as shared so SeedUnit picks them up from target scanning)
-  [20184] = 10,   -- Judgement of Justice
-  [20185] = 10,   -- Judgement of Light (Rank 1)
-  [20267] = 10,   -- Judgement of Light (Rank 2)
-  [20268] = 10,   -- Judgement of Light (Rank 3)
-  [20271] = 10,   -- Judgement of Light (Rank 4)
-  [20186] = 10,   -- Judgement of Wisdom (Rank 1)
-  [20354] = 10,   -- Judgement of Wisdom (Rank 2)
-  [20355] = 10,   -- Judgement of Wisdom (Rank 3)
-  [51751] = 10,   -- Judgement of Wisdom (Rank 4) - Turtle WoW
-  [51752] = 10,   -- Judgement of Wisdom (Rank 5) - Turtle WoW
-  [21183] = 10,   -- Judgement of the Crusader (Rank 1)
-  [20183] = 10,   -- Judgement of the Crusader (Rank 2)
-  [20300] = 10,   -- Judgement of the Crusader (Rank 3)
-  [20301] = 10,   -- Judgement of the Crusader (Rank 4)
-  [20302] = 10,   -- Judgement of the Crusader (Rank 5)
-  [20303] = 10,   -- Judgement of the Crusader (Rank 6)
-  [51752] = 10,   -- Turtle WoW: Judgement of Wisdom debuff
+-- SHARED DEBUFFS: one copy per target, refreshed by every caster (armor and
+-- attack power reductions, marks, Judgements). Any other debuff is personal:
+-- each player has their own copy on the target.
+lib.sharedDebuffs = {
+  -- PALADIN JUDGEMENTS
+  [20184] = true, -- Judgement of Justice
+  [20185] = true, -- Judgement of Light (Rank 1)
+  [20267] = true, -- Judgement of Light (Rank 2)
+  [20268] = true, -- Judgement of Light (Rank 3)
+  [20271] = true, -- Judgement of Light (Rank 4)
+  [20186] = true, -- Judgement of Wisdom (Rank 1)
+  [20354] = true, -- Judgement of Wisdom (Rank 2)
+  [20355] = true, -- Judgement of Wisdom (Rank 3)
+  [51751] = true, -- Judgement of Wisdom (Rank 4) - Turtle WoW
+  [51752] = true, -- Judgement of Wisdom (Rank 5) - Turtle WoW
+  [21183] = true, -- Judgement of the Crusader (Rank 1)
+  [20183] = true, -- Judgement of the Crusader (Rank 2)
+  [20300] = true, -- Judgement of the Crusader (Rank 3)
+  [20301] = true, -- Judgement of the Crusader (Rank 4)
+  [20302] = true, -- Judgement of the Crusader (Rank 5)
+  [20303] = true, -- Judgement of the Crusader (Rank 6)
 
   -- WARRIOR
-  [7386] = 30,    -- Sunder Armor (Rank 1)
-  [7405] = 30,    -- Sunder Armor (Rank 2)
-  [8380] = 30,    -- Sunder Armor (Rank 3)
-  [8647] = 30,    -- Sunder Armor (Rank 4)
-  [11597] = 30,   -- Sunder Armor (Rank 5)
+  [7386] = true,  -- Sunder Armor (Rank 1)
+  [7405] = true,  -- Sunder Armor (Rank 2)
+  [8380] = true,  -- Sunder Armor (Rank 3)
+  [11596] = true, -- Sunder Armor (Rank 4)
+  [11597] = true, -- Sunder Armor (Rank 5)
 
-  [6343] = 10,    -- Thunder Clap (Rank 1)
-  [8198] = 14,    -- Thunder Clap (Rank 2)
-  [8205] = 18,    -- Thunder Clap (Rank 3)
-  [11580] = 22,   -- Thunder Clap (Rank 4)
-  [11581] = 26,   -- Thunder Clap (Rank 5)
-  [13532] = 30,   -- Thunder Clap (Rank 6)
+  [6343] = true,  -- Thunder Clap (Rank 1)
+  [8198] = true,  -- Thunder Clap (Rank 2)
+  [8205] = true,  -- Thunder Clap (Rank 3)
+  [11580] = true, -- Thunder Clap (Rank 4)
+  [11581] = true, -- Thunder Clap (Rank 5)
+  [13532] = true, -- Thunder Clap (Rank 6)
 
-  [1160] = 30,    -- Demoralizing Shout (Rank 1)
-  [6190] = 30,    -- Demoralizing Shout (Rank 2)
-  [11554] = 30,   -- Demoralizing Shout (Rank 3)
-  [11555] = 30,   -- Demoralizing Shout (Rank 4)
-  [11556] = 30,   -- Demoralizing Shout (Rank 5)
+  [1160] = true,  -- Demoralizing Shout (Rank 1)
+  [6190] = true,  -- Demoralizing Shout (Rank 2)
+  [11554] = true, -- Demoralizing Shout (Rank 3)
+  [11555] = true, -- Demoralizing Shout (Rank 4)
+  [11556] = true, -- Demoralizing Shout (Rank 5)
 
   -- ROGUE
-  [8647] = 30,    -- Expose Armor (Rank 1)
-  [8649] = 30,    -- Expose Armor (Rank 2)
-  [8650] = 30,    -- Expose Armor (Rank 3)
-  [11197] = 30,   -- Expose Armor (Rank 4)
-  [11198] = 30,   -- Expose Armor (Rank 5)
+  [8647] = true,  -- Expose Armor (Rank 1)
+  [8649] = true,  -- Expose Armor (Rank 2)
+  [8650] = true,  -- Expose Armor (Rank 3)
+  [11197] = true, -- Expose Armor (Rank 4)
+  [11198] = true, -- Expose Armor (Rank 5)
 
   -- HUNTER
-  [1130] = 120,   -- Hunter's Mark (Rank 1)
-  [14323] = 120,  -- Hunter's Mark (Rank 2)
-  [14324] = 120,  -- Hunter's Mark (Rank 3)
-  [14325] = 120,  -- Hunter's Mark (Rank 4)
+  [1130] = true,  -- Hunter's Mark (Rank 1)
+  [14323] = true, -- Hunter's Mark (Rank 2)
+  [14324] = true, -- Hunter's Mark (Rank 3)
+  [14325] = true, -- Hunter's Mark (Rank 4)
 
   -- DRUID
-  [770] = 40,     -- Faerie Fire (Rank 1)
-  [778] = 40,     -- Faerie Fire (Rank 2)
-  [9749] = 40,    -- Faerie Fire (Rank 3)
-  [9907] = 40,    -- Faerie Fire (Rank 4)
+  [770] = true,   -- Faerie Fire (Rank 1)
+  [778] = true,   -- Faerie Fire (Rank 2)
+  [9749] = true,  -- Faerie Fire (Rank 3)
+  [9907] = true,  -- Faerie Fire (Rank 4)
 
-  [16855] = 40,   -- Faerie Fire (Bear) (Rank 1)
-  [17387] = 40,   -- Faerie Fire (Bear) (Rank 2)
-  [17388] = 40,   -- Faerie Fire (Bear) (Rank 3)
-  [17389] = 40,   -- Faerie Fire (Bear) (Rank 4)
+  [16855] = true, -- Faerie Fire (Bear) (Rank 1)
+  [17387] = true, -- Faerie Fire (Bear) (Rank 2)
+  [17388] = true, -- Faerie Fire (Bear) (Rank 3)
+  [17389] = true, -- Faerie Fire (Bear) (Rank 4)
 
-  [16857] = 40,   -- Faerie Fire (Feral) (Rank 1)
-  [17390] = 40,   -- Faerie Fire (Feral) (Rank 2)
-  [17391] = 40,   -- Faerie Fire (Feral) (Rank 3)
-  [17392] = 40,   -- Faerie Fire (Feral) (Rank 4)
+  [16857] = true, -- Faerie Fire (Feral) (Rank 1)
+  [17390] = true, -- Faerie Fire (Feral) (Rank 2)
+  [17391] = true, -- Faerie Fire (Feral) (Rank 3)
+  [17392] = true, -- Faerie Fire (Feral) (Rank 4)
 
-  [99] = 30,      -- Demoralizing Roar (Rank 1)
-  [1735] = 30,    -- Demoralizing Roar (Rank 2)
-  [9490] = 30,    -- Demoralizing Roar (Rank 3)
-  [9747] = 30,    -- Demoralizing Roar (Rank 4)
-  [9898] = 30,    -- Demoralizing Roar (Rank 5)
+  [99] = true,    -- Demoralizing Roar (Rank 1)
+  [1735] = true,  -- Demoralizing Roar (Rank 2)
+  [9490] = true,  -- Demoralizing Roar (Rank 3)
+  [9747] = true,  -- Demoralizing Roar (Rank 4)
+  [9898] = true,  -- Demoralizing Roar (Rank 5)
 
-  [5209] = 6,     -- Challenging Roar
+  [5209] = true,  -- Challenging Roar
 }
 
--- Helper function to check if a debuff is personal (returns true) or shared (returns false)
-function lib:IsPersonalDebuff(spellID)
-  if lib.personalDebuffs[spellID] then
-    return true
-  elseif lib.sharedDebuffs[spellID] then
-    return false
+-- Lowercased, rank-stripped names of the shared debuffs, built on first use
+local sharedDebuffNames
+
+-- Whether a debuff is shared. An unlisted ID counts by name, so a server-specific
+-- ID of a listed debuff (a Turtle WoW Judgement) is shared too.
+function lib.IsSharedDebuff(spellID, name)
+  if lib.sharedDebuffs[spellID] then return true end
+  name = name or C_Spell.GetSpellName(spellID)
+  if not name then return false end
+  if not sharedDebuffNames then
+    sharedDebuffNames = {}
+    for id in pairs(lib.sharedDebuffs) do
+      local n = C_Spell.GetSpellName(id)
+      if n then sharedDebuffNames[string.lower(CleveRoids.StripRank(n))] = true end
+    end
   end
-  -- Unknown debuffs are treated as personal by default (safer for multi-player scenarios)
-  return true
+  return sharedDebuffNames[string.lower(CleveRoids.StripRank(name))] == true
 end
 
 -- Helper function to extract numeric rank from spell ID
@@ -1469,31 +1131,10 @@ local function NormalizeCCImmunityType(ccType)
     return CC_IMMUNITY_ALIASES[normalized] or normalized
 end
 
--- Maps DBC mechanic IDs back to CC type names for immunity recording
+-- DBC mechanic ID -> CC immunity type. One-to-one: Vanilla distinguishes Stun
+-- (12), Freeze (13), Knockout (14) and Sap (30) immunities, so never fold them.
 -- Inverse of CleveRoids.CCMechanics (defined in Conditionals.lua)
 local MECHANIC_TO_CC_TYPE = {
-    [1] = "charm",
-    [2] = "disorient",
-    [5] = "fear",
-    [7] = "root",
-    [9] = "silence",
-    [10] = "sleep",
-    [11] = "snare",
-    [12] = "stun",
-    [13] = "freeze",
-    [14] = "knockout",
-    [17] = "polymorph",
-    [18] = "banish",
-    [20] = "shackle",
-    [24] = "horror",
-    [27] = "daze",
-    [30] = "sap",
-}
-
--- Mechanic-precise mapping used only for learned NPC immunity. Keep it
--- one-to-one: Vanilla can distinguish Stun (12), Freeze (13), Knockout (14)
--- and Sap (30) immunities independently, so never fold them together here.
-local MECHANIC_TO_IMMUNITY_TYPE = {
     [1] = "charm",
     [2] = "disorient",
     [5] = "fear",
@@ -1601,13 +1242,9 @@ end
 
 -- CC IMMUNITY TRACKING
 
--- Get CC type from a spell ID via DBC mechanic lookup (nampower, then ClassicAPI)
--- Returns: CC type name (e.g., "stun", "fear") or nil if not a CC spell
--- EffectApplyAuraName → CC type mapping (fallback when mechanics are unset)
--- Uses vanilla 1.12.1 aura type enum values
--- Note: some CC types share aura IDs (e.g., sleep uses MOD_STUN + sleep mechanic,
--- horror uses MOD_FEAR + horror mechanic). Those are caught by mechanic lookup;
--- this table handles spells where mechanics are 0 but the aura effect is CC.
+-- Aura type -> CC type, for an effect with no mechanic at all (Repentance
+-- applies MOD_STUN with none). Vanilla 1.12.1 aura enum. Sleep, horror and the
+-- like share these auras but carry their own mechanic, which wins.
 local AURA_NAME_TO_CC_TYPE = {
     [1]  = "charm",     -- SPELL_AURA_BIND_SIGHT
     [2]  = "charm",     -- SPELL_AURA_MOD_POSSESS_PET
@@ -1620,97 +1257,66 @@ local AURA_NAME_TO_CC_TYPE = {
     [33] = "snare",     -- SPELL_AURA_MOD_DECREASE_SPEED
 }
 
+-- The CC type of one spell effect: its own mechanic, else the spell's, else
+-- (no mechanic at all) its aura type
+local function EffectCCType(spellMechanic, effectMechanic, auraName)
+    local mechanic = effectMechanic > 0 and effectMechanic or spellMechanic
+    if mechanic > 0 then return MECHANIC_TO_CC_TYPE[mechanic] end
+    return AURA_NAME_TO_CC_TYPE[auraName]
+end
+
+-- The CC immunity that stops a spell outright: its spell-level mechanic, or one
+-- CC type shared by all its effects. A spell with any other effect still lands
+-- on a unit immune to that CC; only the CC effect is dropped (Frostbolt's
+-- damage hits a snare-immune unit). Returns e.g. "stun", or nil.
 local function GetSpellCCType(spellID)
     if not spellID or spellID <= 0 then return nil end
+    local spellMechanic = C_Spell.GetSpellMechanicByID(spellID) or 0
+    if spellMechanic > 0 then return MECHANIC_TO_CC_TYPE[spellMechanic] end
 
-    -- Priority 1: DBC mechanic lookup (authoritative, covers all spells)
-    if GetSpellRecField then
-        -- Check spell-level mechanic first
-        local mechanic = GetSpellRecField(spellID, "mechanic")
-        if mechanic and mechanic > 0 and MECHANIC_TO_CC_TYPE[mechanic] then
-            return MECHANIC_TO_CC_TYPE[mechanic]
-        end
-
-        -- Check per-effect mechanics (array of 3 effects)
-        local effectMechanics = GetSpellRecField(spellID, "effectMechanic")
-        if effectMechanics then
-            for i = 1, 3 do
-                local em = effectMechanics[i]
-                if em and em > 0 and MECHANIC_TO_CC_TYPE[em] then
-                    return MECHANIC_TO_CC_TYPE[em]
-                end
-            end
-        end
-
-        -- Priority 1b: effectApplyAuraName fallback (catches spells with CC aura
-        -- effects but no mechanic set, e.g., Repentance applying MOD_STUN)
-        local auraNames = GetSpellRecField(spellID, "effectApplyAuraName")
-        if auraNames then
-            for i = 1, 3 do
-                local an = auraNames[i]
-                if an and an > 0 and AURA_NAME_TO_CC_TYPE[an] then
-                    return AURA_NAME_TO_CC_TYPE[an]
-                end
-            end
+    local effects = C_Spell.GetSpellEffectInfo(spellID)
+    if not effects then return nil end
+    local effectMechanics = C_Spell.GetSpellEffectMechanics(spellID)
+    local ccType
+    for i = 1, 3 do
+        if effects[i].effect ~= 0 then
+            local t = EffectCCType(0, effectMechanics[i], effects[i].auraName)
+            if not t or (ccType and t ~= ccType) then return nil end
+            ccType = t
         end
     end
-
-    -- Priority 2: ClassicAPI Spell.dbc reader (always present; covers every spell).
-    -- A subset of Priority 1's per-effect/aura checks, used when nampower's
-    -- GetSpellRecField is unavailable.
-    local mechanic = CleveRoids.ClassicAPI.GetSpellMechanicByID(spellID)
-    if mechanic and mechanic > 0 and MECHANIC_TO_CC_TYPE[mechanic] then
-        return MECHANIC_TO_CC_TYPE[mechanic]
-    end
-
-    return nil
+    return ccType
 end
 
 -- Expose publicly for use by other modules
 CleveRoids.GetSpellCCType = GetSpellCCType
 
--- Resolve the mechanic bucket used for learned NPC immunity. DBC spell/effect
--- mechanics are authoritative; aura type is only a fallback for spells whose
--- mechanic fields are empty.
-local function GetSpellImmunityType(spellID)
+-- The CC type of the aura a spell applies (Frostbolt: snare), or nil
+local function GetAuraCCType(spellID)
     if not spellID or spellID <= 0 then return nil end
-
-    if GetSpellRecField then
-        local mechanic = GetSpellRecField(spellID, "mechanic")
-        if mechanic and mechanic > 0 and MECHANIC_TO_IMMUNITY_TYPE[mechanic] then
-            return MECHANIC_TO_IMMUNITY_TYPE[mechanic]
-        end
-
-        local effectMechanics = GetSpellRecField(spellID, "effectMechanic")
-        if effectMechanics then
-            for i = 1, 3 do
-                local em = effectMechanics[i]
-                if em and em > 0 and MECHANIC_TO_IMMUNITY_TYPE[em] then
-                    return MECHANIC_TO_IMMUNITY_TYPE[em]
-                end
-            end
-        end
-
-        local auraNames = GetSpellRecField(spellID, "effectApplyAuraName")
-        if auraNames then
-            for i = 1, 3 do
-                local an = auraNames[i]
-                if an and an > 0 and AURA_NAME_TO_CC_TYPE[an] then
-                    return AURA_NAME_TO_CC_TYPE[an]
-                end
-            end
+    local effects = C_Spell.GetSpellEffectInfo(spellID)
+    if not effects then return nil end
+    local spellMechanic = C_Spell.GetSpellMechanicByID(spellID) or 0
+    local effectMechanics = C_Spell.GetSpellEffectMechanics(spellID)
+    for i = 1, 3 do
+        if effects[i].auraName ~= 0 then
+            local t = EffectCCType(spellMechanic, effectMechanics[i], effects[i].auraName)
+            if t then return t end
         end
     end
-
-    local mechanic = CleveRoids.ClassicAPI.GetSpellMechanicByID(spellID)
-    if mechanic and mechanic > 0 and MECHANIC_TO_IMMUNITY_TYPE[mechanic] then
-        return MECHANIC_TO_IMMUNITY_TYPE[mechanic]
-    end
-
     return nil
 end
 
-CleveRoids.GetSpellImmunityType = GetSpellImmunityType
+-- Whether a spell applies a debuff: it is harmful and one of its effects is an aura
+local function AppliesDebuff(spellID)
+    if not C_Spell.IsSpellHarmful(spellID) then return false end
+    local effects = C_Spell.GetSpellEffectInfo(spellID)
+    if not effects then return false end
+    for i = 1, 3 do
+        if effects[i].auraName ~= 0 then return true end
+    end
+    return false
+end
 
 -- NPC immunity learning only needs DR groups that can actually diminish creatures.
 -- vMaNGOS 1.12 marks controlled stun, triggered stun, and Kidney Shot as DRTYPE_ALL;
@@ -1755,7 +1361,7 @@ local function WasClientInitiatedSpell(spellID)
 end
 
 local function GetSpellImmunityDRType(spellID)
-    if GetSpellCCType(spellID) ~= "stun" then return nil end
+    if GetAuraCCType(spellID) ~= "stun" then return nil end
 
     if IsKidneyShotSpell(spellID) then
         return "stun_kidneyshot"
@@ -2021,13 +1627,14 @@ end
 CleveRoids.RemoveSpellImmunity = RemoveSpellImmunity
 
 -- AURA EXPECTATIONS
--- When the player's personal-debuff, shared-debuff or CC spell hits a unit, the
--- aura it applies is expected there. SPELL_AURA_APPLIED, or a C_UnitAuras check,
--- clears the expectation, and a miss cancels it; meanwhile [nodebuff] treats the
--- debuff as in flight (CleveRoids.IsAuraExpected). A personal debuff still missing
--- after AURA_EXPECT_DELAY is an immunity the server never reports: when a target
--- ignores one effect of a spell (Rake's bleed, Hamstring's snare) the server drops
--- that effect silently, and the damage still lands, so no IMMUNE miss is sent.
+-- When the player's debuff-applying spell hits a unit, the debuff is expected
+-- there. SPELL_AURA_APPLIED, or a C_UnitAuras check, clears the expectation, and
+-- a miss cancels it; meanwhile [nodebuff] treats the debuff as in flight
+-- (CleveRoids.IsAuraExpected). A bleed or CC debuff still missing after
+-- AURA_EXPECT_DELAY is an immunity the server never reports: when a target
+-- ignores one effect of a spell (Rake's bleed, Frostbolt's snare) the server
+-- drops that effect silently, and the damage still lands, so no IMMUNE miss is
+-- sent. Immunity to the whole spell arrives as that IMMUNE miss instead.
 local AURA_EXPECT_DELAY = 0.4
 local DEBUFF_CAP_THRESHOLD = 47  -- of 48 aura slots: a debuff this crowded was pushed off
 local auraExpectations = {}      -- [guid .. ":" .. auraID] = expectation
@@ -2053,9 +1660,30 @@ local function AuraLanded(unit, e)
     end
 end
 
--- A personal debuff that never appeared: record the immunity, unless something
--- else explains the absence.
+-- Master Strike's CC is resisted apart from its damage, so a missing one is no immunity
+local function IsSplitCCSpell(spellID)
+    if SPLIT_CC_SPELLS[spellID] then return true end
+    local name = C_Spell.GetSpellName(spellID)
+    return name and SPLIT_CC_SPELL_NAMES[BaseSpellName(name)] or false
+end
+
+-- The unit took 3+ of the player's stuns of this DR pool recently, so a stun
+-- that fails now is diminishing returns, not immunity
+local function InDiminishingReturns(guid, spellID)
+    local drType = GetSpellImmunityDRType(spellID)
+    local entry = drType and lib.recentCCHits[guid] and lib.recentCCHits[guid][drType]
+    return entry and (GetTime() - entry.lastHitTime) < DR_RESET_WINDOW and entry.count >= 3
+end
+
+-- A debuff that never appeared: if it is a bleed or a CC, record the immunity,
+-- unless something else explains the absence. A debuff with neither proves
+-- nothing: a stronger copy, or another debuff of its exclusive group (Demoralizing
+-- Shout and Roar), also keeps it off.
 local function ResolveMissingAura(e)
+    local isBleed = IsBleedByMechanic(e.auraID)
+    local ccType = not isBleed and GetAuraCCType(e.auraID)
+    if not (isBleed or ccType) then return end
+
     local unit = UnitTokenFromGUID(e.guid)
     -- No token (despawned, out of range), dead, or a player: inconclusive
     if not unit or UnitIsDead(unit) or UnitIsPlayer(unit) then return end
@@ -2082,7 +1710,7 @@ local function ResolveMissingAura(e)
         return
     end
 
-    if IsBleedByMechanic(e.auraID) then
+    if isBleed then
         -- Bosses known to take bleeds hit the debuff cap often; never record them
         if MOBS_THAT_BLEED[UnitCreatureID(unit)] then return end
         -- Recorded as bleed directly: RecordImmunity would use Rake's initial
@@ -2092,16 +1720,15 @@ local function ResolveMissingAura(e)
         if CleveRoids.debug then
             CleveRoids.Print("|cffff6600[Bleed Immunity]|r " .. e.name .. " is immune to bleed (" .. e.auraName .. ")")
         end
-    else
-        RecordImmunity(e.name, nil, nil, e.auraID)
+    elseif not IsSplitCCSpell(e.auraID) and not InDiminishingReturns(e.guid, e.auraID) then
+        RecordCCImmunity(e.name, ccType, nil, e.auraName)
     end
 end
 
 -- The player's spell hit a unit: expect the debuff it applies
 local function ExpectAura(spellID, guid, targetName)
     local auraID = ExpectedAuraID(spellID)
-    local personal = lib.personalDebuffs[auraID] ~= nil
-    if not (personal or lib.sharedDebuffs[auraID] or GetSpellCCType(spellID)) then return end
+    if not AppliesDebuff(auraID) then return end
     local auraName = C_Spell.GetSpellName(auraID)
     if not auraName then return end
 
@@ -2116,9 +1743,7 @@ local function ExpectAura(spellID, guid, targetName)
     C_Timer.After(AURA_EXPECT_DELAY, function()
         if auraExpectations[key] ~= e then return end  -- landed, missed, or recast
         auraExpectations[key] = nil
-        if personal then
-            ResolveMissingAura(e)
-        end
+        ResolveMissingAura(e)
     end)
 end
 
@@ -2144,9 +1769,9 @@ local function PlayerAuraApplied(spellID, guid, targetName)
         lib.recentCCHits[guid][drType] = { count = count, lastHitTime = now }
     end
 
-    local immunityType = GetSpellImmunityType(spellID) or GetSpellCCType(spellID)
-    if immunityType and targetName then
-        RemoveCCImmunity(targetName, immunityType)
+    local ccType = GetAuraCCType(spellID)
+    if ccType and targetName then
+        RemoveCCImmunity(targetName, ccType)
     end
 end
 
@@ -2223,8 +1848,8 @@ function CleveRoids.CheckImmunity(unitId, spellOrSchool)
     end
     local ccSpellID = GetSpellIdForName and GetSpellIdForName(ccSpellName)
     if ccSpellID then
-        local immunityType = GetSpellImmunityType(ccSpellID)
-        if immunityType and CheckCCImmunity(unitId, immunityType) then
+        local ccType = GetSpellCCType(ccSpellID)
+        if ccType and CheckCCImmunity(unitId, ccType) then
             return true
         end
     end
@@ -2737,7 +2362,6 @@ local function ProcessSpellMissSelf(spellId, targetGuid, targetName, missType)
     local spellName = C_Spell.GetSpellName(spellId)
     if not spellName or not targetName then return end
     lib.guidToName[targetGuid] = targetName
-    local baseName = string.gsub(spellName, "%s*%(.-%)%s*$", "")
 
     if CleveRoids.debug then
         DEFAULT_CHAT_FRAME:AddMessage(
@@ -2747,7 +2371,7 @@ local function ProcessSpellMissSelf(spellId, targetGuid, targetName, missType)
     end
 
     -- Skip split CC spells (physical damage + resistable CC)
-    if SPLIT_CC_SPELLS[spellId] or SPLIT_CC_SPELL_NAMES[baseName] then
+    if IsSplitCCSpell(spellId) then
         if CleveRoids.debug then
             CleveRoids.Print("|cff00aaff[SPELL_MISSED Split CC Skip]|r " .. spellName .. " CC immune on " .. targetName)
         end
@@ -2791,22 +2415,17 @@ local function ProcessSpellMissSelf(spellId, targetGuid, targetName, missType)
     end
 
     -- Check NPC-applicable DR before recording permanent CC immunity.
-    local ccType = GetSpellCCType(spellId)
-    local immunityType = GetSpellImmunityType(spellId) or ccType
-    local drType = GetSpellImmunityDRType(spellId)
-    if drType then
-        local drEntry = lib.recentCCHits[targetGuid] and lib.recentCCHits[targetGuid][drType]
-        if drEntry and (GetTime() - drEntry.lastHitTime) < DR_RESET_WINDOW and drEntry.count >= 3 then
-            if CleveRoids.debug then
-                CleveRoids.Print("|cff00aaff[SPELL_MISSED DR Skip]|r " .. targetName .. " - likely " .. drType .. " DR immunity, not recording")
-            end
-            return
+    if InDiminishingReturns(targetGuid, spellId) then
+        if CleveRoids.debug then
+            CleveRoids.Print("|cff00aaff[SPELL_MISSED DR Skip]|r " .. targetName .. " - likely DR immunity, not recording")
         end
+        return
     end
 
-    -- Record as permanent immunity
-    if immunityType then
-        RecordCCImmunity(targetName, immunityType, nil, spellName)
+    -- Record as permanent immunity: to the CC that stops the whole spell, else its school
+    local ccType = GetSpellCCType(spellId)
+    if ccType then
+        RecordCCImmunity(targetName, ccType, nil, spellName)
     else
         RecordImmunity(targetName, spellName, nil, spellId)
     end
