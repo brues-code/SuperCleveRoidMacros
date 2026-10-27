@@ -171,6 +171,14 @@ the target name, so nothing is parsed from chat text. Ranged-class spells
 must be handled. Spells that the 1.12 combat log hides (attributes `0x180`)
 fire no combat log event, as they write no chat line either.
 
+`SMSG_SPELLORDAMAGE_IMMUNE` — a target immune to the damage of a periodic tick
+or a damage shield — arrives as `DAMAGE_SHIELD_MISSED` (or
+`SPELL_PERIODIC_MISSED` when the server sets its debug byte) with `missType`
+`"IMMUNE"`, and is recorded the same way. The server sends nothing when it
+skips one effect of a spell (`IsImmuneToSpellEffect` strips it from the effect
+mask), so Rake's bleed or Pounce's stun on an immune mob produces no event:
+those are learned by checking that the aura appeared.
+
 A tracked CC or bleed confirms that it landed through `SPELL_AURA_APPLIED`
 with `auraType` `"DEBUFF"` (`HandleAffliction`).
 

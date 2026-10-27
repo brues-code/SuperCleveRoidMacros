@@ -7148,6 +7148,12 @@ combatLogFrame:SetScript("OnEvent", function()
         if sourceGUID == playerGUID then
             ProcessSpellMissSelf(a1, destGUID, destName, a4)
         end
+    elseif subevent == "DAMAGE_SHIELD_MISSED" or subevent == "SPELL_PERIODIC_MISSED" then
+        -- spellId, spellName, spellSchool, missType. A target immune to the
+        -- damage of a periodic tick or a damage shield (SMSG_SPELLORDAMAGE_IMMUNE)
+        if sourceGUID == playerGUID and a4 == "IMMUNE" then
+            ProcessSpellMissSelf(a1, destGUID, destName, a4)
+        end
     elseif subevent == "SWING_MISSED" then
         -- missType
         ProcessAvoidance(sourceGUID, destGUID, playerGUID, a1, nil)
