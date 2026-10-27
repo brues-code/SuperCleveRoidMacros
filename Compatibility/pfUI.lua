@@ -276,7 +276,7 @@ end
 --
 -- Note: AURA_CAST hooks don't provide durationMs/auraCapStatus, so
 -- AllCasterAuraTracking and overflow buff tracking remain on their own
--- event frame (CleveRoidsAutoAttackFrame in Conditionals.lua).
+-- event frame (CleveRoidsAuraCastFrame in Conditionals.lua).
 
 function Extension.SetupPfUIEventHooks(lib)
     if not pfUI or not lib then return end
@@ -299,7 +299,7 @@ function Extension.SetupPfUIEventHooks(lib)
         ev:UnregisterEvent("BUFF_REMOVED_OTHER")
 
         -- Keep registered: SPELL_START_SELF (channel duration capture before early return),
-        -- UNIT_DIED (AllCasterAuraTracking + OverflowBuff cleanup), UNIT_CASTEVENT (SuperWoW),
+        -- UNIT_CASTEVENT (SuperWoW),
         -- PLAYER_TARGET_CHANGED, UNIT_AURA (SeedUnit)
 
         if CleveRoids.debug then
@@ -317,7 +317,7 @@ function Extension.SetupPfUIEventHooks(lib)
 
     -- UNIT_DIED hook: supplementary cleanup for our private tables
     -- (AllCasterAuraTracking, OverflowBuffs) that pfUI doesn't manage.
-    -- Our UNIT_DIED event handler on the libdebuff frame also does this,
+    -- HandleUnitDied (combat log UNIT_DIED) in Utility.lua also does this,
     -- but the hook provides a second path in case event ordering shifts.
     if type(pfUI.libdebuff_unit_died_hooks) == "table" then
         pfUI.libdebuff_unit_died_hooks[HOOK_KEY] = function(guid)

@@ -161,27 +161,27 @@ addon anything again.
 An `IMMUNE` result is treated as DR, and discarded, only while the pool holds
 three or more hits inside the window. Otherwise it is learned.
 
-## nampower `SPELL_MISS` arguments
+## Where `IMMUNE` comes from
 
-`TriggerSpellMissEvent` (`nampower/spellevents.cpp:888-917`) signals both
-`SPELL_MISS_SELF` and `SPELL_MISS_OTHER` with the same layout:
+Immunity is learned from ClassicAPI's `COMBAT_LOG_EVENT_UNFILTERED`: a
+`SPELL_MISSED` or `RANGE_MISSED` whose source is the player and whose
+`missType` is `"IMMUNE"`. The event gives the spell ID, the target GUID and
+the target name, so nothing is parsed from chat text. Ranged-class spells
+(Aimed Shot, Multi-Shot, Shoot) arrive as `RANGE_MISSED`, so both prefixes
+must be handled. Spells that the 1.12 combat log hides (attributes `0x180`)
+fire no combat log event, as they write no chat line either.
 
-```text
-arg1 = casterGuid   arg2 = targetGuid   arg3 = spellId   arg4 = missInfo
-```
+A tracked CC or bleed confirms that it landed through `SPELL_AURA_APPLIED`
+with `auraType` `"DEBUFF"` (`HandleAffliction`).
 
-`SPELL_MISS_SELF` carries `casterGuid` too, even though it is by definition
-the player — the event is chosen by comparing the caster to the active player
-GUID, not by changing the payload. Reading `arg1` as the spell ID hands a GUID
-string to the immunity recorder and silently loses every miss.
-
-## Known limitation: mouseover casts
+## Known limitation: untokened targets
 
 `ProcessSpellMissSelf` refuses to learn permanent immunity when it cannot
 resolve a queryable unit, because the temporary-immunity-buff check needs one
-— an NPC under Divine Shield must not be recorded as permanently immune. A CC
-cast at a mouseover that is not the current target can therefore return
-`IMMUNE` without being learned.
+— an NPC under Divine Shield must not be recorded as permanently immune. The
+unit comes from `UnitTokenFromGUID`, so the target, focus, mouseover or any
+unit with a nameplate works. An `IMMUNE` on a unit that no
+token points at is not learned.
 
 This is the safeguard working as designed, not a known bug. Do not loosen it
 without a reproduction showing a real failure, since the failure mode on the

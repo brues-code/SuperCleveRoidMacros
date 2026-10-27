@@ -704,37 +704,35 @@ threatFrame:SetScript("OnEvent", function()
 end)
 
 -- ============================================================================
--- AUTO-ATTACK EVENT TRACKING (Nampower v2.24+)
+-- MELEE RESULT AND AURA CAP TRACKING
 -- ============================================================================
 -- Tracks player's melee swings and incoming attacks for conditionals:
 --   [lastswing:crit/glancing/miss/dodge/parry/blocked/offhand]
 --   [incominghit:crit/crushing/dodge/parry/blocked]
+-- from COMBAT_LOG_EVENT_UNFILTERED, and aura cap state for
 --   [buffcapped] / [debuffcapped]
--- Requires NP_EnableAutoAttackEvents=1 and NP_EnableAuraCastEvents=1 CVars
+-- from nampower's AURA_CAST events (requires NP_EnableAuraCastEvents=1).
 
--- State tracking for player's outgoing melee swings
-CleveRoids.LastSwing = {
-    timestamp = 0,      -- GetTime() when swing occurred
-    damage = 0,         -- Total damage dealt
-    hitInfo = 0,        -- HitInfo bitfield
-    victimState = 0,    -- VictimState enum
-    blockedAmount = 0,  -- Amount blocked
-    absorbAmount = 0,   -- Amount absorbed
-    resistAmount = 0,   -- Amount resisted
-    targetGuid = nil,   -- GUID of target hit
-}
+-- The result of one melee attack. missType is the combat log's ("DODGE",
+-- "PARRY", "MISS", ...) or nil for a hit; blocked is what a hit lost to a block.
+local function NewMeleeResult()
+    return {
+        timestamp = 0,      -- GetTime() of the attack
+        missType = nil,
+        damage = 0,
+        blocked = 0,
+        absorbed = 0,
+        resisted = 0,
+        critical = false,
+        glancing = false,
+        crushing = false,
+        offHand = false,
+    }
+end
 
--- State tracking for incoming attacks on player
-CleveRoids.LastIncomingHit = {
-    timestamp = 0,
-    damage = 0,
-    hitInfo = 0,
-    victimState = 0,
-    blockedAmount = 0,
-    absorbAmount = 0,
-    resistAmount = 0,
-    attackerGuid = nil,
-}
+-- Player's outgoing melee swings (.targetGuid) and incoming attacks (.attackerGuid)
+CleveRoids.LastSwing = NewMeleeResult()
+CleveRoids.LastIncomingHit = NewMeleeResult()
 
 -- Aura cap status tracking (from AURA_CAST events)
 -- For player: 32 buff slots, 16 debuff slots
@@ -846,30 +844,11 @@ function CleveRoids.GetAllCasterAuraTimeRemaining(targetGuid, spellId)
     return nil
 end
 
--- HitInfo bitfield values (from NampowerAPI.lua, duplicated for local access)
--- Converted to decimal for Lua 5.0 compatibility (no hex literals)
-local HITINFO_MISS = 16          -- 0x10
-local HITINFO_CRITICALHIT = 128  -- 0x80
-local HITINFO_GLANCING = 16384   -- 0x4000
-local HITINFO_CRUSHING = 32768   -- 0x8000
-local HITINFO_LEFTSWING = 4      -- 0x4 (Off-hand attack)
-
--- VictimState values (from AUTO_ATTACK / SPELL_GO events)
-local VICTIMSTATE_UNAFFECTED = 0  -- Generic miss (seen with HITINFO_MISS)
-local VICTIMSTATE_NORMAL = 1      -- Hit landed
-local VICTIMSTATE_DODGE = 2
-local VICTIMSTATE_PARRY = 3
-local VICTIMSTATE_INTERRUPT = 4
-local VICTIMSTATE_BLOCKS = 5
-local VICTIMSTATE_EVADES = 6
-local VICTIMSTATE_IS_IMMUNE = 7
-local VICTIMSTATE_DEFLECTS = 8
-
 -- Aura cap status bitfield
 local AURA_CAP_BUFF_FULL = 1
 local AURA_CAP_DEBUFF_FULL = 2
 
--- Helper: Check if a HitInfo bitfield contains a specific flag
+-- Helper: Check if a bitfield contains a specific flag
 local function HasHitFlag(hitInfo, flag)
     if not hitInfo or not flag then return false end
     if bit and bit.band then
@@ -879,38 +858,59 @@ local function HasHitFlag(hitInfo, flag)
     return false
 end
 
--- Process AUTO_ATTACK_OTHER event (player attacking something, or other units)
-local function OnAutoAttackOther(attackerGuid, targetGuid, totalDamage, hitInfo, victimState,
-                                  subDamageCount, blockedAmount, totalAbsorb, totalResist)
-    -- Check if player is the attacker
-    local playerGuid = CleveRoids.GetGUID("player")
-    if not playerGuid or attackerGuid ~= playerGuid then
-        return  -- Not player's attack, ignore
+local function RecordMeleeResult(result, missType, amount, resisted, blocked, absorbed,
+                                 critical, glancing, crushing, offHand)
+    result.timestamp = GetTime()
+    result.missType = missType
+    result.damage = amount or 0
+    result.resisted = resisted or 0
+    result.blocked = blocked or 0
+    result.absorbed = absorbed or 0
+    result.critical = critical and true or false
+    result.glancing = glancing and true or false
+    result.crushing = crushing and true or false
+    result.offHand = offHand and true or false
+end
+
+-- Record melee results from the combat log: the player's swings, attacks on the
+-- player, and the player's physical abilities that missed (a dodged Mortal
+-- Strike counts for [lastswing:dodge] the same as a dodged swing).
+local meleeResultFrame = CreateFrame("Frame", "CleveRoidsMeleeResultFrame")
+meleeResultFrame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+meleeResultFrame:SetScript("OnEvent", function()
+    local _, subevent, _, sourceGUID, _, _, _, destGUID, _, _, _,
+          a1, a2, a3, a4, a5, a6, a7, a8, a9, a10 = CombatLogGetCurrentEventInfo()
+    if subevent ~= "SWING_DAMAGE" and subevent ~= "SWING_MISSED" and subevent ~= "SPELL_MISSED" then
+        return
     end
 
-    CleveRoids.LastSwing.timestamp = GetTime()
-    CleveRoids.LastSwing.damage = totalDamage or 0
-    CleveRoids.LastSwing.hitInfo = hitInfo or 0
-    CleveRoids.LastSwing.victimState = victimState or 0
-    CleveRoids.LastSwing.blockedAmount = blockedAmount or 0
-    CleveRoids.LastSwing.absorbAmount = totalAbsorb or 0
-    CleveRoids.LastSwing.resistAmount = totalResist or 0
-    CleveRoids.LastSwing.targetGuid = targetGuid
+    local playerGuid = CleveRoids.GetGUID("player")
+    local result
+    if sourceGUID == playerGuid then
+        -- Only a physical ability counts as a swing (spellSchool 1)
+        if subevent == "SPELL_MISSED" and a3 ~= 1 then return end
+        result = CleveRoids.LastSwing
+        result.targetGuid = destGUID
+    elseif destGUID == playerGuid and subevent ~= "SPELL_MISSED" then
+        result = CleveRoids.LastIncomingHit
+        result.attackerGuid = sourceGUID
+    else
+        return
+    end
 
-end
-
--- Process AUTO_ATTACK_SELF event (player being attacked)
-local function OnAutoAttackSelf(attackerGuid, targetGuid, totalDamage, hitInfo, victimState,
-                                 subDamageCount, blockedAmount, totalAbsorb, totalResist)
-    CleveRoids.LastIncomingHit.timestamp = GetTime()
-    CleveRoids.LastIncomingHit.damage = totalDamage or 0
-    CleveRoids.LastIncomingHit.hitInfo = hitInfo or 0
-    CleveRoids.LastIncomingHit.victimState = victimState or 0
-    CleveRoids.LastIncomingHit.blockedAmount = blockedAmount or 0
-    CleveRoids.LastIncomingHit.absorbAmount = totalAbsorb or 0
-    CleveRoids.LastIncomingHit.resistAmount = totalResist or 0
-    CleveRoids.LastIncomingHit.attackerGuid = attackerGuid
-end
+    if subevent == "SWING_DAMAGE" then
+        -- amount, overkill, school, resisted, blocked, absorbed, critical, glancing, crushing, isOffHand
+        RecordMeleeResult(result, nil, a1, a4, a5, a6, a7, a8, a9, a10)
+    elseif subevent == "SWING_MISSED" then
+        -- missType, isOffHand, amountMissed
+        RecordMeleeResult(result, a1, 0, nil, a1 == "BLOCK" and a3, a1 == "ABSORB" and a3,
+            nil, nil, nil, a2)
+    else
+        -- spellId, spellName, spellSchool, missType, isOffHand, amountMissed
+        RecordMeleeResult(result, a4, 0, nil, a4 == "BLOCK" and a6, a4 == "ABSORB" and a6,
+            nil, nil, nil, a5)
+    end
+end)
 
 -- Process AURA_CAST events for cap status tracking
 -- Parameters: spellId, casterGuid, targetGuid, effect, effectAuraName,
@@ -1176,20 +1176,14 @@ CleveRoids._auraCleanupTicker = C_Timer.NewTicker(5, function()
     CleveRoids.CleanupAuraTracking()
 end)
 
--- Create frame to listen for Nampower auto-attack and aura events
-local autoAttackFrame = CreateFrame("Frame", "CleveRoidsAutoAttackFrame")
+-- Create frame to listen for Nampower aura events
+local auraCastFrame = CreateFrame("Frame", "CleveRoidsAuraCastFrame")
 
 -- Register for events on PLAYER_ENTERING_WORLD (after CVars are applied)
-autoAttackFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-autoAttackFrame:SetScript("OnEvent", function()
+auraCastFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+auraCastFrame:SetScript("OnEvent", function()
     if event == "PLAYER_ENTERING_WORLD" then
-        -- Check if Nampower v2.24+ is available for auto-attack events
         local API = CleveRoids.NampowerAPI
-        if API and API.features and API.features.hasAutoAttackEvents then
-            -- Register for auto-attack events (requires NP_EnableAutoAttackEvents=1)
-            this:RegisterEvent("AUTO_ATTACK_OTHER")
-            this:RegisterEvent("AUTO_ATTACK_SELF")
-        end
 
         -- Check for aura cast events (v2.20+, requires NP_EnableAuraCastEvents=1)
         if API and API.features and API.features.hasAuraCastEvents then
@@ -1254,14 +1248,6 @@ autoAttackFrame:SetScript("OnEvent", function()
             end
         end
 
-    elseif event == "AUTO_ATTACK_OTHER" then
-        -- arg1=attackerGuid, arg2=targetGuid, arg3=totalDamage, arg4=hitInfo, arg5=victimState,
-        -- arg6=subDamageCount, arg7=blockedAmount, arg8=totalAbsorb, arg9=totalResist
-        OnAutoAttackOther(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
-
-    elseif event == "AUTO_ATTACK_SELF" then
-        OnAutoAttackSelf(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
-
     elseif event == "AURA_CAST_ON_SELF" then
         -- arg1=spellId, arg2=casterGuid, arg3=targetGuid, arg4=effect, arg5=effectAuraName,
         -- arg6=effectAmplitude, arg7=effectMiscValue, arg8=durationMs, arg9=auraCapStatus
@@ -1319,26 +1305,24 @@ function CleveRoids.ValidateLastSwing(swingType, operator, amount)
     end
 
     if swingTypeLower == "crit" or swingTypeLower == "critical" then
-        return HasHitFlag(swing.hitInfo, HITINFO_CRITICALHIT)
+        return swing.critical
     elseif swingTypeLower == "glancing" then
-        return HasHitFlag(swing.hitInfo, HITINFO_GLANCING)
+        return swing.glancing
     elseif swingTypeLower == "miss" then
-        return HasHitFlag(swing.hitInfo, HITINFO_MISS)
+        return swing.missType == "MISS"
     elseif swingTypeLower == "dodge" or swingTypeLower == "dodged" then
-        return swing.victimState == VICTIMSTATE_DODGE
+        return swing.missType == "DODGE"
     elseif swingTypeLower == "parry" or swingTypeLower == "parried" then
-        return swing.victimState == VICTIMSTATE_PARRY
+        return swing.missType == "PARRY"
     elseif swingTypeLower == "blocked" or swingTypeLower == "block" then
-        return swing.victimState == VICTIMSTATE_BLOCKS or swing.blockedAmount > 0
+        return swing.missType == "BLOCK" or swing.blocked > 0
     elseif swingTypeLower == "offhand" or swingTypeLower == "oh" then
-        return HasHitFlag(swing.hitInfo, HITINFO_LEFTSWING)
+        return swing.offHand
     elseif swingTypeLower == "mainhand" or swingTypeLower == "mh" then
-        return not HasHitFlag(swing.hitInfo, HITINFO_LEFTSWING)
+        return not swing.offHand
     elseif swingTypeLower == "hit" then
-        -- A successful hit (not miss, not dodged, not parried)
-        return not HasHitFlag(swing.hitInfo, HITINFO_MISS) and
-               swing.victimState ~= VICTIMSTATE_DODGE and
-               swing.victimState ~= VICTIMSTATE_PARRY
+        -- The swing landed
+        return swing.missType == nil
     end
 
     -- Default: already checked isRecent above, so return true for any recent swing
@@ -1370,24 +1354,22 @@ function CleveRoids.ValidateIncomingHit(hitType, operator, amount)
     end
 
     if hitTypeLower == "crit" or hitTypeLower == "critical" then
-        return HasHitFlag(hit.hitInfo, HITINFO_CRITICALHIT)
+        return hit.critical
     elseif hitTypeLower == "crushing" then
-        return HasHitFlag(hit.hitInfo, HITINFO_CRUSHING)
+        return hit.crushing
     elseif hitTypeLower == "glancing" then
-        return HasHitFlag(hit.hitInfo, HITINFO_GLANCING)
+        return hit.glancing
     elseif hitTypeLower == "miss" or hitTypeLower == "missed" then
-        return HasHitFlag(hit.hitInfo, HITINFO_MISS)
+        return hit.missType == "MISS"
     elseif hitTypeLower == "dodge" or hitTypeLower == "dodged" then
-        return hit.victimState == VICTIMSTATE_DODGE
+        return hit.missType == "DODGE"
     elseif hitTypeLower == "parry" or hitTypeLower == "parried" then
-        return hit.victimState == VICTIMSTATE_PARRY
+        return hit.missType == "PARRY"
     elseif hitTypeLower == "blocked" or hitTypeLower == "block" then
-        return hit.victimState == VICTIMSTATE_BLOCKS or hit.blockedAmount > 0
+        return hit.missType == "BLOCK" or hit.blocked > 0
     elseif hitTypeLower == "hit" then
-        -- A successful incoming hit (not miss, not dodged, not parried by us)
-        return not HasHitFlag(hit.hitInfo, HITINFO_MISS) and
-               hit.victimState ~= VICTIMSTATE_DODGE and
-               hit.victimState ~= VICTIMSTATE_PARRY
+        -- The attack landed
+        return hit.missType == nil
     end
 
     -- Default: already checked isRecent above, so return true for any recent hit
@@ -8306,9 +8288,9 @@ CleveRoids.Keywords = {
     end,
 
     -- ========================================================================
-    -- AUTO-ATTACK CONDITIONALS (Nampower v2.24+)
+    -- MELEE RESULT CONDITIONALS
     -- ========================================================================
-    -- Requires NP_EnableAutoAttackEvents=1 CVar
+    -- Fed by COMBAT_LOG_EVENT_UNFILTERED (see CleveRoidsMeleeResultFrame)
 
     -- [lastswing:type] - Check result of player's last melee swing
     -- Types: crit, glancing, miss, dodge, parry, blocked, offhand/oh, mainhand/mh, hit

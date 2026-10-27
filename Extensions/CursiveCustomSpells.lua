@@ -422,38 +422,13 @@ local function RefreshJudgementsOnTarget(targetGuid)
     end
 end
 
--- Hook melee combat events for auto attacks
+-- Refresh on the player's auto attack hits
 local meleeRefreshFrame = CreateFrame("Frame")
-meleeRefreshFrame:RegisterEvent("CHAT_MSG_COMBAT_SELF_HITS")
+meleeRefreshFrame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
 meleeRefreshFrame:SetScript("OnEvent", function()
-    -- Auto attack hit patterns (vanilla WoW format)
-    -- "You hit TargetName for X damage."
-    -- "You crit TargetName for X damage."
-    local msg = arg1
-    if not msg then return end
-
-    -- Parse target name from combat message
-    local targetName = nil
-
-    -- Pattern: "You hit TargetName for X"
-    local _, _, name = string.find(msg, "^You hit (.+) for")
-    if name then targetName = name end
-
-    -- Pattern: "You crit TargetName for X"
-    if not targetName then
-        _, _, name = string.find(msg, "^You crit (.+) for")
-        if name then targetName = name end
-    end
-
-    if not targetName then return end
-
-    -- Check if current target matches the hit target
-    local currentTargetName = UnitName("target")
-    if currentTargetName and currentTargetName == targetName then
-        local targetGuid = CleveRoids.GetGUID("target")
-        if targetGuid then
-            RefreshJudgementsOnTarget(targetGuid)
-        end
+    local _, subevent, _, sourceGuid, _, _, _, targetGuid = CombatLogGetCurrentEventInfo()
+    if subevent == "SWING_DAMAGE" and sourceGuid == CleveRoids.GetGUID("player") then
+        RefreshJudgementsOnTarget(targetGuid)
     end
 end)
 

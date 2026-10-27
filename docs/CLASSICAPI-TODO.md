@@ -157,6 +157,56 @@ missing, the same as nampower/UnitXP.
 
 ---
 
+## Nampower reduction — keep only the spell queue
+
+**Goal:** nampower stays only for its spell queue, which ClassicAPI does not
+have: `QueueSpellByName`, `QueueScript`, `CastSpellByNameNoQueue`,
+`ChannelStopCastingNextTick`, `SPELL_QUEUE_EVENT` and the `NP_Queue*` /
+`*QueueWindowMs` / buffer CVars. Everything else moves to ClassicAPI. Where
+ClassicAPI has no equivalent, add one to ClassicAPI instead of keeping nampower.
+Each step leaves a working addon.
+
+1. ~~**Combat events → `COMBAT_LOG_EVENT_UNFILTERED`.**~~ — DONE. The
+   dispatcher at the end of `Utility.lua` (`CleveRoidsCombatLogFrame`) feeds
+   immunity (`SPELL_MISSED`/`RANGE_MISSED` `IMMUNE`), reactive procs
+   (`ProcessAvoidance`, swings and spells alike), `[resisted]`, spell-school
+   learning, CC/bleed landing (`SPELL_AURA_APPLIED`) and `UNIT_DIED` cleanup.
+   `CleveRoidsMeleeResultFrame` in `Conditionals.lua` records
+   `[lastswing]`/`[incominghit]`; the Cursive extension refreshes Judgements on
+   `SWING_DAMAGE`. Gone: every chat-text parser and `CHAT_MSG_*`/`RAW_COMBATLOG`
+   registration, nampower `SPELL_MISS_*`, `SPELL_DAMAGE_EVENT_*`,
+   `AUTO_ATTACK_*` and `UNIT_DIED`, the `NP_EnableAutoAttackEvents` setup, the
+   `ProcessMissReason` correlation and its `WasSpellReflected`/`DidTargetEvade`.
+   The `RAW_COMBATLOG` debuff-fade learner was dropped, not ported: it stripped
+   `0x` from GUIDs before looking up `lib.objects`, so it never matched.
+2. **Cast tracking.** `SPELL_GO_*`, `SPELL_START_*`, `SPELL_FAILED_*`,
+   `SPELL_CAST_EVENT` and SuperWoW's `UNIT_CASTEVENT` → `UNIT_SPELLCAST_*` for
+   units with a token (the player, target, focus). CLEU
+   `SPELL_CAST_START`/`SUCCESS` for any nearby caster, or when the target GUID
+   of an instant cast is needed. CLEU `SPELL_CAST_SUCCESS` does not fire for a
+   spell with a cast time, so `SPELL_GO` maps to `UNIT_SPELLCAST_SUCCEEDED`, not
+   to CLEU.
+3. **Aura events.** `AURA_CAST_*`, `BUFF_/DEBUFF_ADDED/REMOVED_*`,
+   `*_UPDATE_DURATION_SELF` → `UNIT_AURA_DELTA` + `C_UnitAuras`, or CLEU
+   `SPELL_AURA_*` for units with no token. Do this together with the libdebuff
+   retirement below.
+4. **Direct swaps.** `GetCastInfo`/`GetCurrentCastingInfo` →
+   `C_Spell.CastingInfo`/`ChannelInfo`; `IsSpellInRange`/`IsSpellUsable`/
+   `GetSpellPowerCost` → `C_Spell.*`; `GetPlayerAuraDuration`/`GetUnitAuras` →
+   `C_UnitAuras`; `GetSpellIdForName`/`GetSpellNameAndRankForId`/
+   `GetSpellSlotTypeIdForName` → `C_Spell.GetSpellInfo`/`FindSpellBookSlotByID`;
+   item lookups (`FindPlayerItemSlot`, `GetBagItems`, `GetEquippedItems`,
+   `GetTrinkets`, `UseItemIdOrName`, `GetItemStats`) → `C_Container`/`C_Item`.
+5. **Field reads.** Match each field SCRM reads through `GetUnitField`/
+   `GetUnitData` and `GetSpellRecField`/`GetSpellRec`, and also
+   `GetSpellModifiers`, `GetSpellDuration`, `IsAuraHidden`, `GetItemLevel`,
+   `SetMouseoverUnit` and `[rooted]`. File each gap against ClassicAPI.
+
+The "keep nampower" verdicts below (`FindItemLocation`, `[usable]`,
+`[rooted]`) are now gaps to close under steps 4–5, not reasons to keep nampower.
+
+---
+
 ## Conditionals.lua audit — do NOT migrate (traps)
 
 Findings from the full Conditionals.lua audit. These look like ClassicAPI
@@ -219,8 +269,7 @@ ships ~1695 lines of it, re-based on `C_UnitAuras.GetAuraDataByIndex` /
 Carnage refresh and Dark Harvest tick compression in the DLL.
 
 **Group B — no `C_UnitAuras` equivalent, keep:**
-`ShouldApplyDebuffRank`, `DidSpellFail`, `WasSpellReflected`, `DidTargetEvade`,
-`ProcessMissReason`, `IsPersonalDebuff`, `GetSpellRank`/`GetSpellBaseName`,
+`ShouldApplyDebuffRank`, `DidSpellFail`, `IsPersonalDebuff`, `GetSpellRank`/`GetSpellBaseName`,
 `HasPendingCast`. These are miss/rank/learning logic, not aura state.
 
 **Gate before removing Group A:** confirm parity in-game on one spell where

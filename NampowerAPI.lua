@@ -335,7 +335,6 @@ API.VERSION_REQUIREMENTS = {
     ["CooldownItemMetadata"]    = { 2, 23, 0 },  -- itemId, itemHasActiveSpell, itemActiveSpellId
 
     -- v2.24+ - Auto-attack events
-    ["AutoAttackEvents"]        = { 2, 24, 0 },  -- AUTO_ATTACK_SELF/OTHER events
 
     -- v2.25+ - Spell start/go/failed/delayed/channel events
     ["SpellStartEvents"]        = { 2, 25, 0 },  -- SPELL_START_SELF/OTHER events
@@ -364,7 +363,6 @@ API.VERSION_REQUIREMENTS = {
     ["GetPlayerAuraDuration"]   = { 2, 30, 0, "GetPlayerAuraDuration" },
 
     -- v2.31+ - Spell miss events
-    ["SpellMissEvents"]         = { 2, 31, 0 },  -- SPELL_MISS_SELF/OTHER events
 
     -- v2.32+ - Aura event state parameter and stack removal fix
     ["AuraEventState"]          = { 2, 32, 0 },
@@ -545,7 +543,6 @@ local function InitializeFeatures()
     f.hasCooldownItemMetadata = API.HasFeature("CooldownItemMetadata")
 
     -- v2.24+ Auto-attack events
-    f.hasAutoAttackEvents = API.HasFeature("AutoAttackEvents")
 
     -- v2.25+ Spell start/go/failed/delayed/channel events
     f.hasSpellStartEvents = API.HasFeature("SpellStartEvents")
@@ -574,7 +571,6 @@ local function InitializeFeatures()
     f.hasGetPlayerAuraDuration = API.HasFeature("GetPlayerAuraDuration")
 
     -- v2.31+ Spell miss events
-    f.hasSpellMissEvents = API.HasFeature("SpellMissEvents")
 
     -- v2.32+ Aura event state parameter
     f.hasAuraEventState = API.HasFeature("AuraEventState")
@@ -2349,47 +2345,6 @@ API.AURA_DURATION_EVENTS = {
     "DEBUFF_UPDATE_DURATION_SELF",  -- Player debuff duration refreshed
 }
 
--- Auto-attack event names (v2.24+, requires NP_EnableAutoAttackEvents=1)
--- Parameters: attackerGuid, targetGuid, totalDamage, hitInfo, victimState,
---             subDamageCount, blockedAmount, totalAbsorb, totalResist
-API.AUTO_ATTACK_EVENTS = {
-    "AUTO_ATTACK_SELF",   -- Fires when active player is the target
-    "AUTO_ATTACK_OTHER",  -- Fires when active player is attacker or different unit is target
-}
-
--- HitInfo bitfield values (for AUTO_ATTACK events)
--- Converted to decimal for Lua 5.0 compatibility (no hex literals)
-API.HITINFO = {
-    NORMALSWING = 0,
-    UNK0 = 1,
-    AFFECTS_VICTIM = 2,
-    LEFTSWING = 4,          -- Off-hand attack
-    UNK3 = 8,
-    MISS = 16,              -- 0x10
-    ABSORB = 32,            -- 0x20
-    RESIST = 64,            -- 0x40
-    CRITICALHIT = 128,      -- 0x80
-    UNK8 = 256,             -- 0x100
-    UNK9 = 8192,            -- 0x2000
-    GLANCING = 16384,       -- 0x4000
-    CRUSHING = 32768,       -- 0x8000
-    NOACTION = 65536,       -- 0x10000
-    SWINGNOHITSOUND = 524288, -- 0x80000
-}
-
--- VictimState values (for AUTO_ATTACK events)
-API.VICTIMSTATE = {
-    UNAFFECTED = 0,   -- Seen with HITINFO_MISS
-    NORMAL = 1,
-    DODGE = 2,
-    PARRY = 3,
-    INTERRUPT = 4,
-    BLOCKS = 5,
-    EVADES = 6,
-    IS_IMMUNE = 7,
-    DEFLECTS = 8,
-}
-
 -- Unit GUID events (v2.39+)
 -- Fire once per unit state change, identified by GUID rather than unit token.
 -- Unlike standard UNIT_HEALTH etc. (one event per registered token), each GUID event
@@ -2886,11 +2841,6 @@ function API.Initialize()
             SetCVar("NP_EnableAuraCastEvents", "1")
         end
 
-        -- NP_EnableAutoAttackEvents (v2.24+) - required for [lastswing], [incominghit]
-        if f.hasAutoAttackEvents and GetCVar("NP_EnableAutoAttackEvents") ~= "1" then
-            SetCVar("NP_EnableAutoAttackEvents", "1")
-        end
-
         -- NP_EnableSpellStartEvents (v2.25+) - required for SPELL_START_SELF/OTHER cast tracking
         if f.hasSpellStartEvents and GetCVar("NP_EnableSpellStartEvents") ~= "1" then
             SetCVar("NP_EnableSpellStartEvents", "1")
@@ -3369,16 +3319,6 @@ end
 function API.ClearSpellTypeCache()
     API.spellTypeCache = {}
 end
-
---------------------------------------------------------------------------------
--- SPELL MISS CONSTANTS (v2.31+)
---------------------------------------------------------------------------------
-
--- MissInfo enum values from SPELL_MISS_SELF/OTHER events
-API.MISS_INFO = {
-    NONE = 0, MISS = 1, RESIST = 2, DODGE = 3, PARRY = 4, BLOCK = 5,
-    EVADE = 6, IMMUNE = 7, IMMUNE2 = 8, DEFLECT = 9, ABSORB = 10, REFLECT = 11,
-}
 
 --------------------------------------------------------------------------------
 -- SPELL POWER QUERY (v2.31+)
