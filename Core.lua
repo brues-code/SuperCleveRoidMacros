@@ -1508,10 +1508,18 @@ function CleveRoids.ExecuteMacroBody(body,inline)
             end
         end
 
-        -- For all other commands, use ChatEdit_SendText
+        -- For all other commands, run the line the way the engine runs a macro
+        -- line: through FrameXML's hidden MacroEditBox (its EXECUTE_CHAT_LINE
+        -- handler, mirrored). Using ChatFrameEditBox would write the line into
+        -- the chat input history and clobber/hide whatever the user is typing.
         if not cmdHandled then
-            ChatFrameEditBox:SetText(v)
-            ChatEdit_SendText(ChatFrameEditBox)
+            local defaultEditBox = DEFAULT_CHAT_FRAME.editBox
+            MacroEditBox.chatFrame = DEFAULT_CHAT_FRAME
+            MacroEditBox.chatType = defaultEditBox.chatType
+            MacroEditBox.tellTarget = defaultEditBox.tellTarget
+            MacroEditBox.channelTarget = defaultEditBox.channelTarget
+            MacroEditBox:SetText(v)
+            ChatEdit_SendText(MacroEditBox)
         end
     end
 
