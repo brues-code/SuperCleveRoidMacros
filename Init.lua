@@ -69,15 +69,18 @@ CleveRoids.currentSequence = nil
 CleveRoids.bookTypes = {BOOKTYPE_SPELL, BOOKTYPE_PET}
 CleveRoids.unknownTexture = "Interface\\Icons\\INV_Misc_QuestionMark"
 
-CleveRoids.spell_tracking = {}
-
--- GUID-based cast tracking, populated from our own SPELL_START handlers and pruned
+-- GUID-based cast tracking for libdebuff, populated from its SPELL_START handler and pruned
 -- in OnUpdate. Format: [casterGuid] = {spellID, spellName, icon, startTime, duration,
 -- endTime}
 CleveRoids.castTracking = {}
 
 -- Combo point tracking (initialized early for /cast hook)
 CleveRoids.lastComboPoints = 0
+-- The player's casts as they leave the client (UNIT_SPELLCAST_SENT), so a spell
+-- the player cast can be told from a proc, with a finisher's combo points
+-- captured before the server spends them.
+-- Format: [spellId] = { timestamp = GetTime(), comboPoints = n or nil }
+CleveRoids.sentCasts = {}
 CleveRoids.lastComboPointsTime = 0
 
 -- Resist tracking state
@@ -87,12 +90,9 @@ CleveRoids.resistState = nil
 -- KEY_DOWN/KEY_UP state table (populated when Nampower v2.41+ hasKeyEvents)
 CleveRoids._keyState = {}
 
--- Holds information about the currently cast spell
+-- Auto-attack state, driven by PLAYER_ENTER_COMBAT / PLAYER_LEAVE_COMBAT and the
+-- autorepeat events
 CleveRoids.CurrentSpell = {
-    -- "channeled" or "cast"
-    type = "",
-    -- the name of the spell
-    spellName = "",
     -- is the Attack ability enabled
     autoAttack = false,
     -- is the Auto Shot ability enabled
@@ -101,49 +101,34 @@ CleveRoids.CurrentSpell = {
     wand = false,
 }
 
--- Enhanced casting state tracking
-CleveRoids.UpdateCastingState = function()
-    if not GetCurrentCastingInfo then return false end
-
-    local castId, visId, autoId, casting, channeling, onswing, autoattack = GetCurrentCastingInfo()
-
-    -- Update CurrentSpell based on actual cast state
-    -- NOTE: Channel state is EXCLUSIVELY managed by SPELLCAST_CHANNEL_START/STOP events
-    -- This function NEVER touches channel state, only regular casts
-    if casting == 1 then
-        CleveRoids.CurrentSpell.type = "cast"
-        CleveRoids.CurrentSpell.castingSpellId = castId
-    elseif CleveRoids.CurrentSpell.type == "cast" then
-        -- Only clear if we were in a regular cast (not channel)
-        CleveRoids.CurrentSpell.type = ""
-        CleveRoids.CurrentSpell.castingSpellId = nil
+-- The player's cast in progress, from ClassicAPI's cast state, which has the
+-- effective cast time (haste, talents) and tracks pushback. Returns the kind
+-- ("cast" or "channeled"), the spell name and the seconds left, or nil when the
+-- player is not casting.
+function CleveRoids.GetPlayerCast()
+    local kind = "cast"
+    local name, _, _, _, endMs = C_Spell.CastingInfo()
+    if not name then
+        kind = "channeled"
+        name, _, _, _, endMs = C_Spell.ChannelInfo()
+        if not name then return nil end
     end
-    -- DO NOT touch channel state here - events handle it
-
-    -- Always update metadata from GetCurrentCastingInfo (onswing/autoattack only here)
-    CleveRoids.CurrentSpell.autoAttack = (autoattack == 1)
-    CleveRoids.CurrentSpell.onSwingPending = (onswing == 1)
-    CleveRoids.CurrentSpell.visualSpellId = visId
-    CleveRoids.CurrentSpell.autoRepeatSpellId = autoId
-
-    -- Enhanced timing data from GetCastInfo (Nampower 2.18+)
-    if GetCastInfo then
-        local ok, info = pcall(GetCastInfo)
-        if ok and info then
-            CleveRoids.CurrentSpell.castRemainingMs = info.castRemainingMs
-            CleveRoids.CurrentSpell.castEndTime = info.castEndS
-            CleveRoids.CurrentSpell.gcdRemainingMs = info.gcdRemainingMs
-            CleveRoids.CurrentSpell.gcdEndTime = info.gcdEndS
-        else
-            CleveRoids.CurrentSpell.castRemainingMs = nil
-            CleveRoids.CurrentSpell.castEndTime = nil
-            CleveRoids.CurrentSpell.gcdRemainingMs = nil
-            CleveRoids.CurrentSpell.gcdEndTime = nil
-        end
-    end
-
-    return true
+    local remaining = endMs / 1000 - GetTime()
+    if remaining < 0 then remaining = 0 end
+    return kind, name, remaining
 end
+
+-- Seconds left on the player's cast of this kind ("cast" or "channeled", or nil
+-- for either), 0 when not casting one.
+function CleveRoids.PlayerCastTimeLeft(kind)
+    local castKind, _, remaining = CleveRoids.GetPlayerCast()
+    if not castKind or (kind and castKind ~= kind) then return 0 end
+    return remaining
+end
+
+-- A cast this close to its end already counts as finished, so a macro can
+-- queue the next spell (Nampower's spell queue) instead of being blocked.
+CleveRoids.CAST_END_GRACE = 0.1
 
 CleveRoids.dynamicCmds = {
     ["/cast"]         = true,
@@ -197,7 +182,6 @@ end
 
 -- Spell queue state (Nampower)
 CleveRoids.queuedSpell = nil
-CleveRoids.lastCastSpell = nil
 
 -- Macro execution control
 CleveRoids.stopMacroFlag = false

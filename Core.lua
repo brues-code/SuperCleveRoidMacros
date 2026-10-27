@@ -307,7 +307,7 @@ local function PerformEquipSwap(item, inventoryId, useQueueScript)
 
     if isWeapon and UnitAffectingCombat("player") then
         -- Don't swap while casting
-        if CleveRoids.CurrentSpell.type ~= "" then
+        if CleveRoids.GetPlayerCast() then
             return false
         end
 
@@ -3945,7 +3945,6 @@ function CleveRoids.DoCastSequence(sequence)
   -- Usage: /castsequence reset=target Sunder Armor, nil
   local actionLower = string.lower(CleveRoids.Trim(active.action))
   if actionLower == "nil" or actionLower == "null" or actionLower == "pass" or actionLower == "noop" then
-    sequence.status = 0
     sequence.lastUpdate = GetTime()
     if CleveRoids.debug then
       DEFAULT_CHAT_FRAME:AddMessage("|cff00ffff[Sequence]|r Hit stop step, falling through")
@@ -3954,9 +3953,7 @@ function CleveRoids.DoCastSequence(sequence)
     return
   end
 
-  sequence.status     = 0
   sequence.lastUpdate = GetTime()
-  sequence.expires    = 0
 
   -- Capture target GUID for reset=target (only resets on NEW target, not same target)
   if sequence.reset and sequence.reset.target and UnitExists("target") then
@@ -4269,17 +4266,6 @@ function CleveRoids.OnUpdate(self)
         seqKey, sequence = next(Sequences, seqKey)
     end
 
-    -- PERFORMANCE: Use next() directly instead of pairs() to avoid iterator allocation
-    local spell_tracking = CR.spell_tracking
-    local guid, cast = next(spell_tracking)
-    while guid do
-        local nextGuid = next(spell_tracking, guid)  -- Get next before potential removal
-        if cast.expires and time > cast.expires then
-            spell_tracking[guid] = nil
-        end
-        guid, cast = nextGuid, nextGuid and spell_tracking[nextGuid]
-    end
-
     -- Clean stale castTracking entries. Instant casts are stored with endTime = nil
     -- (SPELL_START sets it only when the cast has a duration), so an endTime-only
     -- check could never evict them and every instant cast by every unit in range
@@ -4530,32 +4516,19 @@ function CleveRoids.ApplyUnitStreamEvents()
     end
 end
 CleveRoids.ApplyUnitStreamEvents()
-if CleveRoids.hasSuperwow then
-  CleveRoids.Frame:RegisterEvent("UNIT_CASTEVENT")
-end
 if QueueSpellByName then
     CleveRoids.Frame:RegisterEvent("SPELL_QUEUE_EVENT")
-    CleveRoids.Frame:RegisterEvent("SPELL_CAST_EVENT")
 end
 CleveRoids.Frame:RegisterEvent("START_AUTOREPEAT_SPELL")
 CleveRoids.Frame:RegisterEvent("STOP_AUTOREPEAT_SPELL")
-CleveRoids.Frame:RegisterEvent("SPELLCAST_CHANNEL_START")
-CleveRoids.Frame:RegisterEvent("SPELLCAST_CHANNEL_STOP")
-CleveRoids.Frame:RegisterEvent("SPELLCAST_START")
-CleveRoids.Frame:RegisterEvent("SPELLCAST_STOP")
-CleveRoids.Frame:RegisterEvent("SPELLCAST_FAILED")
-CleveRoids.Frame:RegisterEvent("SPELLCAST_INTERRUPTED")
-
--- Nampower SPELL_CAST_EVENT for reliable channel tracking + cast sequence + spell_tracking
-if GetCurrentCastingInfo then
-    CleveRoids.Frame:RegisterEvent("SPELL_CAST_EVENT")
-end
-
--- Nampower v2.25+: SPELL_START_SELF for spell_tracking and cast sequence (Nampower fallback for UNIT_CASTEVENT)
-if CleveRoids.NampowerAPI and CleveRoids.NampowerAPI.features and CleveRoids.NampowerAPI.features.hasSpellStartEvents then
-    CleveRoids.Frame:RegisterEvent("SPELL_START_SELF")
-    CleveRoids.Frame:RegisterEvent("SPELL_FAILED_SELF")
-end
+CleveRoids.Frame:RegisterEvent("UNIT_SPELLCAST_SENT")
+CleveRoids.Frame:RegisterEvent("UNIT_SPELLCAST_START")
+CleveRoids.Frame:RegisterEvent("UNIT_SPELLCAST_STOP")
+CleveRoids.Frame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+CleveRoids.Frame:RegisterEvent("UNIT_SPELLCAST_FAILED")
+CleveRoids.Frame:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED")
+CleveRoids.Frame:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START")
+CleveRoids.Frame:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
 
 -- Nampower v2.41+: keyboard input events for [keydown:X] conditional
 if CleveRoids.NampowerAPI.features.hasKeyEvents then
@@ -4667,480 +4640,68 @@ function CleveRoids.Frame:ADDON_LOADED(addon)
     -- NOTE: SuperMacro hook installation is handled by Compatibility/SuperMacro.lua
 end
 
-function CleveRoids.Frame:UNIT_CASTEVENT(caster,target,action,spell_id,cast_time)
-    -- Melee swings carry no spell to resolve. ClassicAPI mirrors the server's
-    -- paladin judgement-refresh rule off SMSG_ATTACKERSTATEUPDATE in the DLL
-    -- (src/aura/JudgementRefresh.cpp), so there is nothing to do here.
-    if action == "MAINHAND" or action == "OFFHAND" then
-        return
-    end
+-- Cast events (ClassicAPI UNIT_SPELLCAST_*). The cast state itself is read on
+-- demand from ClassicAPI (CleveRoids.GetPlayerCast, CheckSpellCast); these
+-- handlers only refresh the action buttons, advance a /castsequence and capture
+-- a finisher's combo points.
 
-    -- Debug channel tracking
-    if CleveRoids.ChannelTimeDebug then
-        local spellName = spell_id and C_Spell.GetSpellName(spell_id) or "Unknown"
-        if string.find(spellName, "Arcane") then
-            DEFAULT_CHAT_FRAME:AddMessage(string.format("|cff00ff00[UNIT_CASTEVENT]|r %s: %s (ID:%s) caster=%s player=%s",
-                action, spellName, tostring(spell_id), tostring(caster), tostring(CleveRoids.playerGuid)))
-        end
-    end
-
-    -- handle cast spell tracking
-    local cast = CleveRoids.spell_tracking[caster]
-    if cast_time > 0 and action == "START" or action == "CHANNEL" then
-        CleveRoids.spell_tracking[caster] = { spell_id = spell_id, expires = GetTime() + cast_time/1000, type = action }
-
-        -- ALSO store under "player" literal for easier lookup
-        if caster == CleveRoids.playerGuid then
-            CleveRoids.spell_tracking["player"] = CleveRoids.spell_tracking[caster]
-
-            -- For CHANNEL events, capture duration for checkchanneled conditional
-            if action == "CHANNEL" then
-                CleveRoids.channelStartTime = GetTime()
-                -- Try to get accurate duration from spell tooltip (reflects haste)
-                local tooltipDuration = CleveRoids.GetChannelDurationFromTooltipByID(spell_id)
-                if tooltipDuration then
-                    CleveRoids.channelDuration = tooltipDuration
-                else
-                    -- Fallback to UNIT_CASTEVENT duration (may not reflect haste)
-                    CleveRoids.channelDuration = cast_time / 1000
-                end
-            end
-
-            -- For START events, capture cast time for checkcasting conditional
-            if action == "START" then
-                CleveRoids.castStartTime = GetTime()
-                -- For cast-time spells, UNIT_CASTEVENT duration is usually accurate
-                -- but we could add tooltip scanning here too if needed
-                CleveRoids.castDuration = cast_time / 1000
-            end
-        end
-
-        if CleveRoids.ChannelTimeDebug and caster == CleveRoids.playerGuid then
-            DEFAULT_CHAT_FRAME:AddMessage(string.format("|cff00ff00[Tracking]|r Set spell_tracking[%s] AND [player]: type=%s, expires=%.2f",
-                tostring(caster), action, GetTime() + cast_time/1000))
-        end
-        -- Always show for channels if debug is on
-        if CleveRoids.ChannelTimeDebug and action == "CHANNEL" then
-            DEFAULT_CHAT_FRAME:AddMessage(string.format("|cff00ff00[Tracking]|r caster=%s, playerGuid=%s, match=%s",
-                tostring(caster), tostring(CleveRoids.playerGuid), tostring(caster == CleveRoids.playerGuid)))
-        end
-    elseif cast
-        and (
-            (cast.spell_id == spell_id and (action == "FAIL" or action == "CAST"))
-            or (GetTime() > cast.expires)
-        )
-    then
-        if CleveRoids.ChannelTimeDebug and caster == CleveRoids.playerGuid then
-            local reason = ""
-            if cast.spell_id == spell_id and (action == "FAIL" or action == "CAST") then
-                reason = string.format("spell_id match (%s) and action=%s", tostring(spell_id), action)
-            elseif GetTime() > cast.expires then
-                reason = string.format("expired (%.2f > %.2f)", GetTime(), cast.expires)
-            end
-            DEFAULT_CHAT_FRAME:AddMessage(string.format("|cffff0000[Tracking]|r CLEARING spell_tracking - %s", reason))
-        end
-        CleveRoids.spell_tracking[caster] = nil
-        -- Also clear "player" literal if this is the player
-        if caster == CleveRoids.playerGuid then
-            CleveRoids.spell_tracking["player"] = nil
-        end
-    end
-
-    -- handle cast sequence (SuperWoW)
-    if CleveRoids.currentSequence and caster == CleveRoids.playerGuid then
-        local active = CleveRoids.GetCurrentSequenceAction(CleveRoids.currentSequence)
-
-        local name = C_Spell.GetSpellName(spell_id)
-        local rank = C_Spell.GetSpellSubtext(spell_id)
-        local nameRank = (rank and rank ~= "") and (name .. "(" .. rank .. ")") or nil
-        local isSeqSpell = active and active.action and (
-            active.action == name or
-            (nameRank and active.action == nameRank)
-        )
-
-        if isSeqSpell then
-            local status = CleveRoids.currentSequence.status
-            if status == 0 and (action == "START" or action == "CHANNEL") and cast_time > 0 then
-                -- cast_time is ms; GetTime() is seconds
-                CleveRoids.currentSequence.status  = 1
-                CleveRoids.currentSequence.expires = GetTime() + (cast_time / 1000) - 2
-            elseif (status == 0 and action == "CAST" and cast_time == 0)
-                or (status == 1 and action == "CAST" and CleveRoids.currentSequence.expires) then
-                CleveRoids.currentSequence.status     = 2
-                CleveRoids.currentSequence.lastUpdate = GetTime()
-                CleveRoids.AdvanceSequence(CleveRoids.currentSequence)
-                CleveRoids.currentSequence = nil
-            elseif action == "INTERRUPTED" or action == "FAILED" then
-                CleveRoids.currentSequence.status = 1
-            end
-        end
-    end
-
-    if CleveRoidMacros.realtime == 0 then
+-- A cast started, stopped or failed: re-test the buttons now for the player,
+-- and queue an update for another unit (its cast feeds [casting]).
+local function OnCastChanged(self, unit)
+    if unit == "player" then
+        CleveRoids.TestForAllActiveActions()
+    elseif CleveRoidMacros.realtime == 0 then
         CleveRoids.QueueActionUpdate()
     end
 end
+CleveRoids.Frame.UNIT_SPELLCAST_START = OnCastChanged
+CleveRoids.Frame.UNIT_SPELLCAST_STOP = OnCastChanged
+CleveRoids.Frame.UNIT_SPELLCAST_FAILED = OnCastChanged
+CleveRoids.Frame.UNIT_SPELLCAST_INTERRUPTED = OnCastChanged
+CleveRoids.Frame.UNIT_SPELLCAST_CHANNEL_START = OnCastChanged
+CleveRoids.Frame.UNIT_SPELLCAST_CHANNEL_STOP = OnCastChanged
 
--- Nampower SPELL_CAST_EVENT handler for reliable channel tracking
--- Also handles spell_tracking clearing and cast sequence advancement (Nampower fallback for UNIT_CASTEVENT)
--- Nampower SPELL_CAST_EVENT. This one handler covers three separate concerns that
--- used to live in two same-named functions, the second of which silently replaced
--- the first (Lua assigns in file order), so the channel/sequence half never ran:
---   1. [casting] conditional state + cast bookkeeping (lastCastSpell, pendingCasts,
---      combo-point capture for finishers).
---   2. Channel start detection.
---   3. The Nampower fallback for spell_tracking and cast-sequence advancement, used
---      when SuperWoW is absent and UNIT_CASTEVENT never fires.
--- Args arrive from the dispatcher as (self, arg1..arg10).
-function CleveRoids.Frame:SPELL_CAST_EVENT(success, spellId, castType, targetGuid, itemId)
-    local CHANNEL = 4
-
-    -- BUGFIX: Update casting state on spell cast events (for [casting] conditional)
-    if CleveRoids.UpdateCastingState then
-        CleveRoids.UpdateCastingState()
-    end
-
-    if success == 1 then
-        CleveRoids.lastCastSpell = {
-            spellId = spellId,
-            castType = castType,
-            targetGuid = targetGuid,
-            timestamp = GetTime()
-        }
-        local name = C_Spell.GetSpellName(spellId)
-        if name then
-            CleveRoids.lastCastSpell.spellName = name
-        end
-
-        -- Track pending cast for SPELL_GO correlation (reactive ability detection)
-        -- Keyed by spellId so concurrent casts don't overwrite each other
-        CleveRoids.pendingCasts = CleveRoids.pendingCasts or {}
-
-        -- Clean up consumed entries older than 5 seconds (lightweight, runs per-cast)
-        local cleanupTime = GetTime() - 5
-        for id, entry in pairs(CleveRoids.pendingCasts) do
-            if entry.consumed and entry.consumedAt and entry.consumedAt < cleanupTime then
-                CleveRoids.pendingCasts[id] = nil
-            end
-        end
-
-        CleveRoids.pendingCasts[spellId] = {
-            castType = castType,
-            targetGuid = targetGuid,
-            timestamp = GetTime(),
-            comboPoints = nil,
-        }
-
-        -- Capture combo points NOW (before server consumes them)
-        -- SPELL_CAST_EVENT fires client-side, so CP are guaranteed available
-        if (CleveRoids.IsComboScalingSpellID and CleveRoids.IsComboScalingSpellID(spellId)) or
-           (CleveRoids.FerociousBiteSpellIDs and CleveRoids.FerociousBiteSpellIDs[spellId]) then
-            local cp = CleveRoids.GetComboPoints and CleveRoids.GetComboPoints() or 0
-            if cp > 0 then
-                CleveRoids.pendingCasts[spellId].comboPoints = cp
-                if CleveRoids.debug then
-                    local castSpellName = C_Spell.GetSpellName(spellId) or "Unknown"
-                    DEFAULT_CHAT_FRAME:AddMessage(
-                        string.format("|cff00ff88[SPELL_CAST_EVENT]|r Captured %d CP for %s (ID:%d)",
-                            cp, castSpellName, spellId)
-                    )
-                end
-            end
-        end
-    else
-        -- Cast failed - clear pending entry for this spell
-        if CleveRoids.pendingCasts then
-            CleveRoids.pendingCasts[spellId] = nil
-        end
-    end
-
-    if castType == CHANNEL and success == 1 then
-        -- Channel started successfully
-        CleveRoids.CurrentSpell.type = "channeled"
-        CleveRoids.CurrentSpell.castingSpellId = spellId
-
-        local spellName = C_Spell.GetSpellName(spellId)
-        if spellName then
-            CleveRoids.CurrentSpell.spellName = spellName
-        end
-
-        -- Force immediate action update
-        CleveRoids.TestForAllActiveActions()
-    end
-
-    -- Nampower fallback: spell_tracking and cast sequence (when SuperWoW not available)
-    if not CleveRoids.hasSuperwow and spellId then
-        local playerGuid = CleveRoids.playerGuid or CleveRoids.GetGUID("player")
-
-        -- Clear spell_tracking on success or failure
-        if success == 1 or success == 0 then
-            local cast = CleveRoids.spell_tracking[playerGuid]
-            if cast and cast.spell_id == spellId then
-                CleveRoids.spell_tracking[playerGuid] = nil
-                CleveRoids.spell_tracking["player"] = nil
-            end
-        end
-
-        -- Cast sequence advancement
-        if CleveRoids.currentSequence and success == 1 then
-            local active = CleveRoids.GetCurrentSequenceAction(CleveRoids.currentSequence)
-            if active and active.action then
-                local name = C_Spell.GetSpellName(spellId)
-                local rank = C_Spell.GetSpellSubtext(spellId)
-                local nameRank = (rank and rank ~= "") and (name .. "(" .. rank .. ")") or nil
-                local isSeqSpell = (active.action == name or (nameRank and active.action == nameRank))
-
-                if isSeqSpell then
-                    CleveRoids.currentSequence.status = 2
-                    CleveRoids.currentSequence.lastUpdate = GetTime()
-                    CleveRoids.AdvanceSequence(CleveRoids.currentSequence)
-                    CleveRoids.currentSequence = nil
-                end
-            end
-        end
-
-        -- Cast sequence failure handling
-        if CleveRoids.currentSequence and success == 0 then
-            local active = CleveRoids.GetCurrentSequenceAction(CleveRoids.currentSequence)
-            if active and active.action then
-                local name = C_Spell.GetSpellName(spellId)
-                local isSeqSpell = (active.action == name)
-                if isSeqSpell then
-                    CleveRoids.currentSequence.status = 1  -- Reset to retry
-                end
-            end
-        end
-
-        if CleveRoidMacros.realtime == 0 then
-            CleveRoids.QueueActionUpdate()
-        end
-    end
+-- Whether spellID is the step the running /castsequence is waiting on
+local function IsCurrentSequenceSpell(spellID)
+    local active = CleveRoids.currentSequence
+        and CleveRoids.GetCurrentSequenceAction(CleveRoids.currentSequence)
+    if not (active and active.action) then return false end
+    local name = C_Spell.GetSpellName(spellID)
+    if not name then return false end
+    if active.action == name then return true end
+    local rank = C_Spell.GetSpellSubtext(spellID)
+    return rank and rank ~= "" and active.action == name .. "(" .. rank .. ")"
 end
 
--- Nampower SPELL_START_SELF handler (v2.25+)
--- Handles spell_tracking population and cast sequence START detection (Nampower fallback for UNIT_CASTEVENT)
-function CleveRoids.Frame:SPELL_START_SELF(casterGuid, targetGuid, spellId, castTimeMs, durationMs, spellType, ...)
-    -- Skip if SuperWoW is handling this via UNIT_CASTEVENT
-    if CleveRoids.hasSuperwow then return end
-    if not spellId then return end
-
-    local playerGuid = CleveRoids.playerGuid or CleveRoids.GetGUID("player")
-    if casterGuid ~= playerGuid then return end
-
-    -- Populate spell_tracking (equivalent to UNIT_CASTEVENT START/CHANNEL)
-    local isChannel = (spellType == 1)
-    local action = isChannel and "CHANNEL" or "START"
-
-    if castTimeMs and castTimeMs > 0 then
-        CleveRoids.spell_tracking[casterGuid] = {
-            spell_id = spellId,
-            expires = GetTime() + castTimeMs / 1000,
-            type = action
-        }
-        CleveRoids.spell_tracking["player"] = CleveRoids.spell_tracking[casterGuid]
-
-        -- Channel duration capture (equivalent to UNIT_CASTEVENT CHANNEL)
-        if isChannel then
-            CleveRoids.channelStartTime = GetTime()
-            local tooltipDuration = CleveRoids.GetChannelDurationFromTooltipByID(spellId)
-            if tooltipDuration then
-                CleveRoids.channelDuration = tooltipDuration
-            else
-                CleveRoids.channelDuration = castTimeMs / 1000
-            end
-        end
-
-        -- Cast duration capture (equivalent to UNIT_CASTEVENT START)
-        if not isChannel then
-            CleveRoids.castStartTime = GetTime()
-            CleveRoids.castDuration = castTimeMs / 1000
-        end
+-- The player's spell went off: advance the /castsequence waiting on it. A cast
+-- that fails leaves the sequence on its step; DoCastSequence drops the stale
+-- currentSequence on the next press and retries.
+function CleveRoids.Frame:UNIT_SPELLCAST_SUCCEEDED(unit, castGUID, spellID)
+    if unit == "player" and IsCurrentSequenceSpell(spellID) then
+        CleveRoids.currentSequence.lastUpdate = GetTime()
+        CleveRoids.AdvanceSequence(CleveRoids.currentSequence)
+        CleveRoids.currentSequence = nil
     end
-
-    -- Cast sequence: set status=1 (casting) for cast-time spells
-    if CleveRoids.currentSequence and castTimeMs and castTimeMs > 0 then
-        local active = CleveRoids.GetCurrentSequenceAction(CleveRoids.currentSequence)
-        if active and active.action then
-            local name = C_Spell.GetSpellName(spellId)
-            local rank = C_Spell.GetSpellSubtext(spellId)
-            local nameRank = (rank and rank ~= "") and (name .. "(" .. rank .. ")") or nil
-            local isSeqSpell = (active.action == name or (nameRank and active.action == nameRank))
-
-            if isSeqSpell and CleveRoids.currentSequence.status == 0 then
-                CleveRoids.currentSequence.status = 1
-                CleveRoids.currentSequence.expires = GetTime() + (castTimeMs / 1000) - 2
-            end
-        end
-    end
-
-    if CleveRoidMacros.realtime == 0 then
-        CleveRoids.QueueActionUpdate()
-    end
+    OnCastChanged(self, unit)
 end
 
--- Nampower SPELL_FAILED_SELF handler (v2.25+)
--- Clears spell_tracking on failure (Nampower fallback for UNIT_CASTEVENT FAIL)
-function CleveRoids.Frame:SPELL_FAILED_SELF(casterGuid, targetGuid, spellId, ...)
-    -- Skip if SuperWoW is handling this via UNIT_CASTEVENT
-    if CleveRoids.hasSuperwow then return end
-    if not spellId then return end
-
-    local playerGuid = CleveRoids.playerGuid or CleveRoids.GetGUID("player")
-    if casterGuid ~= playerGuid then return end
-
-    -- Clear spell_tracking
-    local cast = CleveRoids.spell_tracking[casterGuid]
-    if cast and cast.spell_id == spellId then
-        CleveRoids.spell_tracking[casterGuid] = nil
-        CleveRoids.spell_tracking["player"] = nil
-    end
-
-    -- Cast sequence failure handling
-    if CleveRoids.currentSequence then
-        local active = CleveRoids.GetCurrentSequenceAction(CleveRoids.currentSequence)
-        if active and active.action then
-            local name = C_Spell.GetSpellName(spellId)
-            local isSeqSpell = name and (active.action == name)
-            if isSeqSpell then
-                CleveRoids.currentSequence.status = 1  -- Reset to retry
-            end
+-- The player's cast left the client. Record it, and capture a finisher's combo
+-- points now, before the server spends them, for the duration of its debuff.
+function CleveRoids.Frame:UNIT_SPELLCAST_SENT(unit, target, castGUID, spellID)
+    local sent = { timestamp = GetTime() }
+    CleveRoids.sentCasts[spellID] = sent
+    if (CleveRoids.IsComboScalingSpellID and CleveRoids.IsComboScalingSpellID(spellID)) or
+       (CleveRoids.FerociousBiteSpellIDs and CleveRoids.FerociousBiteSpellIDs[spellID]) then
+        local cp = CleveRoids.GetComboPoints and CleveRoids.GetComboPoints() or 0
+        if cp > 0 then
+            sent.comboPoints = cp
         end
-    end
-
-    if CleveRoidMacros.realtime == 0 then
-        CleveRoids.QueueActionUpdate()
-    end
-end
-
-function CleveRoids.Frame:SPELLCAST_CHANNEL_START()
-    -- Set channel state immediately when event fires
-    -- Duration is captured by UNIT_CASTEVENT which fires earlier
-    CleveRoids.CurrentSpell.type = "channeled"
-
-    -- Try to get spell info - prefer GetCastInfo (Nampower 2.18+) for better data
-    local spellId = nil
-    if GetCastInfo then
-        local ok, info = pcall(GetCastInfo)
-        if ok and info and info.spellId and info.spellId > 0 then
-            spellId = info.spellId
-            -- Also capture timing data
-            CleveRoids.CurrentSpell.castRemainingMs = info.castRemainingMs
-            CleveRoids.CurrentSpell.castEndTime = info.castEndS
+        if CleveRoids.debug and cp > 0 then
+            DEFAULT_CHAT_FRAME:AddMessage(
+                string.format("|cff00ff88[UNIT_SPELLCAST_SENT]|r Captured %d CP for %s (ID:%d)",
+                    cp, C_Spell.GetSpellName(spellID) or "Unknown", spellID)
+            )
         end
-    end
-    -- Fallback to GetCurrentCastingInfo for older Nampower
-    if not spellId and GetCurrentCastingInfo then
-        local _, visId = GetCurrentCastingInfo()
-        if visId and visId > 0 then
-            spellId = visId
-        end
-    end
-    -- Update spell info
-    if spellId then
-        CleveRoids.CurrentSpell.castingSpellId = spellId
-        local spellName = C_Spell.GetSpellName(spellId)
-        if spellName then
-            CleveRoids.CurrentSpell.spellName = spellName
-        end
-    end
-
-    -- v2.38+: Override channelDuration with the accurate server-provided value stored by
-    -- SPELL_START_SELF (which fires before this event).  This beats the tooltip scan or
-    -- UNIT_CASTEVENT cast_time fallback, because the server already applied all modifiers.
-    if CleveRoids._v238ChannelDuration then
-        if not spellId or not CleveRoids._v238ChannelSpellId
-            or CleveRoids._v238ChannelSpellId == spellId then
-            CleveRoids.channelDuration = CleveRoids._v238ChannelDuration
-        end
-        CleveRoids._v238ChannelDuration = nil
-        CleveRoids._v238ChannelSpellId  = nil
-    end
-
-    -- Force immediate action update
-    CleveRoids.TestForAllActiveActions()
-end
-
-function CleveRoids.Frame:SPELLCAST_CHANNEL_STOP()
-    -- Channel ended - clear state immediately
-    CleveRoids.CurrentSpell.type = ""
-    CleveRoids.CurrentSpell.spellName = ""
-    CleveRoids.CurrentSpell.castingSpellId = nil
-
-    -- Force immediate action update
-    CleveRoids.TestForAllActiveActions()
-end
-
-function CleveRoids.Frame:SPELLCAST_START()
-    -- Cast-time spell started
-    -- Duration is captured by UNIT_CASTEVENT which fires earlier
-    CleveRoids.CurrentSpell.type = "cast"
-
-    -- Try to get spell info - prefer GetCastInfo (Nampower 2.18+) for better data
-    local spellId = nil
-    if GetCastInfo then
-        local ok, info = pcall(GetCastInfo)
-        if ok and info and info.spellId and info.spellId > 0 then
-            spellId = info.spellId
-            -- Also capture timing data
-            CleveRoids.CurrentSpell.castRemainingMs = info.castRemainingMs
-            CleveRoids.CurrentSpell.castEndTime = info.castEndS
-            CleveRoids.CurrentSpell.gcdRemainingMs = info.gcdRemainingMs
-            CleveRoids.CurrentSpell.gcdEndTime = info.gcdEndS
-        end
-    end
-    -- Fallback to GetCurrentCastingInfo for older Nampower
-    if not spellId and GetCurrentCastingInfo then
-        local castId = GetCurrentCastingInfo()
-        if castId and castId > 0 then
-            spellId = castId
-        end
-    end
-    -- Update spell info
-    if spellId then
-        CleveRoids.CurrentSpell.castingSpellId = spellId
-        local spellName = C_Spell.GetSpellName(spellId)
-        if spellName then
-            CleveRoids.CurrentSpell.spellName = spellName
-        end
-    end
-
-    -- Force immediate action update
-    CleveRoids.TestForAllActiveActions()
-end
-
-function CleveRoids.Frame:SPELLCAST_STOP()
-    -- Cast finished - clear state immediately
-    if CleveRoids.CurrentSpell.type == "cast" then
-        CleveRoids.CurrentSpell.type = ""
-        CleveRoids.CurrentSpell.spellName = ""
-        CleveRoids.CurrentSpell.castingSpellId = nil
-
-        -- Force immediate action update
-        CleveRoids.TestForAllActiveActions()
-    end
-end
-
-function CleveRoids.Frame:SPELLCAST_FAILED()
-    -- Cast failed - clear state immediately
-    if CleveRoids.CurrentSpell.type == "cast" then
-        CleveRoids.CurrentSpell.type = ""
-        CleveRoids.CurrentSpell.spellName = ""
-        CleveRoids.CurrentSpell.castingSpellId = nil
-
-        -- Force immediate action update
-        CleveRoids.TestForAllActiveActions()
-    end
-end
-
-function CleveRoids.Frame:SPELLCAST_INTERRUPTED()
-    -- Cast interrupted - clear state immediately
-    if CleveRoids.CurrentSpell.type == "cast" then
-        CleveRoids.CurrentSpell.type = ""
-        CleveRoids.CurrentSpell.spellName = ""
-        CleveRoids.CurrentSpell.castingSpellId = nil
-
-        -- Force immediate action update
-        CleveRoids.TestForAllActiveActions()
     end
 end
 
@@ -5280,7 +4841,6 @@ function CleveRoids.Frame:PLAYER_TARGET_CHANGED()
                 else
                     -- New target we haven't seen - start at step 1
                     sequence.index = 1
-                    sequence.status = 0
                 end
 
                 -- Update the current target GUID
@@ -5586,17 +5146,9 @@ function CleveRoids.Frame:SPELL_QUEUE_EVENT()
             if name then
                 CleveRoids.queuedSpell.spellName = name
             end
-            -- BUGFIX: Update casting state when spell is queued (for [casting] conditional)
-            if CleveRoids.UpdateCastingState then
-                CleveRoids.UpdateCastingState()
-            end
             CleveRoids.QueueActionUpdate()
         elseif eventCode == NORMAL_QUEUE_POPPED or eventCode == NON_GCD_QUEUE_POPPED or eventCode == ON_SWING_QUEUE_POPPED then
             CleveRoids.queuedSpell = nil
-            -- BUGFIX: Update casting state when spell queue pops (for [casting] conditional)
-            if CleveRoids.UpdateCastingState then
-                CleveRoids.UpdateCastingState()
-            end
             CleveRoids.QueueActionUpdate()
         end
     end

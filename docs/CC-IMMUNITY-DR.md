@@ -121,10 +121,10 @@ mechanic 12. It is not an approximation; it is the complete `DRTYPE_ALL` set.
 `SpellEntry::GetDiminishingReturnsGroup(bool triggered)`
 (`vmangos/src/game/Spells/SpellEntry.cpp:281-432`) resolves the pool, and the
 `triggered` argument means the runtime fact of whether an aura triggered the
-cast — this is not a pure DBC property. SCRM reconstructs it from nampower
-`SPELL_CAST_EVENT` correlation, which only fires for client-initiated casts:
-a spell ID with a recent `CleveRoids.pendingCasts` entry was cast deliberately,
-one without reached `SPELL_GO`/`SPELL_MISS` as a proc.
+cast — this is not a pure DBC property. SCRM reconstructs it from
+`UNIT_SPELLCAST_SENT`, which only fires for client-initiated casts: a spell ID
+with a recent `CleveRoids.sentCasts` entry was cast deliberately, one without
+reached the server as a proc.
 
 ```text
 Kidney Shot                    -> stun_kidneyshot

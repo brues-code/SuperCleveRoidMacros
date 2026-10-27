@@ -179,19 +179,31 @@ Each step leaves a working addon.
    `ProcessMissReason` correlation and its `WasSpellReflected`/`DidTargetEvade`.
    The `RAW_COMBATLOG` debuff-fade learner was dropped, not ported: it stripped
    `0x` from GUIDs before looking up `lib.objects`, so it never matched.
-2. **Cast tracking.** `SPELL_GO_*`, `SPELL_START_*`, `SPELL_FAILED_*`,
-   `SPELL_CAST_EVENT` and SuperWoW's `UNIT_CASTEVENT` → `UNIT_SPELLCAST_*` for
-   units with a token (the player, target, focus). CLEU
-   `SPELL_CAST_START`/`SUCCESS` for any nearby caster, or when the target GUID
-   of an instant cast is needed. CLEU `SPELL_CAST_SUCCESS` does not fire for a
-   spell with a cast time, so `SPELL_GO` maps to `UNIT_SPELLCAST_SUCCEEDED`, not
-   to CLEU.
+2. ~~**Cast tracking.**~~ — DONE for the cast state. `[casting]`,
+   `[channeled]`, `[casttime]`, `[channeltime]`, `[selfcasting]` and the
+   pending-debuff check read `C_Spell.CastingInfo`/`ChannelInfo`
+   (`CleveRoids.GetPlayerCast`), which have the effective cast time and track
+   pushback; `CheckSpellCast` reads `C_Spell.UnitCastingInfo`/`UnitChannelInfo`
+   for any unit. Core's `UNIT_SPELLCAST_*` handlers refresh the buttons,
+   advance `/castsequence` on `SUCCEEDED`, and record each sent cast with a
+   finisher's combo points (`CleveRoids.sentCasts`, on `SENT`). Gone: Core's
+   `UNIT_CASTEVENT`, `SPELL_CAST_EVENT`, `SPELL_START_SELF`, `SPELL_FAILED_SELF`
+   and stock `SPELLCAST_*` handlers, `spell_tracking`, the cast/channel timers,
+   `CurrentSpell.type`/`spellName`, `UpdateCastingState`, `lastCastSpell`, and
+   the tooltip/DBC channel-duration lookup.
+   Still on nampower/SuperWoW, moving with step 3 because they record debuff
+   applications, not casts: libdebuff's `UNIT_CASTEVENT`, `SPELL_GO_*`,
+   `SPELL_START_*`/`SPELL_FAILED_OTHER` (and the `castTracking` target fallback
+   they feed), and the Cursive extension's `UNIT_CASTEVENT` frames. CLEU
+   `SPELL_CAST_SUCCESS` does not fire for a spell with a cast time, so their
+   replacement is `SPELL_AURA_APPLIED` + `C_UnitAuras`, not a cast event.
 3. **Aura events.** `AURA_CAST_*`, `BUFF_/DEBUFF_ADDED/REMOVED_*`,
    `*_UPDATE_DURATION_SELF` → `UNIT_AURA_DELTA` + `C_UnitAuras`, or CLEU
    `SPELL_AURA_*` for units with no token. Do this together with the libdebuff
    retirement below.
-4. **Direct swaps.** `GetCastInfo`/`GetCurrentCastingInfo` →
-   `C_Spell.CastingInfo`/`ChannelInfo`; `IsSpellInRange`/`IsSpellUsable`/
+4. **Direct swaps.** `GetCurrentCastingInfo`, now read only for its on-swing
+   and auto-attack flags (`[onswing]`, weapon swap, Core.lua:94) → ClassicAPI's
+   next-melee/auto-attack state (`C_Spell.IsCurrentSpell` and friends); `IsSpellInRange`/`IsSpellUsable`/
    `GetSpellPowerCost` → `C_Spell.*`; `GetPlayerAuraDuration`/`GetUnitAuras` →
    `C_UnitAuras`; `GetSpellIdForName`/`GetSpellNameAndRankForId`/
    `GetSpellSlotTypeIdForName` → `C_Spell.GetSpellInfo`/`FindSpellBookSlotByID`;

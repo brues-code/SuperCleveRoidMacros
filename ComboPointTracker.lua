@@ -400,15 +400,6 @@ function CleveRoids.TrackComboPointCast(spellName)
         confirmed = false  -- Will be set to true by SPELLCAST_START
     }
 
-    -- Also store in spell_tracking for integration with existing system
-    if not CleveRoids.spell_tracking[spellName] then
-        CleveRoids.spell_tracking[spellName] = {}
-    end
-
-    CleveRoids.spell_tracking[spellName].last_combo_points = comboPoints
-    CleveRoids.spell_tracking[spellName].last_duration = duration
-    CleveRoids.spell_tracking[spellName].last_cast_time = currentTime
-
     -- Debug output
     if CleveRoids.debug then
         DEFAULT_CHAT_FRAME:AddMessage(
@@ -429,13 +420,13 @@ function CleveRoids.TrackComboPointCastByID(spellID, targetGUID)
 
     -- If combo points are 0, try multiple fallback sources
     if comboPoints == 0 then
-        -- PRIMARY: Check SPELL_CAST_EVENT capture (most reliable - client-side pre-server)
-        local pending = CleveRoids.pendingCasts and CleveRoids.pendingCasts[spellID]
+        -- PRIMARY: Check UNIT_SPELLCAST_SENT capture (most reliable - client-side pre-server)
+        local pending = CleveRoids.sentCasts and CleveRoids.sentCasts[spellID]
         if pending and pending.comboPoints and pending.comboPoints > 0 then
             comboPoints = pending.comboPoints
             if CleveRoids.debug then
                 DEFAULT_CHAT_FRAME:AddMessage(
-                    string.format("|cff00ff88[TrackComboByID]|r Using SPELL_CAST_EVENT CP: %d for spell ID %d",
+                    string.format("|cff00ff88[TrackComboByID]|r Using UNIT_SPELLCAST_SENT CP: %d for spell ID %d",
                         comboPoints, spellID)
                 )
             end

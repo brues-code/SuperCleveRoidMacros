@@ -100,146 +100,6 @@ function CleveRoids.IsUnitDeadOrGhost(unit)
     return CleveRoids.IsUnitDead(unit) or UnitIsGhost(unit)
 end
 
--- Hidden tooltip for scanning spell info
-local SpellScanTooltip = nil
-
--- Create hidden tooltip for scanning (once)
-local function GetSpellScanTooltip()
-    if not SpellScanTooltip then
-        SpellScanTooltip = CreateFrame("GameTooltip", "CleveRoidsSpellScanTooltip", nil, "GameTooltipTemplate")
-        SpellScanTooltip:SetOwner(WorldFrame, "ANCHOR_NONE")
-    end
-    return SpellScanTooltip
-end
-
--- Cache for spell durations from tooltip
-local cachedSpellDurations = {}
-local spellDurationCacheTime = {}
-local SPELL_CACHE_DURATION = 0.5  -- Re-scan every 0.5 seconds (haste can change mid-fight)
-
--- Get a spell's slot in the spellbook by name (finds highest rank by default)
--- If targetRank is specified (e.g., "Rank 5"), finds that specific rank
-local function GetSpellSlotByName(targetSpellName, targetRank)
-    local foundSlot = nil
-    local foundRank = nil
-    local i = 1
-    while true do
-        local spellName, spellRank = GetSpellName(i, BOOKTYPE_SPELL)
-        if not spellName then break end
-        if spellName == targetSpellName then
-            if targetRank then
-                -- Looking for specific rank
-                if spellRank == targetRank then
-                    return i, BOOKTYPE_SPELL
-                end
-            else
-                -- Looking for highest rank - keep scanning to find the last one
-                foundSlot = i
-                foundRank = spellRank
-            end
-        end
-        i = i + 1
-    end
-    -- Return highest rank found (last match in spellbook order)
-    return foundSlot, BOOKTYPE_SPELL
-end
-
--- Parse channel duration from tooltip text
--- Matches patterns like "for 5 sec" or "over 8 sec" at the end of descriptions
-local function ParseChannelDurationFromText(text)
-    if not text then return nil end
-    -- Match "for X sec" pattern (channels like Arcane Missiles, Drain Life)
-    local _, _, dur = string.find(text, "for (%d+%.?%d*) sec")
-    if dur then
-        return tonumber(dur)
-    end
-    -- Match "over X sec" pattern (some DoT/HoT tooltips)
-    local _, _, over = string.find(text, "over (%d+%.?%d*) sec")
-    if over then
-        return tonumber(over)
-    end
-    return nil
-end
-
--- Scan spell tooltip for channel/cast duration
--- Returns duration in seconds, or nil if not found
--- Tries Nampower GetSpellDuration (DBC, v2.38+) first, falls back to tooltip scanning
-function CleveRoids.GetSpellDurationFromTooltip(spellName)
-    if not spellName then return nil end
-
-    -- Check cache
-    local now = GetTime()
-    if cachedSpellDurations[spellName] and spellDurationCacheTime[spellName] then
-        if now - spellDurationCacheTime[spellName] < SPELL_CACHE_DURATION then
-            return cachedSpellDurations[spellName]
-        end
-    end
-
-    -- Try Nampower DBC lookup first (v2.38+ GetSpellDuration) — faster and works for all spells
-    if CleveRoids.NampowerAPI and CleveRoids.NampowerAPI.features
-       and CleveRoids.NampowerAPI.features.hasGetSpellDuration then
-        -- Resolve name to ID
-        local spellID = nil
-        if GetSpellIdForName then
-            spellID = GetSpellIdForName(spellName)
-        end
-        if spellID then
-            local durationMs = CleveRoids.NampowerAPI.GetSpellDuration(spellID)
-            if durationMs and durationMs > 0 then
-                local duration = durationMs / 1000
-                cachedSpellDurations[spellName] = duration
-                spellDurationCacheTime[spellName] = now
-                return duration
-            end
-        end
-    end
-
-    -- Fallback: tooltip scanning (works for player spellbook spells)
-    local slot, bookType = GetSpellSlotByName(spellName)
-    if not slot then return nil end
-
-    local tooltip = GetSpellScanTooltip()
-    tooltip:ClearLines()
-    tooltip:SetSpell(slot, bookType)
-
-    -- Scan tooltip lines for duration
-    for i = 1, tooltip:NumLines() do
-        local leftText = getglobal("CleveRoidsSpellScanTooltipTextLeft" .. i)
-        if leftText then
-            local text = leftText:GetText()
-            local duration = ParseChannelDurationFromText(text)
-            if duration then
-                -- Cache the result
-                cachedSpellDurations[spellName] = duration
-                spellDurationCacheTime[spellName] = now
-                return duration
-            end
-        end
-    end
-
-    return nil
-end
-
--- Get channel duration for a spell by ID
--- Tries Nampower GetSpellDuration (DBC) first, falls back to tooltip via name
-function CleveRoids.GetChannelDurationFromTooltipByID(spellID)
-    if not spellID then return nil end
-
-    -- Try Nampower DBC lookup first (v2.38+)
-    if CleveRoids.NampowerAPI and CleveRoids.NampowerAPI.features
-       and CleveRoids.NampowerAPI.features.hasGetSpellDuration then
-        local durationMs = CleveRoids.NampowerAPI.GetSpellDuration(spellID)
-        if durationMs and durationMs > 0 then
-            return durationMs / 1000
-        end
-    end
-
-    -- Fallback: resolve name and scan tooltip
-    local spellName = C_Spell.GetSpellName(spellID)
-    if not spellName then return nil end
-    return CleveRoids.GetSpellDurationFromTooltip(spellName)
-end
-
 if type(hooksecurefunc) ~= "function" then
   function hooksecurefunc(arg1, arg2, arg3)
     local tgt, fname, post
@@ -3809,18 +3669,11 @@ ev:SetScript("OnEvent", function()
     end
 
   -- NAMPOWER v2.25+ CAST TRACKING HANDLERS (Standalone or pfUI < 7.6)
-  -- Populates CleveRoids.castTracking for [casting] conditional support.
+  -- Populates CleveRoids.castTracking, whose target GUID SPELL_GO falls back on.
   -- When pfUI 7.6+ is active, castTracking points to pfUI.libdebuff_casts
   -- and these handlers return early (pfUI handles it).
 
   elseif event == "SPELL_START_SELF" or event == "SPELL_START_OTHER" then
-    -- v2.38+: For player's own channeling spells, pre-store the accurate server channel duration
-    -- BEFORE the pfUI early-return so SPELLCAST_CHANNEL_START (which fires later) can use it.
-    -- arg8 == 1 means spellType=Channeling; arg7 is the channel duration in ms.
-    if event == "SPELL_START_SELF" and arg8 == 1 and arg7 and arg7 > 0 then
-      CleveRoids._v238ChannelDuration = arg7 / 1000
-      CleveRoids._v238ChannelSpellId  = arg2
-    end
 
     -- Nampower fallback for UNIT_CASTEVENT START/CHANNEL: capture combo points and Dark Harvest
     -- Only needed when SuperWoW is not available (UNIT_CASTEVENT won't fire)
@@ -4062,11 +3915,11 @@ ev:SetScript("OnEvent", function()
     -- time AURA_CAST fires. Store in pendingCasts for AURA_CAST to use.
     if isOurs and lib.combopointAbilities and lib.combopointAbilities[spellName] then
       -- Capture combo points from multiple sources
-      -- Priority: SPELL_CAST_EVENT (client-side, pre-server) > GetComboPoints > lastComboPoints > ComboPointTracking
+      -- Priority: UNIT_SPELLCAST_SENT (client-side, pre-server) > GetComboPoints > lastComboPoints > ComboPointTracking
       local comboPoints = 0
 
-      -- PRIMARY: Check SPELL_CAST_EVENT capture (most reliable - captured before server consumed CP)
-      local pending = CleveRoids.pendingCasts and CleveRoids.pendingCasts[spellId]
+      -- PRIMARY: Check UNIT_SPELLCAST_SENT capture (most reliable - captured before server consumed CP)
+      local pending = CleveRoids.sentCasts and CleveRoids.sentCasts[spellId]
       if pending and pending.comboPoints and pending.comboPoints > 0 then
         comboPoints = pending.comboPoints
       end
@@ -4325,18 +4178,18 @@ ev:SetScript("OnEvent", function()
     -- Handle combo point abilities for our casts
     if isOurs and lib.combopointAbilities[spellName] then
       -- Priority order for combo points:
-      -- 1. SPELL_CAST_EVENT capture (client-side, before server consumes CP)
+      -- 1. UNIT_SPELLCAST_SENT capture (client-side, before server consumes CP)
       -- 2. pendingCasts from SPELL_GO (captured on spell landing)
       -- 3. CleveRoids.lastComboPoints (from pre-cast hooks)
       -- 4. GetComboPoints() (might be 0 if already consumed)
       local comboPoints = 0
       local comboSource = "none"
 
-      -- PRIMARY: Check SPELL_CAST_EVENT capture (most reliable - client-side pre-server)
-      local castPending = CleveRoids.pendingCasts and CleveRoids.pendingCasts[spellId]
+      -- PRIMARY: Check UNIT_SPELLCAST_SENT capture (most reliable - client-side pre-server)
+      local castPending = CleveRoids.sentCasts and CleveRoids.sentCasts[spellId]
       if castPending and castPending.comboPoints and castPending.comboPoints > 0 then
         comboPoints = castPending.comboPoints
-        comboSource = "SPELL_CAST_EVENT"
+        comboSource = "UNIT_SPELLCAST_SENT"
       end
 
       -- Fallback: Check lib.pendingCasts (populated by SPELL_GO)
@@ -6098,9 +5951,9 @@ local function IsKidneyShotSpell(spellID)
 end
 
 local function WasClientInitiatedSpell(spellID)
-    -- Nampower SPELL_CAST_EVENT fires only for spells initiated by the client.
-    -- Proc/trigger spell IDs reach server SPELL_GO/MISS without their own entry.
-    local cast = CleveRoids.pendingCasts and CleveRoids.pendingCasts[spellID]
+    -- UNIT_SPELLCAST_SENT fires only for spells initiated by the client.
+    -- Proc/trigger spell IDs reach the server without their own entry.
+    local cast = CleveRoids.sentCasts and CleveRoids.sentCasts[spellID]
     if not cast or not cast.timestamp then return false end
     local age = GetTime() - cast.timestamp
     return age >= 0 and age <= 5
