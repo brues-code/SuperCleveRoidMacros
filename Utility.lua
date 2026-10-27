@@ -1453,40 +1453,40 @@ local POUNCE_BLEED_IDS = {
     [9827] = 9826,   -- Pounce Rank 3 → Pounce Bleed Rank 3
 }
 
--- Bosses that take bleeds but often sit at the debuff cap, where a missing bleed
--- was pushed off rather than resisted
+-- Bosses (NPC IDs) that take bleeds but often sit at the debuff cap, where a
+-- missing bleed was pushed off rather than resisted
 local MOBS_THAT_BLEED = {
     -- Karazhan Crypts / TWoW Custom
-    ["0xF13000F1F3276A33"] = true, -- Keeper Gnarlmoon
-    ["0xF13000F1FA276A32"] = true, -- Ley-Watcher Incantagos
-    ["0xF13000EA3F276C05"] = true, -- King
-    ["0xF13000EA31279058"] = true, -- Queen
-    ["0xF13000EA43276C06"] = true, -- Bishop
-    ["0xF13000EA44279044"] = true, -- Pawn
-    ["0xF13000EA42276C07"] = true, -- Rook
-    ["0xF13000EA4D05DA44"] = true, -- Sanv Tas'dal
-    ["0xF13000EA57276C04"] = true, -- Kruul
-    ["0xF130016C95276DAF"] = true, -- Mephistroth
+    [61939] = true, -- Keeper Gnarlmoon
+    [61946] = true, -- Ley-Watcher Incantagos
+    [59967] = true, -- King
+    [59953] = true, -- Queen
+    [59971] = true, -- Bishop
+    [59972] = true, -- Pawn
+    [59970] = true, -- Rook
+    [59981] = true, -- Sanv Tas'dal
+    [59991] = true, -- Kruul
+    [93333] = true, -- Mephistroth
 
     -- Naxxramas
-    ["0xF130003E5401591A"] = true, -- Anub'Rekhan
-    ["0xF130003E510159B0"] = true, -- Grand Widow Faerlina
-    ["0xF130003E500159A3"] = true, -- Maexxna
-    ["0xF130003EBD01598C"] = true, -- Razuvious
-    ["0xF130003EBC01599F"] = true, -- Gothik
-    ["0xF130003EBF015AB2"] = true, -- Zeliek
-    ["0xF130003EBE015AB3"] = true, -- Mograine
-    ["0xF130003EC1015AB1"] = true, -- Blaumeux
-    ["0xF130003EC0015AB0"] = true, -- Thane
-    ["0xF130003E52015824"] = true, -- Noth
-    ["0xF130003E4001588D"] = true, -- Heigan
-    ["0xF130003E8B0158A2"] = true, -- Loatheb
-    ["0xF130003E9C0158EA"] = true, -- Patchwerk
-    ["0xF130003E3B0158EF"] = true, -- Grobbulus
-    ["0xF130003E3C0158F0"] = true, -- Gluth
-    ["0xF130003E380159A0"] = true, -- Thaddius
-    ["0xF130003E75015AB4"] = true, -- Sapphiron
-    ["0xF130003E76015AED"] = true, -- Kel'Thuzad
+    [15956] = true, -- Anub'Rekhan
+    [15953] = true, -- Grand Widow Faerlina
+    [15952] = true, -- Maexxna
+    [16061] = true, -- Instructor Razuvious
+    [16060] = true, -- Gothik the Harvester
+    [16063] = true, -- Sir Zeliek
+    [16062] = true, -- Highlord Mograine
+    [16065] = true, -- Lady Blaumeux
+    [16064] = true, -- Thane Korth'azz
+    [15954] = true, -- Noth the Plaguebringer
+    [15936] = true, -- Heigan the Unclean
+    [16011] = true, -- Loatheb
+    [16028] = true, -- Patchwerk
+    [15931] = true, -- Grobbulus
+    [15932] = true, -- Gluth
+    [15928] = true, -- Thaddius
+    [15989] = true, -- Sapphiron
+    [15990] = true, -- Kel'Thuzad
 }
 
 -- IMMUNITY TRACKING SYSTEM
@@ -2535,7 +2535,7 @@ local function ResolveMissingAura(e)
 
     if BLEED_SPELL_IDS[e.auraID] then
         -- Bosses known to take bleeds hit the debuff cap often; never record them
-        if MOBS_THAT_BLEED[e.guid] then return end
+        if MOBS_THAT_BLEED[UnitCreatureID(unit)] then return end
         -- Recorded as bleed directly: RecordImmunity would use Rake's initial
         -- (physical) school, but it is the bleed that did not land
         CleveRoids_ImmunityData["bleed"] = CleveRoids_ImmunityData["bleed"] or {}
