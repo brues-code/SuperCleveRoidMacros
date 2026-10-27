@@ -337,8 +337,6 @@ API.VERSION_REQUIREMENTS = {
     -- v2.24+ - Auto-attack events
 
     -- v2.25+ - Spell start/go/failed/delayed/channel events
-    ["SpellStartEvents"]        = { 2, 25, 0 },  -- SPELL_START_SELF/OTHER events
-    ["SpellGoEvents"]           = { 2, 25, 0 },  -- SPELL_GO_SELF/OTHER events
     ["SpellFailedEvents"]       = { 2, 25, 0 },  -- SPELL_FAILED_SELF/OTHER events
     ["SpellDelayedEvents"]      = { 2, 25, 0 },  -- SPELL_DELAYED_SELF/OTHER events (OTHER does not fire; server only sends to affected player)
     ["SpellChannelEvents"]      = { 2, 25, 0 },  -- SPELL_CHANNEL_START / SPELL_CHANNEL_UPDATE events (self-only)
@@ -545,8 +543,6 @@ local function InitializeFeatures()
     -- v2.24+ Auto-attack events
 
     -- v2.25+ Spell start/go/failed/delayed/channel events
-    f.hasSpellStartEvents = API.HasFeature("SpellStartEvents")
-    f.hasSpellGoEvents = API.HasFeature("SpellGoEvents")
     f.hasSpellFailedEvents = API.HasFeature("SpellFailedEvents")
     f.hasSpellDelayedEvents = API.HasFeature("SpellDelayedEvents")
     f.hasSpellChannelEvents = API.HasFeature("SpellChannelEvents")
@@ -2277,23 +2273,6 @@ API.UNIT_GUID_EVENTS = {
     "UNIT_COMBAT_GUID",
 }
 
--- Spell start/go event names (v2.25+)
--- These provide improved granularity over UNIT_CASTEVENT for spell cast tracking
--- SPELL_START: Server notifies a spell with cast time has begun
--- SPELL_GO: Server notifies a spell has completed casting (projectile launched, instant landed)
--- v2.38+: SPELL_START includes arg7=durationMs, arg8=spellType
--- v2.40+: SPELL_START includes arg9=corpseOwnerGuid (string or nil)
--- v2.40+: SPELL_GO includes arg8=corpseOwnerGuid (string or nil)
-API.SPELL_START_EVENTS = {
-    "SPELL_START_SELF",   -- Player starts casting (requires NP_EnableSpellStartEvents=1)
-    "SPELL_START_OTHER",  -- Other unit starts casting
-}
-
-API.SPELL_GO_EVENTS = {
-    "SPELL_GO_SELF",   -- Player's spell completed/fired (requires NP_EnableSpellGoEvents=1)
-    "SPELL_GO_OTHER",  -- Other unit's spell completed/fired
-}
-
 -- Spell heal event names (v2.26+, requires NP_EnableSpellHealEvents=1)
 -- Parameters: targetGuid, casterGuid, spellId, amount, isCritical, isPeriodic
 API.SPELL_HEAL_EVENTS = {
@@ -2748,16 +2727,6 @@ function API.Initialize()
         -- NP_EnableAuraCastEvents (v2.20+) - required for [debuffcapped], [mybuffcapped], overflow buff tracking
         if f.hasAuraCastEvents and GetCVar("NP_EnableAuraCastEvents") ~= "1" then
             SetCVar("NP_EnableAuraCastEvents", "1")
-        end
-
-        -- NP_EnableSpellStartEvents (v2.25+) - required for SPELL_START_SELF/OTHER cast tracking
-        if f.hasSpellStartEvents and GetCVar("NP_EnableSpellStartEvents") ~= "1" then
-            SetCVar("NP_EnableSpellStartEvents", "1")
-        end
-
-        -- NP_EnableSpellGoEvents (v2.25+) - required for SPELL_GO_SELF/OTHER cast tracking
-        if f.hasSpellGoEvents and GetCVar("NP_EnableSpellGoEvents") ~= "1" then
-            SetCVar("NP_EnableSpellGoEvents", "1")
         end
     end
 end

@@ -151,7 +151,8 @@ a pool at all.
 
 ### The safeguard itself
 
-`recentCCHits[targetGUID][drType]` counts landed CC per DR pool, so the three
+`recentCCHits[targetGUID][drType]` counts landed CC per DR pool (the player's
+CC `SPELL_AURA_APPLIED`, in `PlayerAuraApplied`), so the three
 stun pools keep separate histories. A hit more than `DR_RESET_WINDOW` (20s)
 after the previous one in that pool restarts the count at 1, matching the DR
 decay the skip check uses. Without that reset the counter only ever climbed,

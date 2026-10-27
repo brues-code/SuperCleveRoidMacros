@@ -69,11 +69,6 @@ CleveRoids.currentSequence = nil
 CleveRoids.bookTypes = {BOOKTYPE_SPELL, BOOKTYPE_PET}
 CleveRoids.unknownTexture = "Interface\\Icons\\INV_Misc_QuestionMark"
 
--- GUID-based cast tracking for libdebuff, populated from its SPELL_START handler and pruned
--- in OnUpdate. Format: [casterGuid] = {spellID, spellName, icon, startTime, duration,
--- endTime}
-CleveRoids.castTracking = {}
-
 -- Combo point tracking (initialized early for /cast hook)
 CleveRoids.lastComboPoints = 0
 -- The player's casts as they leave the client (UNIT_SPELLCAST_SENT), so a spell

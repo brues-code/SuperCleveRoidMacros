@@ -421,13 +421,11 @@ local function PopulateFrame(frame, label, labelText, iconTable, buffs, countRef
     local count = table.getn(buffs)
     if count > ICONS_PER_FRAME then count = ICONS_PER_FRAME end
 
-    local lib = CleveRoids.libdebuff
-
     for i = 1, count do
         local data = iconTable[i]
         local buff = buffs[i]
 
-        local texture = lib and lib:GetCachedIcon(buff.spellId)
+        local texture = C_Spell.GetSpellTexture(buff.spellId)
         if texture then
             data.icon:SetTexture(texture)
         else

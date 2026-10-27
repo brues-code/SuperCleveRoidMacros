@@ -1535,7 +1535,7 @@ local function IsPendingDebuffCast(spellName, targetUnit)
     local castKind, castingName, castRemaining = CleveRoids.GetPlayerCast()
     if castKind == "cast" and castRemaining > CleveRoids.CAST_END_GRACE
         and NormalizeSpellNameForComparison(castingName) == normalizedCheck then
-        -- If libdebuff flagged this as downrank-blocked, don't treat as pending
+        -- If pfUI's libdebuff flagged this as downrank-blocked, don't treat as pending
         local blocked = targetGuid and CleveRoids.DownrankBlocked[targetGuid] and
             CleveRoids.DownrankBlocked[targetGuid][castingName]
         if not blocked then
@@ -1561,61 +1561,11 @@ local function IsPendingDebuffCast(spellName, targetUnit)
         end
     end
 
-    -- Check in-flight debuffs: use pfUI's pending table when available (shared data,
-    -- avoids duplicate tracking), otherwise fall back to our own pending arrays
-    local lib = CleveRoids.libdebuff
-    if lib and targetGuid then
-        if pfUI and pfUI.libdebuff_pending then
-            -- pfUI.libdebuff_pending[guid][spellName] = {casterGuid, rank, time, downrankBlocked}
-            -- libdebuff sets downrankBlocked=true when the cast was identified as a downrank —
-            -- read that field directly instead of re-implementing the check here.
-            local pendingForTarget = pfUI.libdebuff_pending[targetGuid]
-            if pendingForTarget then
-                local playerGuid = CleveRoids.GetGUID("player")
-                for pendingSpell, pendingData in pairs(pendingForTarget) do
-                    local normalizedPending = NormalizeSpellNameForComparison(pendingSpell)
-                    if normalizedPending == normalizedCheck then
-                        local casterGuid = type(pendingData) == "table" and pendingData.casterGuid or nil
-                        if casterGuid and casterGuid == playerGuid then
-                            if type(pendingData) == "table" and pendingData.downrankBlocked then
-                                CleveRoids.DebugChanged("PendingDebuff_downrank_" .. spellName,
-                                    string.format("|cffff00ff[PendingDebuff]|r %s skipped - downrank blocked by libdebuff", spellName))
-                            else
-                                CleveRoids.DebugChanged("PendingDebuff_" .. spellName,
-                                    string.format("|cffff00ff[PendingDebuff]|r %s pending via pfUI.libdebuff_pending (ours)", spellName))
-                                return true
-                            end
-                        elseif casterGuid then
-                            CleveRoids.DebugChanged("PendingDebuff_other_" .. spellName,
-                                string.format("|cffff00ff[PendingDebuff]|r %s in pfUI pending but caster=%s (not ours) - skipping",
-                                    spellName, string.sub(tostring(casterGuid), 1, 16)))
-                        end
-                    end
-                end
-            end
-        else
-            -- Standalone mode (no pfUI): check our own pending arrays
-            -- These are player-only, populated from UNIT_CASTEVENT / SPELL_GO_SELF
-            local pendingArrays = { lib.pendingPersonalDebuffs, lib.pendingSharedDebuffs, lib.pendingCCDebuffs }
-            for _, arr in ipairs(pendingArrays) do
-                if arr then
-                    for _, pending in pairs(arr) do
-                        if pending and pending.targetGUID == targetGuid and pending.spellID then
-                            local pendingName = C_Spell.GetSpellName(pending.spellID)
-                            if pendingName then
-                                local normalizedPending = NormalizeSpellNameForComparison(pendingName)
-                                if normalizedPending == normalizedCheck then
-                                    CleveRoids.DebugChanged("PendingDebuff_" .. spellName,
-                                        string.format("|cffff00ff[PendingDebuff]|r %s pending via libdebuff pending array (ID:%d)",
-                                            spellName, pending.spellID))
-                                    return true
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
+    -- In flight: the spell hit this target and its debuff has not appeared yet
+    if targetGuid and CleveRoids.IsAuraExpected(targetGuid, normalizedCheck) then
+        CleveRoids.DebugChanged("PendingDebuff_" .. spellName,
+            string.format("|cffff00ff[PendingDebuff]|r %s pending via in-flight hit", spellName))
+        return true
     end
 
     return false
@@ -3242,7 +3192,7 @@ function CleveRoids.ValidateAura(unit, args, isbuff)
             elseif isPlayer then
                 value_to_check = remaining or -1
             elseif nonPlayerAuraTimeRemaining ~= nil then
-                -- Non-player aura with tracked time remaining (from libdebuff or AURA_CAST events)
+                -- Non-player aura with a known time remaining (ClassicAPI)
                 value_to_check = nonPlayerAuraTimeRemaining
             else
                 -- Non-player units without tracked time: treat missing/unknown as 0

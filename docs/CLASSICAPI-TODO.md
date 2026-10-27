@@ -208,14 +208,28 @@ Each step leaves a working addon.
      `FindUnitAuraInfo`/`GetUnitAuras`/`GetUnitAuraApplications`,
      `GetPlayerAura`, and the slot-by-slot scans. libdebuff still runs, but
      nothing outside it reads its timers except the `/cleveroid` debug dump.
-   - **3b — libdebuff's tracking pipeline.** Its `UNIT_CASTEVENT`, `SPELL_GO_*`,
-     `SPELL_START_*`, `AURA_CAST_*`, `DEBUFF_ADDED/REMOVED_*` handlers,
-     `lib.objects`, `castTracking`, the duration learning and the Cursive
-     extension's `UNIT_CASTEVENT` frames. Still read from it: the pending arrays
-     (`IsPendingDebuffCast`, "debuff in flight") and the delayed CC/bleed
-     immunity verification. Both need a replacement (CLEU `SPELL_AURA_APPLIED` /
-     `SPELL_MISSED` from the player) before the pipeline can go. Do this after
-     the parity gate below passes in-game.
+   - **3b — DONE: libdebuff's tracking pipeline.** Gone: its `UNIT_CASTEVENT`,
+     `SPELL_GO_*`, `SPELL_START_*`, `SPELL_FAILED_OTHER`, `AURA_CAST_*`,
+     `DEBUFF_ADDED/REMOVED_*`, `BUFF_REMOVED_*` and target `UNIT_AURA` handlers,
+     the delayed verification frame, `lib.objects` and the tables beside it,
+     `castTracking`, `AddEffect`/`GetDuration`/`UnitDebuff`/`UnitBuff`, the
+     pfUI libdebuff table linking, and nampower's `SPELL_START`/`SPELL_GO` CVar
+     setup. The **aura expectations** in `Utility.lua` replace the pending
+     arrays: the player's hit (`SPELL_CAST_SUCCESS`, `SPELL_DAMAGE`,
+     `RANGE_DAMAGE`) expects the debuff, `SPELL_AURA_APPLIED` / a miss / a
+     `C_UnitAuras` check settles it, and a personal debuff still missing after
+     0.4s records a bleed or school immunity behind the old guards. They also
+     answer `IsPendingDebuffCast` ("in flight"), and the player's CC landing
+     counts DR (`recentCCHits`). The old CC and shared-debuff "missing aura"
+     verifiers were dropped, not ported: with nampower's `SPELL_GO` they
+     short-circuited on `spellGoHit` and never recorded anything.
+   - **3d — duration bookkeeping.** Only libdebuff consumed these, and
+     ClassicAPI supplies caster-modified durations: the talent / equipment /
+     set-bonus duration modifiers (`ApplyAllDurationModifiers`), the
+     ComboPointTracker duration math, `CleveRoids_LearnedDurations` /
+     `CleveRoids_ComboDurations` and their `/cleveroid` commands, and the
+     Console `/cast` pre-tracking. The Cursive extension's `UNIT_CASTEVENT`
+     frames feed Cursive's own timers and are SuperWoW, not nampower.
    - **3c — nampower-only aura data.** `[buffcapped]`/`[debuffcapped]`
      (`AURA_CAST` `auraCapStatus`), player buffs past the 32 client slots
      (`OverflowBuffs`, the OverflowBuffFrame extension) and
@@ -279,36 +293,20 @@ don't re-investigate.
 
 ## libdebuff retirement
 
-libdebuff exists because vanilla cannot report debuff durations on units other
-than the player. ClassicAPI's `Aura::Source` cache now does exactly that, so most
-of the library is redundant. This is a staged replacement, not a delete: measure
-first, then remove per group.
+libdebuff existed because vanilla cannot report debuff durations on units other
+than the player. ClassicAPI's `Aura::Source` cache now does exactly that, so the
+tracking was removed (steps 3a, 3b). What remains of `CleveRoids.libdebuff` is
+data and small helpers with no `C_UnitAuras` equivalent: the personal/shared
+debuff lists (`IsPersonalDebuff`), `GetSpellRank`/`GetSpellBaseName`,
+`trackedAfflictions`, `guidToName`, and the immunity guards `recentDeaths` and
+`recentCCHits`.
 
-Current footprint: 28 public `lib:` methods, ~726 internal references in
-`Utility.lua`, consumers in 8 files (`Conditionals.lua` 45, `Compatibility/pfUI.lua`
-39, `Core.lua` 9). Note pfUI did **not** delete its own libdebuff — v9.0.25 still
-ships ~1695 lines of it, re-based on `C_UnitAuras.GetAuraDataByIndex` /
-`GetAuraDataBySpellName`. "Re-base on C_UnitAuras", not "remove", is the precedent.
-
-**Group A — replaceable by `C_UnitAuras` (do these first):**
-`GetDuration`, `GetDebuffCaster`, `IsOurDebuff`, `UnitBuff`/`UnitDebuff`,
-`FindPlayerDebuff`/`FindPlayerBuff`, `GetAllDebuffsOnTarget`, `GetCachedIcon`,
-`ApplyCarnageRefresh`, and the Dark Harvest trio (`ApplyDarkHarvestStart`/`End`,
-`GetDarkHarvestReduction`, `GetTimeRemainingWithDarkHarvest`) — ClassicAPI ships
-Carnage refresh and Dark Harvest tick compression in the DLL.
-
-**Group B — no `C_UnitAuras` equivalent, keep:**
-`ShouldApplyDebuffRank`, `DidSpellFail`, `IsPersonalDebuff`, `GetSpellRank`/`GetSpellBaseName`,
-`HasPendingCast`. These are miss/rank/learning logic, not aura state.
-
-**Gate before removing Group A (step 3b):** the conditionals already read
-ClassicAPI (step 3a), so test them in-game on a spell where ClassicAPI does the
-hard part — Rip under Carnage. Check `[debuff:Rip<3]` across a Carnage proc, and
-compare `CleveRoids.libdebuff:GetDuration(spellID)` with
-`C_UnitAuras.GetUnitAuraBySpellID("target", spellID, "HARMFUL")` (`duration`, and
-`expirationTime - GetTime()`). If they agree, Group A can go. Watch the
-documented best-effort gaps: an aura cast before you logged in, and
-refresh-at-max-stacks.
+**Check in-game** (not run before the removal): `[debuff:Rip<3]` across a
+Carnage proc, and `C_UnitAuras.GetUnitAuraBySpellID("target", spellID,
+"HARMFUL")` (`duration`, `expirationTime - GetTime()`) against the tooltip.
+Watch the documented best-effort gaps: an aura cast before you logged in, and
+refresh-at-max-stacks. Also Conflagrate: libdebuff shortened its Immolate timer
+by 3s; whether ClassicAPI models that is unverified.
 
 ## Marginal / optional follow-ups
 

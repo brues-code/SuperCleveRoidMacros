@@ -4266,32 +4266,6 @@ function CleveRoids.OnUpdate(self)
         seqKey, sequence = next(Sequences, seqKey)
     end
 
-    -- Clean stale castTracking entries. Instant casts are stored with endTime = nil
-    -- (SPELL_START sets it only when the cast has a duration), so an endTime-only
-    -- check could never evict them and every instant cast by every unit in range
-    -- accumulated forever. Fall back to startTime for those: the matching SPELL_GO
-    -- lands within a frame or two, so anything still here after the grace period is
-    -- an entry whose completion we never observed.
-    local ct = CR.castTracking
-    local ctGuid, ctEntry = next(ct)
-    while ctGuid do
-        local nextCtGuid = next(ct, ctGuid)
-        if ctEntry then
-            if ctEntry.endTime then
-                if time > ctEntry.endTime + 0.5 then
-                    ct[ctGuid] = nil
-                end
-            elseif ctEntry.startTime and time > ctEntry.startTime + 1 then
-                -- No endTime: an instant cast. Its SPELL_GO lands within a frame or
-                -- two, so a second is generous, and anything older is an entry whose
-                -- completion we never saw.
-                ct[ctGuid] = nil
-            end
-        end
-        ctGuid = nextCtGuid
-        ctEntry = nextCtGuid and ct[nextCtGuid]
-    end
-
     -- PERFORMANCE OPTIMIZATION: Run memory cleanup less frequently (every 5 seconds instead of every frame)
     -- This reduces CPU usage while maintaining effective memory management
     if (time - CR.lastCleanupTime) >= CR.CLEANUP_INTERVAL then
@@ -5805,71 +5779,22 @@ SlashCmdList["CLEVEROID"] = function(msg)
         local targetName = UnitName("target") or "Unknown"
         CleveRoids.Print("Target: " .. targetName .. " (GUID: " .. tostring(guid) .. ")")
 
-        -- Show tracking table for this target
+        -- The target's debuffs as the conditionals see them (C_UnitAuras)
         CleveRoids.Print(" ")
-        CleveRoids.Print("|cff00ff00=== Tracked Debuffs (libdebuff.objects) ===|r")
-        local lib = CleveRoids.libdebuff
-        if lib and lib.objects and lib.objects[guid] then
-            local count = 0
-            for spellID, rec in pairs(lib.objects[guid]) do
-                if rec and rec.start and rec.duration then
-                    local timeRemaining = rec.duration + rec.start - GetTime()
-                    local spellName = C_Spell.GetSpellName(spellID) or "Unknown"
-                    local caster = rec.caster or "unknown"
-                    local stacks = rec.stacks or 0
-                    if timeRemaining > 0 then
-                        CleveRoids.Print(string.format("  |cff00ff00[%d]|r %s: %.1fs left (caster: %s, stacks: %d)",
-                            spellID, spellName, timeRemaining, caster, stacks))
-                        count = count + 1
-                    else
-                        CleveRoids.Print(string.format("  |cffff0000[%d]|r %s: EXPIRED %.1fs ago (caster: %s)",
-                            spellID, spellName, -timeRemaining, caster))
-                    end
-                end
-            end
-            if count == 0 then
-                CleveRoids.Print("  (no active tracked debuffs)")
-            end
-        else
-            CleveRoids.Print("  (no tracking data for this target)")
+        CleveRoids.Print("|cff00ff00=== Debuffs (C_UnitAuras) ===|r")
+        local i = 1
+        while true do
+            local name, _, count, _, _, expirationTime, source, _, _, spellId =
+                C_UnitAuras.UnitAura("target", i, "HARMFUL")
+            if not name then break end
+            local timeStr = (expirationTime and expirationTime > 0)
+                and string.format("%.1fs left", expirationTime - GetTime()) or "no timer"
+            CleveRoids.Print(string.format("  [%d] %s: %s (stacks: %d, caster: %s)",
+                spellId or 0, name, timeStr, count or 0, tostring(source)))
+            i = i + 1
         end
-
-        -- Show actual debuff slots (1-16 via UnitDebuff, 17-48 via overflow)
-        CleveRoids.Print(" ")
-        CleveRoids.Print("|cff00ff00=== Debuff Slots (UnitDebuff 1-16) ===|r")
-        local debuffCount = 0
-        for i = 1, 16 do
-            local texture, stacks, debuffType, spellID = UnitDebuff("target", i)
-            if texture then
-                local spellName = C_Spell.GetSpellName(spellID) or "slot" .. i
-                CleveRoids.Print(string.format("  Slot %d: [%d] %s (stacks: %d)",
-                    i, spellID or 0, spellName, stacks or 0))
-                debuffCount = debuffCount + 1
-            end
-        end
-        if debuffCount == 0 then
-            CleveRoids.Print("  (no debuffs in slots 1-16)")
-        end
-
-        -- Show overflow debuffs in buff slots (17-48)
-        CleveRoids.Print(" ")
-        CleveRoids.Print("|cff00ff00=== Overflow Debuffs (UnitBuff 1-32 as debuffs 17-48) ===|r")
-        local overflowCount = 0
-        for i = 1, 32 do
-            local texture, stacks, spellID = UnitBuff("target", i)
-            if texture and spellID then
-                -- Check if this might be an overflow debuff by checking libdebuff durations
-                local isDebuff = lib and lib.durations and lib.durations[spellID]
-                if isDebuff then
-                    local spellName = C_Spell.GetSpellName(spellID) or "slot" .. i
-                    CleveRoids.Print(string.format("  Buff Slot %d (=Debuff %d): [%d] %s (stacks: %d) |cffff8800OVERFLOW|r",
-                        i, i + 16, spellID, spellName, stacks or 0))
-                    overflowCount = overflowCount + 1
-                end
-            end
-        end
-        if overflowCount == 0 then
-            CleveRoids.Print("  (no overflow debuffs detected)")
+        if i == 1 then
+            CleveRoids.Print("  (no debuffs)")
         end
 
         -- If a specific debuff name was provided, test the conditional
@@ -5877,59 +5802,13 @@ SlashCmdList["CLEVEROID"] = function(msg)
             CleveRoids.Print(" ")
             CleveRoids.Print("|cff00ff00=== Testing [debuff:\"" .. searchName .. "\"] ===|r")
 
-            -- Test ValidateUnitDebuff
             local result = CleveRoids.ValidateUnitDebuff("target", { name = searchName })
             CleveRoids.Print("ValidateUnitDebuff(target, {name='" .. searchName .. "'}): " ..
                 (result and "|cff00ff00true|r" or "|cffff0000false|r"))
 
-            -- Test with time conditional
             local resultTime = CleveRoids.ValidateUnitDebuff("target", { name = searchName, operator = "<", amount = 99999 })
             CleveRoids.Print("ValidateUnitDebuff(target, {name='" .. searchName .. "', operator='<', amount=99999}): " ..
                 (resultTime and "|cff00ff00true|r" or "|cffff0000false|r"))
-
-            -- Look for spell IDs matching this name
-            CleveRoids.Print(" ")
-            CleveRoids.Print("|cff00ff00=== Spell ID Lookup for \"" .. searchName .. "\" ===|r")
-            local foundIDs = {}
-            -- Check Spells table
-            if CleveRoids.Spells then
-                for id, name in pairs(CleveRoids.Spells) do
-                    if type(name) == "string" and string.lower(name) == string.lower(searchName) then
-                        table.insert(foundIDs, id)
-                    end
-                end
-            end
-            -- Also check GetSpellRecField
-            if GetSpellRecField then
-                for id = 1, 30000 do
-                    local name = C_Spell.GetSpellName(id)
-                    if name and string.lower(name) == string.lower(searchName) then
-                        local found = false
-                        for _, existingID in ipairs(foundIDs) do
-                            if existingID == id then found = true break end
-                        end
-                        if not found then
-                            table.insert(foundIDs, id)
-                        end
-                    end
-                    -- Stop early if we found some
-                    if table.getn(foundIDs) > 10 then break end
-                end
-            end
-
-            if table.getn(foundIDs) > 0 then
-                for _, id in ipairs(foundIDs) do
-                    local tracked = lib and lib.objects and lib.objects[guid] and lib.objects[guid][id]
-                    local trackedStr = tracked and "|cff00ff00TRACKED|r" or "|cff888888not tracked|r"
-                    CleveRoids.Print("  SpellID " .. id .. ": " .. trackedStr)
-                    if tracked then
-                        local remaining = tracked.duration + tracked.start - GetTime()
-                        CleveRoids.Print("    -> " .. string.format("%.1fs remaining (caster: %s)", remaining, tracked.caster or "?"))
-                    end
-                end
-            else
-                CleveRoids.Print("  (no spell IDs found for this name)")
-            end
         end
 
         return
