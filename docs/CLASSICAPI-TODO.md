@@ -108,7 +108,7 @@ API references are line numbers into `C:\Git\ClassicAPI\docs\API.md`.
   name. The consumers (`actionSlots` for `/startattack`·`/shoot`·auto-shot
   proxies, reactive spells) only need spells, so this is acceptable.
 - **Follow-up (optional):** migrate the remaining `GetActionText` macro-slot
-  detection in `Core.lua` / `ComboPointTracker.lua` to `GetActionInfo` too.
+  detection in `Core.lua` to `GetActionInfo` too.
 
 ### 4. `C_Spell.*` / `GetSpellInfo(spellID)`
 - **API:** `API.md:6649+` — `GetSpellCooldown`, `IsUsableSpell`, `IsSpellKnown`,
@@ -124,8 +124,8 @@ API references are line numbers into `C:\Git\ClassicAPI\docs\API.md`.
 
 ### 6. `UnitGUID` / `UnitTokenFromGUID`
 - **API:** `API.md:8206+`.
-- **Replaces today:** SuperWoW GUIDs in ComboPointTracker (`ComboPointTracker.lua`).
-- **Verify first:** confirm GUID string format matches SuperWoW's before swapping.
+- **Done.** The immunity guards and aura expectations resolve combat-log GUIDs
+  with `UnitTokenFromGUID`; the GUID string format matches SuperWoW's.
 
 ### 7. Native `focus` token + `FocusUnit`/`ClearFocus` + `PLAYER_FOCUS_CHANGED`
 - **API:** `API.md:2624+`.
@@ -162,8 +162,9 @@ missing, the same as nampower/UnitXP.
 **Goal:** nampower stays only for its spell queue, which ClassicAPI does not
 have: `QueueSpellByName`, `QueueScript`, `CastSpellByNameNoQueue`,
 `ChannelStopCastingNextTick`, `SPELL_QUEUE_EVENT` and the `NP_Queue*` /
-`*QueueWindowMs` / buffer CVars. Everything else moves to ClassicAPI. Where
-ClassicAPI has no equivalent, add one to ClassicAPI instead of keeping nampower.
+`*QueueWindowMs` / buffer CVars — and for its aura-cap data (step 3c).
+Everything else moves to ClassicAPI. Where ClassicAPI has no equivalent, add one
+to ClassicAPI instead of keeping nampower.
 Each step leaves a working addon.
 
 1. ~~**Combat events → `COMBAT_LOG_EVENT_UNFILTERED`.**~~ — DONE. The
@@ -223,18 +224,26 @@ Each step leaves a working addon.
      counts DR (`recentCCHits`). The old CC and shared-debuff "missing aura"
      verifiers were dropped, not ported: with nampower's `SPELL_GO` they
      short-circuited on `spellGoHit` and never recorded anything.
-   - **3d — duration bookkeeping.** Only libdebuff consumed these, and
-     ClassicAPI supplies caster-modified durations: the talent / equipment /
-     set-bonus duration modifiers (`ApplyAllDurationModifiers`), the
-     ComboPointTracker duration math, `CleveRoids_LearnedDurations` /
-     `CleveRoids_ComboDurations` and their `/cleveroid` commands, and the
-     Console `/cast` pre-tracking. The Cursive extension's `UNIT_CASTEVENT`
-     frames feed Cursive's own timers and are SuperWoW, not nampower.
-   - **3c — nampower-only aura data.** `[buffcapped]`/`[debuffcapped]`
+   - **3d — DONE: duration bookkeeping removed.** Only libdebuff consumed it,
+     and ClassicAPI supplies caster-modified durations. Gone: the talent /
+     equipment / set-bonus duration modifiers (`ApplyAllDurationModifiers`),
+     nampower's `GetSpellModifiers` wrappers, `ComboPointTracker.lua` (its
+     combo-point duration math, cast hooks and `/combotrack`),
+     `CleveRoids_LearnedDurations` / `CleveRoids_ComboDurations` /
+     `CleveRoids_AuraTextures` and the `learn`/`forget`/`combo*`/`testtalent`
+     commands, and the Console `/cast` pre-tracking. `sentCasts` now holds only
+     the send time. The bleed tables moved into `Utility.lua` beside the aura
+     expectations. `[setbonus]`'s `GetEquippedSetPieceCount` stays. The Cursive
+     extension's `UNIT_CASTEVENT` frames feed Cursive's own timers and are
+     SuperWoW, not nampower.
+   - **3c — DECIDED: stays on nampower.** `[buffcapped]`/`[debuffcapped]`
      (`AURA_CAST` `auraCapStatus`), player buffs past the 32 client slots
      (`OverflowBuffs`, the OverflowBuffFrame extension) and
-     `AllCasterAuraTracking`. ClassicAPI cannot see a buff that has no client
-     slot, so keep these on nampower or file a ClassicAPI gap.
+     `AllCasterAuraTracking` keep reading nampower's `AURA_CAST_*`,
+     `BUFF/DEBUFF_REMOVED_OTHER` and `*_UPDATE_DURATION_SELF` events
+     (`CleveRoidsAuraCastFrame` in `Conditionals.lua`). ClassicAPI cannot see a
+     buff that has no client slot, and only nampower reports the server's cap
+     flags. Like the spell queue, this is a nampower feature SCRM keeps.
 4. **Direct swaps.** `GetCurrentCastingInfo`, now read only for its on-swing
    and auto-attack flags (`[onswing]`, weapon swap, Core.lua:94) → ClassicAPI's
    next-melee/auto-attack state (`C_Spell.IsCurrentSpell` and friends); `IsSpellInRange`/`IsSpellUsable`/

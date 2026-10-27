@@ -1370,504 +1370,11 @@ local function HandleUnitDied(guid)
   end
 end
 
--- TALENT MODIFIER SYSTEM
-
--- Database of talent modifiers for debuff durations
--- Structure: [spellID] = {
---   talent = "Talent Name" (optional, for name-based lookup),
---   tab = talentTab (preferred, for direct position lookup),
---   id = talentID (preferred, for direct position lookup),
---   modifier = function(baseDuration, talentRank)
--- }
-CleveRoids.talentModifiers = CleveRoids.talentModifiers or {}
-
--- ROGUE talent modifiers
--- Taste for Blood: Increases Rupture duration by 2 seconds per rank (3 ranks max)
--- Talent Position: Tab 1, Talent 10 (Assassination tree)
--- Talent Spell IDs: 14174 (Rank 1), 14175 (Rank 2), 14176 (Rank 3)
-CleveRoids.talentModifiers[1943] = { tab = 1, id = 10, talent = "Taste for Blood", modifier = function(base, rank) return base + (rank * 2) end }  -- Rupture Rank 1
-CleveRoids.talentModifiers[8639] = { tab = 1, id = 10, talent = "Taste for Blood", modifier = function(base, rank) return base + (rank * 2) end }  -- Rupture Rank 2
-CleveRoids.talentModifiers[8640] = { tab = 1, id = 10, talent = "Taste for Blood", modifier = function(base, rank) return base + (rank * 2) end }  -- Rupture Rank 3
-CleveRoids.talentModifiers[11273] = { tab = 1, id = 10, talent = "Taste for Blood", modifier = function(base, rank) return base + (rank * 2) end } -- Rupture Rank 4
-CleveRoids.talentModifiers[11274] = { tab = 1, id = 10, talent = "Taste for Blood", modifier = function(base, rank) return base + (rank * 2) end } -- Rupture Rank 5
-CleveRoids.talentModifiers[11275] = { tab = 1, id = 10, talent = "Taste for Blood", modifier = function(base, rank) return base + (rank * 2) end } -- Rupture Rank 6
-
--- Improved Gouge: Increases Gouge duration by 0.5 seconds per rank (3 ranks max)
--- Talent Position: Tab 3, Talent 3 (Subtlety tree)
--- Talent Spell IDs: 13741 (Rank 1), 13793 (Rank 2), 13792 (Rank 3)
-CleveRoids.talentModifiers[1776] = { tab = 3, id = 3, talent = "Improved Gouge", modifier = function(base, rank) return base + (rank * 0.5) end }  -- Gouge Rank 1
-CleveRoids.talentModifiers[1777] = { tab = 3, id = 3, talent = "Improved Gouge", modifier = function(base, rank) return base + (rank * 0.5) end }  -- Gouge Rank 2
-CleveRoids.talentModifiers[8629] = { tab = 3, id = 3, talent = "Improved Gouge", modifier = function(base, rank) return base + (rank * 0.5) end }  -- Gouge Rank 3
-CleveRoids.talentModifiers[11285] = { tab = 3, id = 3, talent = "Improved Gouge", modifier = function(base, rank) return base + (rank * 0.5) end } -- Gouge Rank 4
-CleveRoids.talentModifiers[11286] = { tab = 3, id = 3, talent = "Improved Gouge", modifier = function(base, rank) return base + (rank * 0.5) end } -- Gouge Rank 5
-
--- PRIEST talent modifiers
--- Improved Shadow Word: Pain: Increases SW:P duration by 3 seconds per rank (2 ranks max)
--- Talent Position: Tab 3 (Shadow), Talent 4
--- Talent Spell IDs: 15275 (Rank 1), 15317 (Rank 2)
-CleveRoids.talentModifiers[589] = { tab = 3, id = 4, talent = "Improved Shadow Word: Pain", modifier = function(base, rank) return base + (rank * 3) end }    -- SW:P Rank 1
-CleveRoids.talentModifiers[594] = { tab = 3, id = 4, talent = "Improved Shadow Word: Pain", modifier = function(base, rank) return base + (rank * 3) end }    -- SW:P Rank 2
-CleveRoids.talentModifiers[970] = { tab = 3, id = 4, talent = "Improved Shadow Word: Pain", modifier = function(base, rank) return base + (rank * 3) end }    -- SW:P Rank 3
-CleveRoids.talentModifiers[992] = { tab = 3, id = 4, talent = "Improved Shadow Word: Pain", modifier = function(base, rank) return base + (rank * 3) end }    -- SW:P Rank 4
-CleveRoids.talentModifiers[2767] = { tab = 3, id = 4, talent = "Improved Shadow Word: Pain", modifier = function(base, rank) return base + (rank * 3) end }   -- SW:P Rank 5
-CleveRoids.talentModifiers[10892] = { tab = 3, id = 4, talent = "Improved Shadow Word: Pain", modifier = function(base, rank) return base + (rank * 3) end }  -- SW:P Rank 6
-CleveRoids.talentModifiers[10893] = { tab = 3, id = 4, talent = "Improved Shadow Word: Pain", modifier = function(base, rank) return base + (rank * 3) end }  -- SW:P Rank 7
-CleveRoids.talentModifiers[10894] = { tab = 3, id = 4, talent = "Improved Shadow Word: Pain", modifier = function(base, rank) return base + (rank * 3) end }  -- SW:P Rank 8
-
--- DRUID talent modifiers
--- Brutal Impact: Increases Bash and Pounce stun duration by 0.5 seconds per rank (2 ranks max)
--- Talent Position: Tab 2 (Feral Combat), Talent 4
--- Talent Spell IDs: 16940 (Rank 1), 16941 (Rank 2)
-CleveRoids.talentModifiers[5211] = { tab = 2, id = 4, talent = "Brutal Impact", modifier = function(base, rank) return base + (rank * 0.5) end }  -- Bash Rank 1
-CleveRoids.talentModifiers[6798] = { tab = 2, id = 4, talent = "Brutal Impact", modifier = function(base, rank) return base + (rank * 0.5) end }  -- Bash Rank 2
-CleveRoids.talentModifiers[8983] = { tab = 2, id = 4, talent = "Brutal Impact", modifier = function(base, rank) return base + (rank * 0.5) end }  -- Bash Rank 3
-
--- NOTE: Brutal Impact affects the STUN portion of Pounce (cast spell IDs 9005, 9823, 9827)
--- The BLEED portion (triggered spell IDs 9007, 9824, 9826) is NOT affected by Brutal Impact
--- We track the bleed for immunity detection, not the stun, so no talent modifiers needed here
-
--- WARRIOR talent modifiers
--- Booming Voice: Increases duration of Battle Shout and Demoralizing Shout by 12% per rank (5 ranks max)
--- Talent Position: Tab 2 (Fury), Talent 1
--- Talent Spell IDs: 12321 (Rank 1), 12835 (Rank 2), 12836 (Rank 3), 12837 (Rank 4), 12838 (Rank 5)
-local boomingVoiceModifier = function(base, rank) return base * (1 + rank * 0.12) end  -- 12% per rank, 60% at rank 5
-CleveRoids.talentModifiers[1160] = { tab = 2, id = 1, talent = "Booming Voice", modifier = boomingVoiceModifier }   -- Demoralizing Shout Rank 1
-CleveRoids.talentModifiers[6190] = { tab = 2, id = 1, talent = "Booming Voice", modifier = boomingVoiceModifier }   -- Demoralizing Shout Rank 2
-CleveRoids.talentModifiers[11554] = { tab = 2, id = 1, talent = "Booming Voice", modifier = boomingVoiceModifier }  -- Demoralizing Shout Rank 3
-CleveRoids.talentModifiers[11555] = { tab = 2, id = 1, talent = "Booming Voice", modifier = boomingVoiceModifier }  -- Demoralizing Shout Rank 4
-CleveRoids.talentModifiers[11556] = { tab = 2, id = 1, talent = "Booming Voice", modifier = boomingVoiceModifier }  -- Demoralizing Shout Rank 5
-
--- Function to get talent rank
--- Supports both position-based (tab, id) and name-based lookup
--- Position-based is preferred as it's more reliable and locale-independent (like Cursive addon)
--- Parameters: talentName OR (tab, id)
--- Returns: Talent rank (0 if not found or not learned)
-function CleveRoids.GetTalentRank(talentName, tab, id)
-    -- Method 1: Direct position lookup (preferred, like Cursive)
-    if tab and id then
-        local _, _, _, _, rank = GetTalentInfo(tab, id)
-        return tonumber(rank) or 0
-    end
-
-    -- Method 2: Name-based lookup (fallback for backwards compatibility)
-    if not talentName then return 0 end
-
-    -- Ensure talents are indexed
-    if not CleveRoids.Talents or table.getn(CleveRoids.Talents) == 0 then
-        if CleveRoids.IndexTalents then
-            CleveRoids.IndexTalents()
-        end
-    end
-
-    local rank = CleveRoids.Talents[talentName]
-    return (rank and tonumber(rank)) or 0
-end
-
--- Apply talent modifiers to a debuff duration
--- Parameters:
---   spellID: The spell ID
---   baseDuration: The base duration (after combo points if applicable)
--- Returns: Modified duration, or baseDuration if no talent modifier applies
-function CleveRoids.ApplyTalentModifier(spellID, baseDuration)
-    if not spellID or not baseDuration then
-        return baseDuration
-    end
-
-    local modifier = CleveRoids.talentModifiers[spellID]
-    if not modifier then
-        return baseDuration
-    end
-
-    local talentRank = 0
-    local lookupMethod = "none"
-
-    -- Method 1: Position-based lookup (preferred, locale-independent)
-    if modifier.tab and modifier.id then
-        local _, _, _, _, rank = GetTalentInfo(modifier.tab, modifier.id)
-        talentRank = tonumber(rank) or 0
-        if talentRank > 0 then
-            lookupMethod = "position"
-        end
-    end
-
-    -- Method 2: Name-based lookup (fallback for backwards compatibility)
-    if talentRank == 0 and modifier.talent then
-        talentRank = CleveRoids.GetTalentRank(modifier.talent)
-        if talentRank > 0 then
-            lookupMethod = "name"
-        end
-    end
-
-    if talentRank == 0 then
-        return baseDuration
-    end
-
-    local modifiedDuration = modifier.modifier(baseDuration, talentRank)
-
-    if CleveRoids.debug then
-        local talentName = modifier.talent or ("Tab " .. modifier.tab .. " ID " .. modifier.id)
-        DEFAULT_CHAT_FRAME:AddMessage(
-            string.format("|cffff00ff[Talent Modifier]|r %s (ID:%d): %ds -> %ds (talent: %s rank %d, %s)",
-                C_Spell.GetSpellName(spellID) or "Unknown", spellID, baseDuration, modifiedDuration,
-                talentName, talentRank, lookupMethod)
-        )
-    end
-
-    return modifiedDuration
-end
-
--- Helper function to register a talent modifier
--- Usage: CleveRoids.RegisterTalentModifier(spellID, talentName, modifierFunction)
-function CleveRoids.RegisterTalentModifier(spellID, talentName, modifierFunc)
-    if not spellID or not talentName or not modifierFunc then
-        return false
-    end
-
-    CleveRoids.talentModifiers[spellID] = {
-        talent = talentName,
-        modifier = modifierFunc
-    }
-
-    return true
-end
-
--- Diagnostic function to check talent modifier system
--- Usage: CleveRoids.DiagnoseTalentModifier(spellID, baseDuration)
-function CleveRoids.DiagnoseTalentModifier(spellID, baseDuration)
-    baseDuration = baseDuration or 10 -- Default test duration
-
-    DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00=== Talent Modifier Diagnostic ===|r")
-
-    -- Check if spellID is valid
-    local spellName = C_Spell.GetSpellName(spellID)
-    if not spellName then
-        DEFAULT_CHAT_FRAME:AddMessage("|cffff0000ERROR: Invalid spell ID " .. tostring(spellID) .. "|r")
-        return
-    end
-    DEFAULT_CHAT_FRAME:AddMessage("Spell: " .. spellName .. " (ID: " .. spellID .. ")")
-
-    -- Check if talents are indexed
-    if not CleveRoids.Talents then
-        DEFAULT_CHAT_FRAME:AddMessage("|cffff0000ERROR: Talents table doesn't exist!|r")
-        DEFAULT_CHAT_FRAME:AddMessage("Attempting to index talents...")
-        if CleveRoids.IndexTalents then
-            CleveRoids.IndexTalents()
-            DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00Talents indexed.|r")
-        else
-            DEFAULT_CHAT_FRAME:AddMessage("|cffff0000ERROR: IndexTalents function not found!|r")
-            return
-        end
-    end
-
-    local talentCount = 0
-    for k, v in pairs(CleveRoids.Talents) do
-        if type(k) == "string" and type(v) == "number" and v > 0 then
-            talentCount = talentCount + 1
-        end
-    end
-    DEFAULT_CHAT_FRAME:AddMessage("Talents indexed: " .. talentCount .. " talents found")
-
-    -- Check if modifier is registered
-    local modifier = CleveRoids.talentModifiers[spellID]
-    if not modifier then
-        DEFAULT_CHAT_FRAME:AddMessage("|cffff0000No talent modifier registered for this spell|r")
-        return
-    end
-
-    local talentDesc = modifier.talent or ("Tab " .. tostring(modifier.tab) .. " ID " .. tostring(modifier.id))
-    DEFAULT_CHAT_FRAME:AddMessage("Modifier registered: " .. talentDesc)
-
-    -- Check talent rank using BOTH methods
-    local talentRank = 0
-    local lookupMethod = "none"
-
-    if modifier.tab and modifier.id then
-        -- Position-based lookup (preferred)
-        local _, name, _, _, rank = GetTalentInfo(modifier.tab, modifier.id)
-        talentRank = tonumber(rank) or 0
-        lookupMethod = "position"
-        DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00Position lookup (Tab " .. modifier.tab .. ", ID " .. modifier.id .. "):|r")
-        DEFAULT_CHAT_FRAME:AddMessage("  Talent name: " .. tostring(name))
-        DEFAULT_CHAT_FRAME:AddMessage("  Rank: " .. talentRank)
-    end
-
-    if modifier.talent then
-        -- Name-based lookup (fallback)
-        local nameRank = CleveRoids.GetTalentRank(modifier.talent)
-        DEFAULT_CHAT_FRAME:AddMessage("|cffaaaa00Name lookup (" .. modifier.talent .. "):|r")
-        DEFAULT_CHAT_FRAME:AddMessage("  Rank: " .. nameRank)
-
-        -- Use name rank if position didn't work
-        if talentRank == 0 and nameRank > 0 then
-            talentRank = nameRank
-            lookupMethod = "name"
-        end
-
-        -- Check if talent exists in table
-        local directLookup = CleveRoids.Talents[modifier.talent]
-        DEFAULT_CHAT_FRAME:AddMessage("  Direct table lookup: " .. tostring(directLookup))
-    end
-
-    DEFAULT_CHAT_FRAME:AddMessage("Final rank: " .. talentRank .. " (via " .. lookupMethod .. ")")
-
-    if talentRank == 0 then
-        DEFAULT_CHAT_FRAME:AddMessage("|cffff0000You don't have " .. talentDesc .. "!|r")
-        -- Show available talents for debugging
-        DEFAULT_CHAT_FRAME:AddMessage("Available talents with ranks:")
-        local shown = 0
-        for name, rank in pairs(CleveRoids.Talents) do
-            if type(name) == "string" and type(rank) == "number" and rank > 0 then
-                DEFAULT_CHAT_FRAME:AddMessage("  - " .. name .. ": " .. rank)
-                shown = shown + 1
-                if shown >= 10 then
-                    DEFAULT_CHAT_FRAME:AddMessage("  ... (showing first 10)")
-                    break
-                end
-            end
-        end
-    else
-        -- Test the modifier
-        local modifiedDuration = modifier.modifier(baseDuration, talentRank)
-        DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00Test calculation:|r")
-        DEFAULT_CHAT_FRAME:AddMessage("  Base: " .. baseDuration .. "s")
-        DEFAULT_CHAT_FRAME:AddMessage("  Modified: " .. modifiedDuration .. "s")
-        DEFAULT_CHAT_FRAME:AddMessage("  Bonus: +" .. (modifiedDuration - baseDuration) .. "s")
-
-        -- Test actual application
-        local applied = CleveRoids.ApplyTalentModifier(spellID, baseDuration)
-        DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00Via ApplyTalentModifier:|r " .. applied .. "s")
-    end
-
-    DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00=== End Diagnostic ===|r")
-end
-
--- EQUIPMENT MODIFIER SYSTEM
-
--- Database of equipment modifiers for debuff durations
--- Structure: [spellID] = { slot = invSlotID, items = { [itemID] = modifierFunction } }
-CleveRoids.equipmentModifiers = CleveRoids.equipmentModifiers or {}
-
--- DRUID equipment modifiers
--- Idol of Savagery (Black Morass Idol): Reduces Rip and Rake duration by 10% (multiplicative)
--- Item ID: 61699, Slot: 18 (Ranged/Relic)
-local ripRakeIdolModifier = function(duration, itemID)
-    if itemID == 61699 then
-        -- Idol of Savagery: 10% reduction (multiply by 0.9)
-        return duration * 0.9
-    end
-    return duration
-end
-
--- Rip (all ranks)
-CleveRoids.equipmentModifiers[1079] = { slot = 18, modifier = ripRakeIdolModifier }   -- Rip Rank 1
-CleveRoids.equipmentModifiers[9492] = { slot = 18, modifier = ripRakeIdolModifier }   -- Rip Rank 2
-CleveRoids.equipmentModifiers[9493] = { slot = 18, modifier = ripRakeIdolModifier }   -- Rip Rank 3
-CleveRoids.equipmentModifiers[9752] = { slot = 18, modifier = ripRakeIdolModifier }   -- Rip Rank 4
-CleveRoids.equipmentModifiers[9894] = { slot = 18, modifier = ripRakeIdolModifier }   -- Rip Rank 5
-CleveRoids.equipmentModifiers[9896] = { slot = 18, modifier = ripRakeIdolModifier }   -- Rip Rank 6
-
--- Rake (all ranks)
-CleveRoids.equipmentModifiers[1822] = { slot = 18, modifier = ripRakeIdolModifier }   -- Rake Rank 1
-CleveRoids.equipmentModifiers[1823] = { slot = 18, modifier = ripRakeIdolModifier }   -- Rake Rank 2
-CleveRoids.equipmentModifiers[1824] = { slot = 18, modifier = ripRakeIdolModifier }   -- Rake Rank 3
-CleveRoids.equipmentModifiers[9904] = { slot = 18, modifier = ripRakeIdolModifier }   -- Rake Rank 4
+-- EQUIPMENT SET PIECES ([setbonus])
 
 -- Function to get equipped item ID in a specific slot
 function CleveRoids.GetEquippedItemID(slotID)
     return CleveRoids.ClassicAPI.GetInventoryItemID("player", slotID)
-end
-
--- Apply equipment modifiers to a debuff duration
--- Parameters:
---   spellID: The spell ID
---   baseDuration: The base duration (after combo points and talents)
--- Returns: Modified duration, or baseDuration if no equipment modifier applies
-function CleveRoids.ApplyEquipmentModifier(spellID, baseDuration)
-    if not spellID or not baseDuration then
-        return baseDuration
-    end
-
-    local modifier = CleveRoids.equipmentModifiers[spellID]
-    if not modifier then
-        return baseDuration
-    end
-
-    local itemID = CleveRoids.GetEquippedItemID(modifier.slot)
-    if not itemID then
-        return baseDuration
-    end
-
-    local modifiedDuration = modifier.modifier(baseDuration, itemID)
-
-    if modifiedDuration ~= baseDuration and CleveRoids.debug then
-        local itemName = C_Item.GetItemName({ equipmentSlotIndex = modifier.slot }) or "Unknown"
-
-        DEFAULT_CHAT_FRAME:AddMessage(
-            string.format("|cffff00ff[Equipment Modifier]|r %s (ID:%d): %ds -> %ds (item: %s [%d])",
-                C_Spell.GetSpellName(spellID) or "Unknown", spellID, baseDuration, modifiedDuration,
-                itemName, itemID)
-        )
-    end
-
-    return modifiedDuration
-end
-
--- Helper function to register an equipment modifier
--- Usage: CleveRoids.RegisterEquipmentModifier(spellID, slotID, modifierFunction)
-function CleveRoids.RegisterEquipmentModifier(spellID, slotID, modifierFunc)
-    if not spellID or not slotID or not modifierFunc then
-        return false
-    end
-
-    CleveRoids.equipmentModifiers[spellID] = {
-        slot = slotID,
-        modifier = modifierFunc
-    }
-
-    return true
-end
-
--- NAMPOWER SPELL MODIFIERS INTEGRATION (v2.18+)
-
--- Try to get duration modifiers from Nampower's GetSpellModifiers
--- This function supplements (not replaces) the talent/equipment modifier system
--- Returns: Modified duration, or nil if no Nampower modifier applies
--- Parameters:
---   spellID: The spell ID
---   baseDuration: The base duration before modifiers
-function CleveRoids.ApplyNampowerDurationModifier(spellID, baseDuration)
-    if not spellID or not baseDuration then
-        return nil
-    end
-
-    -- Check if Nampower API is available with GetSpellModifiers
-    local API = CleveRoids.NampowerAPI
-    if not API or not GetSpellModifiers then
-        return nil
-    end
-
-    -- MODIFIER_DURATION = 1
-    local flat, percent, hasModifier = GetSpellModifiers(spellID, 1)
-
-    if not hasModifier or (flat == 0 and percent == 0) then
-        return nil
-    end
-
-    -- Apply flat modifier first, then percentage
-    -- Nampower returns percent as final multiplier (90 = 90% of original, not -10% change)
-    local modified = baseDuration + (flat or 0)
-    if percent and percent ~= 0 then
-        modified = modified * (percent / 100)
-    end
-
-    if CleveRoids.debug then
-        DEFAULT_CHAT_FRAME:AddMessage(
-            string.format("|cffff00ff[Nampower Duration Modifier]|r %s (ID:%d): %ds -> %ds (flat: %+d, percent: %d%%)",
-                C_Spell.GetSpellName(spellID) or "Unknown", spellID, baseDuration, modified,
-                flat or 0, percent or 0)
-        )
-    end
-
-    return modified
-end
-
--- Comprehensive duration modifier function that combines all sources
--- Logic:
---   1. If Nampower GetSpellModifiers available: use it exclusively (includes talents, buffs, equipment)
---   2. Otherwise fallback: apply manual talent modifiers, then equipment modifiers
---   3. Always apply set bonus modifiers last
--- Parameters:
---   spellID: The spell ID
---   baseDuration: The base duration (after combo points if applicable)
--- Returns: Fully modified duration
-function CleveRoids.ApplyAllDurationModifiers(spellID, baseDuration)
-    if not spellID or not baseDuration then
-        return baseDuration
-    end
-
-    local duration = baseDuration
-
-    -- Try Nampower's GetSpellModifiers first (includes dynamic modifiers from buffs/talents/equipment)
-    local nampowerDuration = CleveRoids.ApplyNampowerDurationModifier(spellID, duration)
-    if nampowerDuration then
-        -- Nampower handled all modifiers (talents, buffs, equipment effects like Idol of Savagery)
-        -- Do NOT apply equipment modifiers again - Nampower already includes them
-        duration = nampowerDuration
-    else
-        -- Fallback: use manual talent and equipment modifiers when Nampower unavailable
-        if CleveRoids.ApplyTalentModifier then
-            duration = CleveRoids.ApplyTalentModifier(spellID, duration)
-        end
-        if CleveRoids.ApplyEquipmentModifier then
-            duration = CleveRoids.ApplyEquipmentModifier(spellID, duration)
-        end
-    end
-
-    -- Always apply set bonus modifiers last
-    if CleveRoids.ApplySetBonusModifier then
-        duration = CleveRoids.ApplySetBonusModifier(spellID, duration)
-    end
-
-    return duration
-end
-
--- SET BONUS MODIFIER SYSTEM
-
--- Database of set bonus modifiers for debuff durations
--- Structure: [spellID] = { items = {itemID1, itemID2, ...}, threshold = X, modifier = function(baseDuration) }
--- When a setId is given, items can be omitted and resolved from ItemSet.dbc
-CleveRoids.setbonusModifiers = CleveRoids.setbonusModifiers or {}
-
--- Cache: setId -> { itemId1, itemId2, ... } (resolved from ItemSet.dbc or hardcoded)
-local setItemCache = {}
-
--- Resolve set items: use the ItemSet.dbc lookup when a setId is given, otherwise
--- fall back to the hardcoded list on the modifier.
-local function ResolveSetItems(modifier)
-    -- If items are already provided (hardcoded), use them directly
-    if modifier.items and table.getn(modifier.items) > 0 then
-        return modifier.items
-    end
-
-    -- DBC lookup by setId via ClassicAPI
-    if modifier.setId then
-        -- Check cache first
-        if setItemCache[modifier.setId] then
-            return setItemCache[modifier.setId]
-        end
-
-        local info = CleveRoids.ClassicAPI.GetItemSetInfo(modifier.setId)
-        local items = info and info.items
-        if items and table.getn(items) > 0 then
-            setItemCache[modifier.setId] = items
-            return items
-        end
-    end
-
-    return nil
-end
-
--- Function to count how many items from a set are currently equipped
--- Accepts either a direct items table or a modifier entry with setId for DBC lookup
-function CleveRoids.CountEquippedSetItems(items)
-    if not items or type(items) ~= "table" then return 0 end
-
-    local count = 0
-    -- Check all equipment slots (1-19)
-    for slot = 1, 19 do
-        local itemID = CleveRoids.GetEquippedItemID(slot)
-        if itemID then
-            -- Check if this item is in the set
-            for _, setItemID in ipairs(items) do
-                if itemID == setItemID then
-                    count = count + 1
-                    break
-                end
-            end
-        end
-    end
-
-    return count
 end
 
 -- Count equipped set items by set ID, comparing each equipped slot's own set
@@ -1883,87 +1390,6 @@ function CleveRoids.CountEquippedSetItemsBySetId(setId)
         end
     end
     return count
-end
-
--- Apply set bonus modifiers to a debuff duration
--- Parameters:
---   spellID: The spell ID
---   baseDuration: The base duration (after combo points, talents, and equipment)
--- Returns: Modified duration, or baseDuration if no set bonus modifier applies
-function CleveRoids.ApplySetBonusModifier(spellID, baseDuration)
-    if not spellID or not baseDuration then
-        return baseDuration
-    end
-
-    local modifier = CleveRoids.setbonusModifiers[spellID]
-    if not modifier then
-        return baseDuration
-    end
-
-    -- Count equipped pieces: use setId for fast Nampower lookup, or resolve item list
-    local equippedCount
-    if modifier.setId then
-        equippedCount = CleveRoids.CountEquippedSetItemsBySetId(modifier.setId)
-    else
-        local items = ResolveSetItems(modifier)
-        if not items then return baseDuration end
-        equippedCount = CleveRoids.CountEquippedSetItems(items)
-    end
-
-    if equippedCount < modifier.threshold then
-        return baseDuration
-    end
-
-    local modifiedDuration = modifier.modifier(baseDuration)
-
-    if modifiedDuration ~= baseDuration and CleveRoids.debug then
-        local spellName = C_Spell.GetSpellName(spellID) or "Unknown"
-        DEFAULT_CHAT_FRAME:AddMessage(
-            string.format("|cff00ffff[Set Bonus Modifier]|r %s (ID:%d): %.1fs -> %.1fs (%d/%d pieces)",
-                spellName, spellID, baseDuration, modifiedDuration,
-                equippedCount, modifier.threshold)
-        )
-    end
-
-    return modifiedDuration
-end
-
--- Helper function to register a set bonus modifier
--- Usage: CleveRoids.RegisterSetBonusModifier(spellID, itemsTable, threshold, modifierFunction)
--- With a setId: CleveRoids.RegisterSetBonusModifier(spellID, nil, threshold, modifierFunction, setId)
-function CleveRoids.RegisterSetBonusModifier(spellID, items, threshold, modifierFunc, setId)
-    if not spellID or not threshold or not modifierFunc then
-        return false
-    end
-    if not items and not setId then
-        return false
-    end
-
-    CleveRoids.setbonusModifiers[spellID] = {
-        items = items,
-        setId = setId,
-        threshold = threshold,
-        modifier = modifierFunc
-    }
-
-    return true
-end
-
--- Get info about an equipped item's set (from ItemSet.dbc via ClassicAPI)
--- Returns: setName, setId, equippedCount, totalPieces, items or nil
-function CleveRoids.GetEquippedItemSetInfo(itemId)
-    if not itemId then return nil end
-
-    local setId = CleveRoids.ClassicAPI.GetItemSetIDByID(itemId)
-    if not setId then return nil end
-
-    local info = CleveRoids.ClassicAPI.GetItemSetInfo(setId)
-    local setName = info and info.name or nil
-    local items = info and info.items or nil
-    local totalPieces = items and table.getn(items) or 0
-    local equippedCount = CleveRoids.CountEquippedSetItemsBySetId(setId)
-
-    return setName, setId, equippedCount, totalPieces, items
 end
 
 -- Count equipped pieces of a named or ID-referenced item set
@@ -1998,44 +1424,70 @@ function CleveRoids.GetEquippedSetPieceCount(nameOrId)
     return 0, nil
 end
 
--- DRUID set bonus modifiers
--- Dreamwalker Regalia (4/9): Increases Moonfire duration by 3 seconds and Insect Swarm by 2 seconds
--- setId 536 = Dreamwalker Regalia; hardcoded items as fallback when DBC lookup unavailable
-local DREAMWALKER_SET_ID = 536
-local dreamwalkerItems = { 47372, 47373, 47374, 47375, 47376, 47377, 47378, 47379, 47380 }
-local dreamwalkerMoonfireModifier = function(base) return base + 3 end
-local dreamwalkerInsectSwarmModifier = function(base) return base + 2 end
+-- BLEEDS
+-- The debuff IDs of the bleeds whose immunity is learned (the aura on the
+-- target, not the cast: Pounce applies Pounce Bleed)
+local BLEED_SPELL_IDS = {
+    -- Rip (bleed DoT from Cat Form finisher)
+    [1079] = true,   -- Rank 1
+    [9492] = true,   -- Rank 2
+    [9493] = true,   -- Rank 3
+    [9752] = true,   -- Rank 4
+    [9894] = true,   -- Rank 5
+    [9896] = true,   -- Rank 6
+    -- Rake (cast ID = debuff ID for Rake)
+    [1822] = true,   -- Rank 1
+    [1823] = true,   -- Rank 2
+    [1824] = true,   -- Rank 3
+    [9904] = true,   -- Rank 4
+    -- Pounce Bleed (triggered spell IDs, different from cast IDs)
+    [9007] = true,   -- Rank 1 (triggered by Pounce 9005)
+    [9824] = true,   -- Rank 2 (triggered by Pounce 9823)
+    [9826] = true,   -- Rank 3 (triggered by Pounce 9827)
+}
 
--- Moonfire (all ranks)
-CleveRoids.setbonusModifiers[8921] = { setId = DREAMWALKER_SET_ID, items = dreamwalkerItems, threshold = 4, modifier = dreamwalkerMoonfireModifier }   -- Moonfire Rank 1
-CleveRoids.setbonusModifiers[8924] = { setId = DREAMWALKER_SET_ID, items = dreamwalkerItems, threshold = 4, modifier = dreamwalkerMoonfireModifier }   -- Moonfire Rank 2
-CleveRoids.setbonusModifiers[8925] = { setId = DREAMWALKER_SET_ID, items = dreamwalkerItems, threshold = 4, modifier = dreamwalkerMoonfireModifier }   -- Moonfire Rank 3
-CleveRoids.setbonusModifiers[8926] = { setId = DREAMWALKER_SET_ID, items = dreamwalkerItems, threshold = 4, modifier = dreamwalkerMoonfireModifier }   -- Moonfire Rank 4
-CleveRoids.setbonusModifiers[8927] = { setId = DREAMWALKER_SET_ID, items = dreamwalkerItems, threshold = 4, modifier = dreamwalkerMoonfireModifier }   -- Moonfire Rank 5
-CleveRoids.setbonusModifiers[8928] = { setId = DREAMWALKER_SET_ID, items = dreamwalkerItems, threshold = 4, modifier = dreamwalkerMoonfireModifier }   -- Moonfire Rank 6
-CleveRoids.setbonusModifiers[8929] = { setId = DREAMWALKER_SET_ID, items = dreamwalkerItems, threshold = 4, modifier = dreamwalkerMoonfireModifier }   -- Moonfire Rank 7
-CleveRoids.setbonusModifiers[9833] = { setId = DREAMWALKER_SET_ID, items = dreamwalkerItems, threshold = 4, modifier = dreamwalkerMoonfireModifier }   -- Moonfire Rank 8
-CleveRoids.setbonusModifiers[9834] = { setId = DREAMWALKER_SET_ID, items = dreamwalkerItems, threshold = 4, modifier = dreamwalkerMoonfireModifier }   -- Moonfire Rank 9
-CleveRoids.setbonusModifiers[9835] = { setId = DREAMWALKER_SET_ID, items = dreamwalkerItems, threshold = 4, modifier = dreamwalkerMoonfireModifier }   -- Moonfire Rank 10
+-- Pounce cast ID -> the Pounce Bleed debuff it applies
+local POUNCE_BLEED_IDS = {
+    [9005] = 9007,   -- Pounce Rank 1 → Pounce Bleed Rank 1
+    [9823] = 9824,   -- Pounce Rank 2 → Pounce Bleed Rank 2
+    [9827] = 9826,   -- Pounce Rank 3 → Pounce Bleed Rank 3
+}
 
--- Insect Swarm (all ranks)
-CleveRoids.setbonusModifiers[5570] = { setId = DREAMWALKER_SET_ID, items = dreamwalkerItems, threshold = 4, modifier = dreamwalkerInsectSwarmModifier }   -- Insect Swarm Rank 1
-CleveRoids.setbonusModifiers[24974] = { setId = DREAMWALKER_SET_ID, items = dreamwalkerItems, threshold = 4, modifier = dreamwalkerInsectSwarmModifier }  -- Insect Swarm Rank 2
-CleveRoids.setbonusModifiers[24975] = { setId = DREAMWALKER_SET_ID, items = dreamwalkerItems, threshold = 4, modifier = dreamwalkerInsectSwarmModifier }  -- Insect Swarm Rank 3
-CleveRoids.setbonusModifiers[24976] = { setId = DREAMWALKER_SET_ID, items = dreamwalkerItems, threshold = 4, modifier = dreamwalkerInsectSwarmModifier }  -- Insect Swarm Rank 4
-CleveRoids.setbonusModifiers[24977] = { setId = DREAMWALKER_SET_ID, items = dreamwalkerItems, threshold = 4, modifier = dreamwalkerInsectSwarmModifier }  -- Insect Swarm Rank 5
+-- Bosses that take bleeds but often sit at the debuff cap, where a missing bleed
+-- was pushed off rather than resisted
+local MOBS_THAT_BLEED = {
+    -- Karazhan Crypts / TWoW Custom
+    ["0xF13000F1F3276A33"] = true, -- Keeper Gnarlmoon
+    ["0xF13000F1FA276A32"] = true, -- Ley-Watcher Incantagos
+    ["0xF13000EA3F276C05"] = true, -- King
+    ["0xF13000EA31279058"] = true, -- Queen
+    ["0xF13000EA43276C06"] = true, -- Bishop
+    ["0xF13000EA44279044"] = true, -- Pawn
+    ["0xF13000EA42276C07"] = true, -- Rook
+    ["0xF13000EA4D05DA44"] = true, -- Sanv Tas'dal
+    ["0xF13000EA57276C04"] = true, -- Kruul
+    ["0xF130016C95276DAF"] = true, -- Mephistroth
 
--- Haruspex's Garb (3/5): Increases Faerie Fire duration by 5 seconds
--- setId 474 = Haruspex's Garb; hardcoded items as fallback when DBC lookup unavailable
-local HARUSPEX_SET_ID = 474
-local haruspexItems = { 19613, 19955, 19840, 19839, 19838 }
-local haruspexFaerieFireModifier = function(base) return base + 5 end
-
--- Faerie Fire (non-feral, all ranks)
-CleveRoids.setbonusModifiers[770] = { setId = HARUSPEX_SET_ID, items = haruspexItems, threshold = 3, modifier = haruspexFaerieFireModifier }    -- Faerie Fire Rank 1
-CleveRoids.setbonusModifiers[778] = { setId = HARUSPEX_SET_ID, items = haruspexItems, threshold = 3, modifier = haruspexFaerieFireModifier }    -- Faerie Fire Rank 2
-CleveRoids.setbonusModifiers[9749] = { setId = HARUSPEX_SET_ID, items = haruspexItems, threshold = 3, modifier = haruspexFaerieFireModifier }   -- Faerie Fire Rank 3
-CleveRoids.setbonusModifiers[9907] = { setId = HARUSPEX_SET_ID, items = haruspexItems, threshold = 3, modifier = haruspexFaerieFireModifier }   -- Faerie Fire Rank 4
+    -- Naxxramas
+    ["0xF130003E5401591A"] = true, -- Anub'Rekhan
+    ["0xF130003E510159B0"] = true, -- Grand Widow Faerlina
+    ["0xF130003E500159A3"] = true, -- Maexxna
+    ["0xF130003EBD01598C"] = true, -- Razuvious
+    ["0xF130003EBC01599F"] = true, -- Gothik
+    ["0xF130003EBF015AB2"] = true, -- Zeliek
+    ["0xF130003EBE015AB3"] = true, -- Mograine
+    ["0xF130003EC1015AB1"] = true, -- Blaumeux
+    ["0xF130003EC0015AB0"] = true, -- Thane
+    ["0xF130003E52015824"] = true, -- Noth
+    ["0xF130003E4001588D"] = true, -- Heigan
+    ["0xF130003E8B0158A2"] = true, -- Loatheb
+    ["0xF130003E9C0158EA"] = true, -- Patchwerk
+    ["0xF130003E3B0158EF"] = true, -- Grobbulus
+    ["0xF130003E3C0158F0"] = true, -- Gluth
+    ["0xF130003E380159A0"] = true, -- Thaddius
+    ["0xF130003E75015AB4"] = true, -- Sapphiron
+    ["0xF130003E76015AED"] = true, -- Kel'Thuzad
+}
 
 -- IMMUNITY TRACKING SYSTEM
 -- Initialize SavedVariables for immunity tracking
@@ -2716,9 +2168,9 @@ end
 local function WasClientInitiatedSpell(spellID)
     -- UNIT_SPELLCAST_SENT fires only for spells initiated by the client.
     -- Proc/trigger spell IDs reach the server without their own entry.
-    local cast = CleveRoids.sentCasts and CleveRoids.sentCasts[spellID]
-    if not cast or not cast.timestamp then return false end
-    local age = GetTime() - cast.timestamp
+    local sentAt = CleveRoids.sentCasts[spellID]
+    if not sentAt then return false end
+    local age = GetTime() - sentAt
     return age >= 0 and age <= 5
 end
 
@@ -2925,7 +2377,7 @@ local function RecordImmunity(npcName, spellName, conditionalBuff, spellID)
         -- Split damage spells (Rake/Pounce/Garrote) are already handled above — their cast spell
         -- triggers IMMUNE for the initial physical hit, so "physical" is correct for those.
         -- Pure bleed spells (Rip, etc.) that reach this path need the override.
-        if school == "physical" and CleveRoids.BleedSpellIDs and CleveRoids.BleedSpellIDs[spellID] then
+        if school == "physical" and BLEED_SPELL_IDS[spellID] then
             school = "bleed"
             if CleveRoids.debug then
                 CleveRoids.Print("|cff00aaff[Bleed Override]|r " .. (spellName or tostring(spellID)) .. " immunity recorded as 'bleed' (DBC school=physical, but spell is a bleed)")
@@ -3033,7 +2485,7 @@ local auraExpectations = {}      -- [guid .. ":" .. auraID] = expectation
 
 -- The aura a spell applies: Pounce applies Pounce Bleed; most apply themselves
 local function ExpectedAuraID(spellID)
-    return CleveRoids.PounceToBleedMapping and CleveRoids.PounceToBleedMapping[spellID] or spellID
+    return POUNCE_BLEED_IDS[spellID] or spellID
 end
 
 -- The expected aura is on the unit, as a new application or a refresh (which
@@ -3081,9 +2533,9 @@ local function ResolveMissingAura(e)
         return
     end
 
-    if CleveRoids.BleedSpellIDs and CleveRoids.BleedSpellIDs[e.auraID] then
+    if BLEED_SPELL_IDS[e.auraID] then
         -- Bosses known to take bleeds hit the debuff cap often; never record them
-        if CleveRoids.MobsThatBleed and CleveRoids.MobsThatBleed[e.guid] then return end
+        if MOBS_THAT_BLEED[e.guid] then return end
         -- Recorded as bleed directly: RecordImmunity would use Rake's initial
         -- (physical) school, but it is the bleed that did not land
         CleveRoids_ImmunityData["bleed"] = CleveRoids_ImmunityData["bleed"] or {}

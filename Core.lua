@@ -4271,20 +4271,6 @@ function CleveRoids.OnUpdate(self)
     if (time - CR.lastCleanupTime) >= CR.CLEANUP_INTERVAL then
         CR.lastCleanupTime = time
 
-        -- MEMORY: Clean up old ComboPointTracking entries (older than 60 seconds)
-        -- PERFORMANCE: Use next() directly instead of pairs() to avoid iterator allocation
-        local comboTracking = CR.ComboPointTracking
-        if comboTracking then
-            local trackName, data = next(comboTracking)
-            while trackName do
-                local nextName = next(comboTracking, trackName)
-                if data.cast_time and (time - data.cast_time) > 60 then
-                    comboTracking[trackName] = nil
-                end
-                trackName, data = nextName, nextName and comboTracking[nextName]
-            end
-        end
-
         -- MEMORY: Clear spell name caches every 60 seconds (12 cleanup cycles)
         CR._spellCacheCleanupCounter = (CR._spellCacheCleanupCounter or 0) + 1
         if CR._spellCacheCleanupCounter >= 12 then
@@ -4616,8 +4602,7 @@ end
 
 -- Cast events (ClassicAPI UNIT_SPELLCAST_*). The cast state itself is read on
 -- demand from ClassicAPI (CleveRoids.GetPlayerCast, CheckSpellCast); these
--- handlers only refresh the action buttons, advance a /castsequence and capture
--- a finisher's combo points.
+-- handlers only refresh the action buttons and advance a /castsequence.
 
 -- A cast started, stopped or failed: re-test the buttons now for the player,
 -- and queue an update for another unit (its cast feeds [casting]).
@@ -4659,24 +4644,9 @@ function CleveRoids.Frame:UNIT_SPELLCAST_SUCCEEDED(unit, castGUID, spellID)
     OnCastChanged(self, unit)
 end
 
--- The player's cast left the client. Record it, and capture a finisher's combo
--- points now, before the server spends them, for the duration of its debuff.
+-- The player's cast left the client
 function CleveRoids.Frame:UNIT_SPELLCAST_SENT(unit, target, castGUID, spellID)
-    local sent = { timestamp = GetTime() }
-    CleveRoids.sentCasts[spellID] = sent
-    if (CleveRoids.IsComboScalingSpellID and CleveRoids.IsComboScalingSpellID(spellID)) or
-       (CleveRoids.FerociousBiteSpellIDs and CleveRoids.FerociousBiteSpellIDs[spellID]) then
-        local cp = CleveRoids.GetComboPoints and CleveRoids.GetComboPoints() or 0
-        if cp > 0 then
-            sent.comboPoints = cp
-        end
-        if CleveRoids.debug and cp > 0 then
-            DEFAULT_CHAT_FRAME:AddMessage(
-                string.format("|cff00ff88[UNIT_SPELLCAST_SENT]|r Captured %d CP for %s (ID:%d)",
-                    cp, C_Spell.GetSpellName(spellID) or "Unknown", spellID)
-            )
-        end
-    end
+    CleveRoids.sentCasts[spellID] = GetTime()
 end
 
 -- PLAYER_ENTER_COMBAT/PLAYER_LEAVE_COMBAT are for AUTO-ATTACK state (not actual combat)
@@ -5290,8 +5260,6 @@ SlashCmdList["CLEVEROID"] = function(msg)
         DEFAULT_CHAT_FRAME:AddMessage("/cleveroid realtime 0 or 1 - Force realtime updates")
         DEFAULT_CHAT_FRAME:AddMessage("/cleveroid refresh X - Set refresh rate (1-10 updates/sec)")
         DEFAULT_CHAT_FRAME:AddMessage("/cleveroid macrocheck 0 or 1 - Enable/disable macro syntax checker")
-        DEFAULT_CHAT_FRAME:AddMessage("/cleveroid learn <spellID> <duration> - Manually set spell duration")
-        DEFAULT_CHAT_FRAME:AddMessage("/cleveroid forget <spellID|all> - Forget learned duration(s)")
         DEFAULT_CHAT_FRAME:AddMessage("/cleveroid debug [0|1] - Toggle learning debug messages")
         DEFAULT_CHAT_FRAME:AddMessage("|cffffaa00Spell Schools:|r")
         DEFAULT_CHAT_FRAME:AddMessage('/cleveroid listschools - List all learned spell schools')
@@ -5307,15 +5275,10 @@ SlashCmdList["CLEVEROID"] = function(msg)
         DEFAULT_CHAT_FRAME:AddMessage('/cleveroid removeccimmune "<NPC>" <type> - Remove CC immunity')
         DEFAULT_CHAT_FRAME:AddMessage('/cleveroid clearccimmune [type] - Clear CC immunity data')
         DEFAULT_CHAT_FRAME:AddMessage("  CC types: stun, fear, root, silence, sleep, charm, polymorph, banish, horror, disorient, snare")
-        DEFAULT_CHAT_FRAME:AddMessage("|cffffaa00Combo Point Tracking:|r")
-        DEFAULT_CHAT_FRAME:AddMessage('/cleveroid combotrack - Show combo point tracking info')
-        DEFAULT_CHAT_FRAME:AddMessage('/cleveroid comboclear - Clear combo tracking data')
-        DEFAULT_CHAT_FRAME:AddMessage('/cleveroid combolearn - Show learned combo durations (per CP)')
-        DEFAULT_CHAT_FRAME:AddMessage("|cffffaa00Talent Modifiers:|r")
+        DEFAULT_CHAT_FRAME:AddMessage("|cffffaa00Talents:|r")
         DEFAULT_CHAT_FRAME:AddMessage('/cleveroid talenttabs - Show talent tab IDs for your class')
         DEFAULT_CHAT_FRAME:AddMessage('/cleveroid listtab <tab> - List all talents in a tab with their IDs')
         DEFAULT_CHAT_FRAME:AddMessage('/cleveroid talents - Show current talent ranks')
-        DEFAULT_CHAT_FRAME:AddMessage('/cleveroid testtalent <spellID> - Test talent modifier for a spell')
         DEFAULT_CHAT_FRAME:AddMessage("|cffffaa00Debuff Tracking Debug:|r")
         DEFAULT_CHAT_FRAME:AddMessage('/cleveroid debuffdebug [spell] - Debug debuff tracking on target')
         DEFAULT_CHAT_FRAME:AddMessage("|cffffaa00pfUI Tank Integration:|r")
@@ -5371,45 +5334,6 @@ SlashCmdList["CLEVEROID"] = function(msg)
         else
             CleveRoids.Print("Usage: /cleveroid macrocheck 0 or 1 - Enable/disable macro syntax checker (Default: 1)")
             CleveRoids.Print("Current macrocheck = " .. tostring(CleveRoidMacros.macrocheck))
-        end
-        return
-    end
-
-    -- learn (manual set duration)
-    if cmd == "learn" then
-        local spellID = tonumber(val)
-        local duration = tonumber(val2)
-        if spellID and duration then
-            local playerGUID = CleveRoids.GetGUID("player")
-            CleveRoids_LearnedDurations = CleveRoids_LearnedDurations or {}
-            CleveRoids_LearnedDurations[spellID] = CleveRoids_LearnedDurations[spellID] or {}
-            CleveRoids_LearnedDurations[spellID][playerGUID] = duration
-            local spellName = C_Spell.GetSpellName(spellID) or "Unknown"
-            CleveRoids.Print("Set " .. spellName .. " (ID:" .. spellID .. ") duration to " .. duration .. "s")
-        else
-            CleveRoids.Print("Usage: /cleveroid learn <spellID> <duration> - Manually set spell duration")
-            CleveRoids.Print("Example: /cleveroid learn 11597 30")
-        end
-        return
-    end
-
-    -- forget (delete learned duration)
-    if cmd == "forget" or cmd == "unlearn" then
-        if val == "all" then
-            CleveRoids_LearnedDurations = {}
-            CleveRoids.Print("Forgot all learned spell durations")
-        else
-            local spellID = tonumber(val)
-            if spellID and CleveRoids_LearnedDurations and CleveRoids_LearnedDurations[spellID] then
-                local spellName = C_Spell.GetSpellName(spellID) or "Unknown"
-                CleveRoids_LearnedDurations[spellID] = nil
-                CleveRoids.Print("Forgot " .. spellName .. " (ID:" .. spellID .. ") duration")
-            elseif spellID then
-                CleveRoids.Print("No learned duration for spell ID " .. spellID)
-            else
-                CleveRoids.Print("Usage: /cleveroid forget <spellID> - Forget learned duration")
-                CleveRoids.Print("       /cleveroid forget all - Forget all learned durations")
-            end
         end
         return
     end
@@ -5609,39 +5533,6 @@ SlashCmdList["CLEVEROID"] = function(msg)
         return
     end
 
-    -- combotrack (show combo point tracking info)
-    if cmd == "combotrack" or cmd == "combo" then
-        CleveRoids.ShowComboTracking()
-        return
-    end
-
-    -- comboclear (clear combo tracking data)
-    if cmd == "comboclear" then
-        CleveRoids.ComboPointTracking = {}
-        CleveRoids.ComboPointTracking.byID = {}
-        CleveRoids.Print("Combo point tracking data cleared")
-        return
-    end
-
-    -- combolearn (show learned combo durations)
-    if cmd == "combolearn" or cmd == "combodurations" then
-        CleveRoids.Print("=== Learned Combo Durations ===")
-        if not CleveRoids_ComboDurations or not next(CleveRoids_ComboDurations) then
-            CleveRoids.Print("No learned combo durations yet. Cast finishers and let them expire!")
-        else
-            for spellID, cpData in pairs(CleveRoids_ComboDurations) do
-                local spellName = C_Spell.GetSpellName(spellID) or ("Spell " .. spellID)
-                CleveRoids.Print(spellName .. " (ID:" .. spellID .. "):")
-                for cp = 1, 5 do
-                    if cpData[cp] then
-                        CleveRoids.Print("  " .. cp .. " CP = " .. cpData[cp] .. "s")
-                    end
-                end
-            end
-        end
-        return
-    end
-
     -- talenttabs (show talent tab IDs)
     if cmd == "talenttabs" or cmd == "tabs" then
         CleveRoids.Print("=== Talent Tabs ===")
@@ -5699,59 +5590,6 @@ SlashCmdList["CLEVEROID"] = function(msg)
             CleveRoids.Print("No talents learned yet!")
         else
             CleveRoids.Print("Total: " .. count .. " talents")
-        end
-        return
-    end
-
-    -- testtalent (test talent modifier for a spell)
-    if cmd == "testtalent" or cmd == "talenttest" then
-        local spellID = tonumber(val)
-        if not spellID then
-            CleveRoids.Print("Usage: /cleveroid testtalent <spellID>")
-            CleveRoids.Print("Example: /cleveroid testtalent 1943  (Rupture Rank 1)")
-            return
-        end
-
-        local spellName = C_Spell.GetSpellName(spellID) or ("Spell " .. spellID)
-        local modifier = CleveRoids.talentModifiers and CleveRoids.talentModifiers[spellID]
-
-        if not modifier then
-            CleveRoids.Print(spellName .. " (ID:" .. spellID .. ") has no talent modifier configured")
-            return
-        end
-
-        -- Get talent rank using position-based or name-based lookup
-        local talentRank = 0
-        local maxRank = 3
-        local talentName = modifier.talent or ("Tab " .. tostring(modifier.tab) .. " ID " .. tostring(modifier.id))
-
-        -- Position-based lookup (preferred)
-        if modifier.tab and modifier.id then
-            local _, name, _, _, rank, max = GetTalentInfo(modifier.tab, modifier.id)
-            talentRank = tonumber(rank) or 0
-            maxRank = tonumber(max) or 3
-            if name then
-                talentName = name
-            end
-        end
-
-        -- Name-based fallback
-        if talentRank == 0 and modifier.talent and CleveRoids.GetTalentRank then
-            talentRank = CleveRoids.GetTalentRank(modifier.talent)
-        end
-
-        CleveRoids.Print("=== Talent Modifier Test ===")
-        CleveRoids.Print("Spell: " .. spellName .. " (ID:" .. spellID .. ")")
-        CleveRoids.Print("Talent: " .. talentName)
-        CleveRoids.Print("Your Rank: " .. talentRank .. "/" .. maxRank)
-
-        if talentRank == 0 then
-            CleveRoids.Print("|cffff0000You don't have this talent!|r")
-        else
-            -- Test with a base duration (use 10s as example)
-            local baseDur = 10
-            local modDur = modifier.modifier(baseDur, talentRank)
-            CleveRoids.Print("Example: 10s base -> " .. modDur .. "s modified (+" .. (modDur - baseDur) .. "s)")
         end
         return
     end
@@ -6038,8 +5876,6 @@ SlashCmdList["CLEVEROID"] = function(msg)
     DEFAULT_CHAT_FRAME:AddMessage("/cleveroid - Show current settings")
     DEFAULT_CHAT_FRAME:AddMessage("/cleveroid realtime 0 or 1 - Force realtime updates (Default: 0. 1 = on, increases CPU load)")
     DEFAULT_CHAT_FRAME:AddMessage("/cleveroid refresh X - Set refresh rate (1 to 10 updates per second. Default: 5)")
-    DEFAULT_CHAT_FRAME:AddMessage("/cleveroid learn <spellID> <duration> - Manually set spell duration")
-    DEFAULT_CHAT_FRAME:AddMessage("/cleveroid forget <spellID|all> - Forget learned duration(s)")
     DEFAULT_CHAT_FRAME:AddMessage("/cleveroid debug [0|1] - Toggle learning debug messages")
     DEFAULT_CHAT_FRAME:AddMessage("|cffffaa00Immunity Tracking:|r")
     DEFAULT_CHAT_FRAME:AddMessage('/cleveroid listimmune [school] - List immunity data')
@@ -6051,10 +5887,6 @@ SlashCmdList["CLEVEROID"] = function(msg)
     DEFAULT_CHAT_FRAME:AddMessage('/cleveroid addccimmune "<NPC>" <type> [buff] - Add CC immunity')
     DEFAULT_CHAT_FRAME:AddMessage('/cleveroid removeccimmune "<NPC>" <type> - Remove CC immunity')
     DEFAULT_CHAT_FRAME:AddMessage('/cleveroid clearccimmune [type] - Clear CC immunity data')
-    DEFAULT_CHAT_FRAME:AddMessage("|cffffaa00Combo Point Tracking:|r")
-    DEFAULT_CHAT_FRAME:AddMessage('/cleveroid combotrack - Show combo point tracking info')
-    DEFAULT_CHAT_FRAME:AddMessage('/cleveroid comboclear - Clear combo tracking data')
-    DEFAULT_CHAT_FRAME:AddMessage('/cleveroid combolearn - Show learned combo durations (per CP)')
 end
 
 SLASH_CLEAREQUIPQUEUE1 = "/clearequipqueue"

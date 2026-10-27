@@ -519,7 +519,6 @@ local COMMANDS_NO_ACTION_NEEDED = {
     ["/quickheal"] = true,
     ["/qh"] = true,
     ["/rl"] = true,
-    ["/combotrack"] = true,
     ["/cleveroid"] = true,
     ["/cleveroidmacros"] = true,
     ["/print"] = true,

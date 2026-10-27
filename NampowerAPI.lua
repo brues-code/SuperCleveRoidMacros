@@ -8,7 +8,6 @@
     - GetSpellRec / GetSpellRecField - Spell record data from client DB
     - GetItemStats / GetItemStatsField - Item stats from client DB
     - GetUnitData / GetUnitField - Low-level unit field access
-    - GetSpellModifiers - Spell modifier calculations (talents, buffs, etc.)
 
     Inventory/Equipment Functions (v2.18+):
     - FindPlayerItemSlot - Fast item location lookup
@@ -287,7 +286,6 @@ API.VERSION_REQUIREMENTS = {
     ["GetItemStatsField"]       = { 2, 8, 0, "GetItemStatsField" },
     ["GetUnitData"]             = { 2, 8, 0, "GetUnitData" },
     ["GetUnitField"]            = { 2, 8, 0, "GetUnitField" },
-    ["GetSpellModifiers"]       = { 2, 8, 0, "GetSpellModifiers" },
 
     -- v2.11+ - GetNampowerVersion itself (meta-feature)
     ["GetNampowerVersion"]      = { 2, 11, 0, "GetNampowerVersion" },
@@ -493,7 +491,6 @@ local function InitializeFeatures()
     f.hasGetItemStatsField = API.HasFeature("GetItemStatsField")
     f.hasGetUnitData = API.HasFeature("GetUnitData")
     f.hasGetUnitField = API.HasFeature("GetUnitField")
-    f.hasGetSpellModifiers = API.HasFeature("GetSpellModifiers")
 
     -- v2.11+ GetNampowerVersion
     f.hasGetNampowerVersion = API.HasFeature("GetNampowerVersion")
@@ -2325,99 +2322,6 @@ API.RESISTANCE_INDEX = {
     SHADOW = 6,
     ARCANE = 7,
 }
-
---------------------------------------------------------------------------------
--- SPELL MODIFIERS API (GetSpellModifiers)
---------------------------------------------------------------------------------
-
--- Modifier type constants
-API.MODIFIER_DAMAGE = 0
-API.MODIFIER_DURATION = 1
-API.MODIFIER_THREAT = 2
-API.MODIFIER_ATTACK_POWER = 3
-API.MODIFIER_CHARGES = 4
-API.MODIFIER_RANGE = 5
-API.MODIFIER_RADIUS = 6
-API.MODIFIER_CRITICAL_CHANCE = 7
-API.MODIFIER_ALL_EFFECTS = 8
-API.MODIFIER_NOT_LOSE_CASTING_TIME = 9
-API.MODIFIER_CASTING_TIME = 10
-API.MODIFIER_COOLDOWN = 11
-API.MODIFIER_SPEED = 12
-API.MODIFIER_COST = 14
-API.MODIFIER_CRIT_DAMAGE_BONUS = 15
-API.MODIFIER_RESIST_MISS_CHANCE = 16
-API.MODIFIER_JUMP_TARGETS = 17
-API.MODIFIER_CHANCE_OF_SUCCESS = 18
-API.MODIFIER_ACTIVATION_TIME = 19
-API.MODIFIER_EFFECT_PAST_FIRST = 20
-API.MODIFIER_CASTING_TIME_OLD = 21
-API.MODIFIER_DOT = 22
-API.MODIFIER_HASTE = 23
-API.MODIFIER_SPELL_BONUS_DAMAGE = 24
-API.MODIFIER_MULTIPLE_VALUE = 27
-API.MODIFIER_RESIST_DISPEL_CHANCE = 28
-
--- Get spell modifiers
--- Requires v2.8+ for GetSpellModifiers
--- Returns: flatMod, percentMod, hasModifier
-function API.GetModifiers(spellId, modifierType)
-    if not API.features.hasGetSpellModifiers or not GetSpellModifiers then
-        return 0, 0, false
-    end
-
-    if not spellId or spellId == 0 then
-        return 0, 0, false
-    end
-
-    local flat, percent, ret = GetSpellModifiers(spellId, modifierType)
-    return flat or 0, percent or 0, ret and ret ~= 0
-end
-
--- Get duration modifier for a spell (useful for debuff tracking)
--- Returns modified duration given base duration
-function API.GetModifiedDuration(spellId, baseDuration)
-    if not baseDuration then return nil end
-
-    local flat, percent, hasModifier = API.GetModifiers(spellId, API.MODIFIER_DURATION)
-
-    if not hasModifier then
-        return baseDuration
-    end
-
-    -- Apply flat modifier first, then percentage
-    -- Nampower returns percent as final multiplier (90 = 90% of original, not -10% change)
-    local modified = baseDuration + flat
-    if percent ~= 0 then
-        modified = modified * (percent / 100)
-    end
-
-    return modified
-end
-
--- Get damage modifier for a spell
-function API.GetDamageModifier(spellId)
-    local flat, percent = API.GetModifiers(spellId, API.MODIFIER_DAMAGE)
-    return flat, percent
-end
-
--- Get cooldown modifier for a spell
-function API.GetCooldownModifier(spellId)
-    local flat, percent = API.GetModifiers(spellId, API.MODIFIER_COOLDOWN)
-    return flat, percent
-end
-
--- Get cast time modifier for a spell
-function API.GetCastTimeModifier(spellId)
-    local flat, percent = API.GetModifiers(spellId, API.MODIFIER_CASTING_TIME)
-    return flat, percent
-end
-
--- Get cost modifier for a spell
-function API.GetCostModifier(spellId)
-    local flat, percent = API.GetModifiers(spellId, API.MODIFIER_COST)
-    return flat, percent
-end
 
 --------------------------------------------------------------------------------
 -- ENHANCED SPELL LOOKUP (using new "spellId:number" and name syntax)

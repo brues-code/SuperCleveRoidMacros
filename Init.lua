@@ -69,14 +69,9 @@ CleveRoids.currentSequence = nil
 CleveRoids.bookTypes = {BOOKTYPE_SPELL, BOOKTYPE_PET}
 CleveRoids.unknownTexture = "Interface\\Icons\\INV_Misc_QuestionMark"
 
--- Combo point tracking (initialized early for /cast hook)
-CleveRoids.lastComboPoints = 0
--- The player's casts as they leave the client (UNIT_SPELLCAST_SENT), so a spell
--- the player cast can be told from a proc, with a finisher's combo points
--- captured before the server spends them.
--- Format: [spellId] = { timestamp = GetTime(), comboPoints = n or nil }
+-- When each spell last left the client (UNIT_SPELLCAST_SENT), so a spell the
+-- player cast can be told from a proc. Format: [spellId] = GetTime()
 CleveRoids.sentCasts = {}
-CleveRoids.lastComboPointsTime = 0
 
 -- Resist tracking state
 -- Structure: { resistType = "full"|"partial", targetGUID = guid }
@@ -359,7 +354,6 @@ initFrame:SetScript("OnEvent", function()
             CleveRoids.hasGetSpellRec = API.features.hasGetSpellRec
             CleveRoids.hasGetItemStats = API.features.hasGetItemStats
             CleveRoids.hasGetUnitData = API.features.hasGetUnitData
-            CleveRoids.hasGetSpellModifiers = API.features.hasGetSpellModifiers
             CleveRoids.hasEnhancedSpellFunctions = API.features.hasEnhancedSpellFunctions
             -- v2.37+: CastSpellByName supports unit token strings as 2nd param
             CleveRoids.hasCastSpellByNameUnitToken = API.features.hasCastSpellByNameUnitToken
