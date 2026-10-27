@@ -247,21 +247,21 @@ end
 -- Loss Of Control
 --------------------------------------------------------------------------------
 
--- Locked spell-school mask from an active SCHOOL_INTERRUPT (Counterspell / Kick /
--- Pummel / Earth Shock lockout) on the player, or 0 when not kicked. Read from
--- C_LossOfControl, which synthesizes the lockout from the server's own
--- SMSG_SPELL_COOLDOWN packet -- a state no debuff scan can see. Also returns the
--- seconds remaining (nil if ClassicAPI didn't observe the applying cast).
--- Player-only (vanilla LoC is local-only).
-function API.GetSchoolLockout()
-    local n = C_LossOfControl.GetActiveLossOfControlDataCount() or 0
-    for i = 1, n do
-        local d = C_LossOfControl.GetActiveLossOfControlData(i)
-        if d and d.locType == "SCHOOL_INTERRUPT" then
-            return d.lockoutSchool or 0, d.timeRemaining
-        end
-    end
-    return 0, nil
+-- Locked spell-school mask for the player's active SCHOOL_INTERRUPT lockouts
+-- (Counterspell / Kick / Pummel / Earth Shock), plus the seconds until they all
+-- clear -- 0 and nil when nothing is kicked. Read from C_LossOfControl, which
+-- synthesizes the lockout from the server's own SMSG_SPELL_COOLDOWN packet -- a
+-- state no debuff scan can see. Player-only (vanilla LoC is local-only).
+--
+-- The mask ORs every locked school, since two can be locked at once (one per
+-- cooldown packet). schoolMask narrows it to those schools, which is how one
+-- school's own remaining time is read rather than the aggregate.
+--
+-- Goes straight at the lockout state: no table per call and none of the debuff
+-- scan C_LossOfControl.GetActiveLossOfControlData pays for, so [locked] costs
+-- nothing to re-evaluate every frame.
+function API.GetSchoolLockout(schoolMask)
+    return C_LossOfControl.GetSchoolLockout(schoolMask)
 end
 
 --------------------------------------------------------------------------------

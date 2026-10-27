@@ -205,6 +205,7 @@ requirementCheckFrame:SetScript("OnEvent", function()
     -- function exists but a held button keeps its value, so [button:N] reads the
     -- button you are turning the camera with -- wrong quietly, which is the worse
     -- failure and why the floor moved rather than the conditional being gated.
+    -- v1.15.9 added C_LossOfControl.GetSchoolLockout, which [locked] calls.
     -- v1.15.10 added PLAYER_SWING, the only source for the swing-timer conditionals.
     local hasClassicAPIMin = hasClassicAPI and CleveRoids.ClassicAPI.HasMinimumVersion(1, 15, 10)
 

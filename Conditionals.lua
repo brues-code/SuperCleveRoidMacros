@@ -4803,31 +4803,66 @@ function CleveRoids.GetSpellMechanic(spellID)
     return CleveRoids.ClassicAPI.GetSpellMechanicByID(spellID) or 0
 end
 
--- School name -> spell-school mask bit (WoW SPELL_SCHOOL_MASK_*).
+-- School name -> spell-school mask bit (WoW SPELL_SCHOOL_MASK_*). Same 1 <<
+-- schoolIndex shape C_LossOfControl uses, so these double as its filter mask.
 local LOCKOUT_SCHOOL_MASK = {
     physical = 1, holy = 2, fire = 4, nature = 8, frost = 16, shadow = 32, arcane = 64,
 }
 
--- Is `bit` set in `mask`? Shift right past `bit`, then test the low bit with
--- math.mod (the % operator is 5.1-only; 1.12 is Lua 5.0, but math.mod exists).
-local function SchoolMaskHasBit(mask, bit)
-    if not mask or mask < bit then return false end
-    return math.mod(math.floor(mask / bit), 2) == 1
-end
-
--- [locked] / [locked:school] -- player is under a spell-school interrupt lockout
--- (Counterspell / Kick / Pummel / Earth Shock), read from C_LossOfControl. This
--- is the lockout no debuff scan can detect; full silences stay on [mycc:silence].
--- school nil/true = any school kicked; a name matches that school's mask bit.
-function CleveRoids.ValidateSchoolLocked(school)
-    local mask = CleveRoids.ClassicAPI.GetSchoolLockout()
-    if not mask or mask == 0 then return false end
-    if school == nil or school == true or school == "" then
+-- Run an entry's comparison(s) against a value. Several are ANDed, the same way
+-- [debuff:Rake>2&<8] reads. No comparison at all passes. The operator comes
+-- from a `[>~=<]+` match, which can capture junk like `><`, so an unknown one
+-- fails the check rather than indexing nil and throwing out of the macro.
+local function CompareAll(entry, value)
+    if entry.comparisons then
+        for _, cmp in ipairs(entry.comparisons) do
+            local compare = CleveRoids.comparators[cmp.operator]
+            if not compare or not compare(value, cmp.amount) then
+                return false
+            end
+        end
         return true
     end
-    local bit = LOCKOUT_SCHOOL_MASK[string.lower(school)]
-    if not bit then return false end
-    return SchoolMaskHasBit(mask, bit)
+    if entry.operator and entry.amount then
+        local compare = CleveRoids.comparators[entry.operator]
+        return compare ~= nil and compare(value, entry.amount)
+    end
+    return true
+end
+
+-- [locked] / [locked:school] / [locked:school<seconds] -- player is under a
+-- spell-school interrupt lockout (Counterspell / Kick / Pummel / Earth Shock),
+-- read from C_LossOfControl. This is the lockout no debuff scan can detect;
+-- full silences stay on [mycc:silence].
+--
+-- `value` is nil/true for bare [locked], a school name, or a parsed comparison
+-- entry carrying an optional name. A named school filters the read, so the
+-- seconds compared are that school's own; unnamed, they run until every locked
+-- school clears. Seconds are read live rather than cached, because re-locking an
+-- already-locked school extends it without firing LOSS_OF_CONTROL_UPDATE.
+function CleveRoids.ValidateSchoolLocked(value, action)
+    local school, entry
+    if type(value) == "table" then
+        entry = value
+        school = value.name
+        -- An omitted name is filled in with the action by the parser, so
+        -- [locked:<0.5] arrives naming the spell itself -- that form is "any
+        -- school", not a school called Fireball.
+        if school == action then school = nil end
+    elseif type(value) == "string" then
+        school = value
+    end
+
+    local filter
+    if school and school ~= "" then
+        filter = LOCKOUT_SCHOOL_MASK[string.lower(school)]
+        if not filter then return false end
+    end
+
+    local mask, remaining = CleveRoids.ClassicAPI.GetSchoolLockout(filter)
+    if not mask or mask == 0 then return false end
+    if not entry then return true end
+    return CompareAll(entry, remaining)
 end
 
 -- Validate CC on a unit (target, focus, player, etc.)
@@ -8146,14 +8181,16 @@ CleveRoids.Keywords = {
     -- lockout (Counterspell/Kick/Pummel/Earth Shock), via ClassicAPI
     -- C_LossOfControl -- the server lockout no debuff scan can see. Bare = any
     -- school kicked; [locked:frost] = that school; [locked:fire/frost] = either.
-    -- Full silences are separate ([mycc:silence]). Player-only.
+    -- Seconds left compare too: [locked:frost<0.5] for that school, [locked:<0.5]
+    -- until every locked school clears -- both for starting a cast into the end
+    -- of a lockout. Full silences are separate ([mycc:silence]). Player-only.
     locked = function(conditionals)
         local v = conditionals.locked
         if v == nil or v == true or (type(v) == "table" and table.getn(v) == 0) then
             return CleveRoids.ValidateSchoolLocked(nil)
         end
         return Or(v, function(school)
-            return CleveRoids.ValidateSchoolLocked(school)
+            return CleveRoids.ValidateSchoolLocked(school, conditionals.action)
         end)
     end,
 
@@ -8165,7 +8202,7 @@ CleveRoids.Keywords = {
             return not CleveRoids.ValidateSchoolLocked(nil)
         end
         return NegatedMulti(v, function(school)
-            return not CleveRoids.ValidateSchoolLocked(school)
+            return not CleveRoids.ValidateSchoolLocked(school, conditionals.action)
         end, conditionals, "nolocked")
     end,
 
