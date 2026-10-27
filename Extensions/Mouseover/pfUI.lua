@@ -209,7 +209,7 @@ function Extension.RegisterFocusScripts()
   local onLeaveFunc = frame:GetScript("OnLeave")
 
   frame:SetScript("OnEnter", function()
-    PfSet(this) -- ResolvePfUnit handles focus emulation
+    PfSet(this)
     if onEnterFunc then onEnterFunc(this) end
   end)
 

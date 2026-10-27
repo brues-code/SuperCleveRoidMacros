@@ -195,26 +195,13 @@ do
 
   local function apply(unit)
     if _G.SetMouseoverUnit then
-      local resolved = unit
-      -- "focus" is not a valid unit token in 1.12.1; resolve to real token
-      if unit == "focus" then
-        if pfUI and pfUI.uf and pfUI.uf.focus and pfUI.uf.focus.label and pfUI.uf.focus.id
-           and UnitExists(pfUI.uf.focus.label .. pfUI.uf.focus.id) then
-          resolved = pfUI.uf.focus.label .. pfUI.uf.focus.id
-        else
-          -- No resolvable unit token; use fallback path
-          CleveRoids.mouseoverUnit = unit
-          if CleveRoids.QueueActionUpdate then CleveRoids.QueueActionUpdate() end
-          return
-        end
-      end
       -- Available via SuperWoW or Nampower v2.37+
       -- Set flag so UPDATE_MOUSEOVER_UNIT handler knows we triggered this
       CleveRoids.__mo.selfTriggered = true
       -- Use empty string instead of nil to properly clear mouseover.
       -- SetMouseoverUnit(nil) doesn't properly clear the game's internal state,
       -- causing UnitIsPlayer("mouseover") to return stale data (TurtleRP bug).
-      _G.SetMouseoverUnit(resolved or "")
+      _G.SetMouseoverUnit(unit or "")
     else
       CleveRoids.mouseoverUnit = unit
     end

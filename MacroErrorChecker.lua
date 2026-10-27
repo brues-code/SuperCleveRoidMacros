@@ -47,7 +47,7 @@ end
 local VALID_COMMANDS = {
     -- Core commands NOT registered via SlashCmdList (so not auto-discoverable):
     -- Blizzard builtins (/cast, /target, /run, ...) handled by FrameXML/C, and
-    -- /focus (a pfUI command, only discoverable when pfUI is loaded).
+    -- /focus (a ClassicAPI engine command).
     ["/cast"] = true,
     ["/focus"] = true,
     ["/print"] = true,

@@ -4196,19 +4196,6 @@ local function ParseCountModeFilter(name)
     return nil, nil
 end
 
--- Resolve virtual unit tokens (focus, focustarget) to real WoW 1.12 unit tokens.
--- pfUI emulates focus via label+id (e.g. "party2").
--- Returns resolved token or nil if the unit cannot be resolved.
-local function ResolveFocusUnit(unit)
-    if unit == "focus" then
-        return CleveRoids.GetFocusUnitId()
-    elseif unit == "focustarget" then
-        local fid = CleveRoids.GetFocusUnitId()
-        return fid and (fid .. "target") or nil
-    end
-    return unit
-end
-
 -- Builds a Keyword validator for a specific power slot (Enum.PowerType) read as a
 -- percentage, mirroring [power]/[mypower]. condKey is the conditional name;
 -- unitDefault is "player" (self) or "target" (@unit-overridable); powerType is the
@@ -4549,8 +4536,6 @@ CleveRoids.Keywords = {
         if type(conditionals.combat) == "table" then
             -- If so, run the check on the provided unit(s).
             return Multi(conditionals.combat, function(unit)
-                unit = ResolveFocusUnit(unit)
-                if not unit then return false end
                 return UnitExists(unit) and UnitAffectingCombat(unit)
             end, conditionals, "combat")
         else
@@ -4570,8 +4555,7 @@ CleveRoids.Keywords = {
         if type(conditionals.nocombat) == "table" then
             -- If so, run the check on the provided unit(s).
             return NegatedMulti(conditionals.nocombat, function(unit)
-                unit = ResolveFocusUnit(unit)
-                if not unit or not UnitExists(unit) then
+                if not UnitExists(unit) then
                     return true
                 end
                 return not UnitAffectingCombat(unit)
@@ -5769,8 +5753,6 @@ CleveRoids.Keywords = {
         if conditionals.istank and type(conditionals.istank) == "table" then
             -- Check specific unit: [istank:focus]
             return Or(conditionals.istank, function(unit)
-                unit = ResolveFocusUnit(unit)
-                if not unit then return false end
                 local name = UnitName(unit)
                 return CleveRoids.IsPlayerTank(name)
             end)
@@ -5786,8 +5768,6 @@ CleveRoids.Keywords = {
         if conditionals.noistank and type(conditionals.noistank) == "table" then
             -- Check specific unit: [noistank:focus]
             return NegatedMulti(conditionals.noistank, function(unit)
-                unit = ResolveFocusUnit(unit)
-                if not unit then return true end
                 return not CleveRoids.IsPlayerTank(UnitName(unit))
             end, conditionals, "noistank")
         end
@@ -6161,14 +6141,13 @@ CleveRoids.Keywords = {
         end, conditionals, "nopethappiness")
     end,
 
-    -- [focus] / [nofocus] - whether a focus is set. Covers pfUI's emulated focus
-    -- and ClassicAPI's native focus token (set via /focus or the FOCUSTARGET keybind).
+    -- [focus] / [nofocus] - whether a focus is set (/focus or the FOCUSTARGET keybind).
     focus = function(conditionals)
-        return CleveRoids.GetFocusUnitId() ~= nil
+        return UnitExists("focus")
     end,
 
     nofocus = function(conditionals)
-        return CleveRoids.GetFocusUnitId() == nil
+        return not UnitExists("focus")
     end,
 
     -- [swimming] - Player is currently swimming (Nampower v2.36+)
@@ -7879,8 +7858,6 @@ CleveRoids.Keywords = {
     ic = function(conditionals)
         if type(conditionals.ic) == "table" then
             return Multi(conditionals.ic, function(unit)
-                unit = ResolveFocusUnit(unit)
-                if not unit then return false end
                 return UnitExists(unit) and UnitAffectingCombat(unit)
             end, conditionals, "ic")
         else
@@ -7892,8 +7869,7 @@ CleveRoids.Keywords = {
     ooc = function(conditionals)
         if type(conditionals.ooc) == "table" then
             return NegatedMulti(conditionals.ooc, function(unit)
-                unit = ResolveFocusUnit(unit)
-                if not unit or not UnitExists(unit) then return true end
+                if not UnitExists(unit) then return true end
                 return not UnitAffectingCombat(unit)
             end, conditionals, "ooc")
         else

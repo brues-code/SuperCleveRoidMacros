@@ -129,8 +129,9 @@ API references are line numbers into `C:\Git\ClassicAPI\docs\API.md`.
 
 ### 7. Native `focus` token + `FocusUnit`/`ClearFocus` + `PLAYER_FOCUS_CHANGED`
 - **API:** `API.md:2624+`.
-- **Replaces today:** custom/pfUI focus resolution (`Conditionals.lua:5799`, `:3148`).
-  Gives engine-backed `@focus` for non-pfUI users.
+- **Done.** `focus` / `focustarget` go to the API as is; the pfUI focus
+  emulation and its `/focus` hook are gone. A clause on an unset focus fails
+  quietly via `UnitExists("focus")`.
 
 ---
 

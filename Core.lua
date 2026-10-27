@@ -902,12 +902,6 @@ function CleveRoids.TestForActiveAction(actions)
 			if IsSpellInRange then
                 local conds = actions.active.activeConditionals or actions.active.conditionals
                 local unit = conds and conds.target or "target"
-				if unit == "focus" then
-					unit = CleveRoids.GetFocusUnitId()
-				elseif unit == "focustarget" then
-					local focusUnit = CleveRoids.GetFocusUnitId()
-					unit = focusUnit and (focusUnit .. "target") or nil
-				end
 				local resolvedMark = CleveRoids.ResolveRaidMarkUnit(unit)
 				if resolvedMark then unit = resolvedMark end
 
@@ -1653,15 +1647,6 @@ function CleveRoids.FixEmptyTargetSetTarget(conditionals, name, hook)
     return false
 end
 
--- Returns the resolved token, or nil when no focus is set so @focus clauses
--- silently fall through to the next macro alternative (no warning spam).
-function CleveRoids.GetFocusUnitId()
-    if UnitExists("focus") then
-        return "focus"
-    end
-    return nil
-end
-
 function CleveRoids.GetMacroNameFromAction(text)
     if string.sub(text, 1, 1) == "{" and string.sub(text, -1) == "}" then
         local name
@@ -2335,12 +2320,11 @@ function CleveRoids.TestAction(cmd, args)
         return
     end
 
-    -- ClassicAPI's native focus token. No focus set: the clause fails quietly,
-    -- exactly as the cast path does, so display and execution agree.
-    if conditionals.target == "focus" or conditionals.target == "focustarget" then
-        local focusUnitId = CleveRoids.GetFocusUnitId()
-        if not focusUnitId then return end
-        conditionals.target = focusUnitId .. (conditionals.target == "focustarget" and "target" or "")
+    -- No focus set: the clause fails quietly, exactly as the cast path does,
+    -- so display and execution agree.
+    if (conditionals.target == "focus" or conditionals.target == "focustarget")
+       and not UnitExists("focus") then
+        return
     end
 
     if conditionals.target == "mouseover" then
@@ -2471,17 +2455,12 @@ function CleveRoids.DoWithConditionals(msg, hook, fixEmptyTargetFunc, targetBefo
 
     -- CleveRoids.SetHelp(conditionals)
 
-    -- ClassicAPI's native focus token. No focus set: fail the clause quietly so
-    -- `[@focus,...] X; X` and `[@focus][] X` fall through like @mouseover does,
-    -- instead of announcing "Invalid target" on the way past.
-    if conditionals.target == "focus" or conditionals.target == "focustarget" then
-        local focusUnitId = CleveRoids.GetFocusUnitId()
-        if not focusUnitId then
-            conditionals.target = origTarget
-            return false
-        end
-        conditionals.target = focusUnitId .. (conditionals.target == "focustarget" and "target" or "")
-        needRetarget = false
+    -- No focus set: fail the clause quietly so `[@focus,...] X; X` and
+    -- `[@focus][] X` fall through like @mouseover does, instead of announcing
+    -- "Invalid target" on the way past.
+    if (conditionals.target == "focus" or conditionals.target == "focustarget")
+       and not UnitExists("focus") then
+        return false
     end
 
     -- Resolve named raid marks (skull/cross/etc.) and mark1-mark8 to native mark# unit tokens
@@ -2859,17 +2838,6 @@ function CleveRoids.DoTarget(msg)
             elseif pfUI and pfUI.uf and pfUI.uf.mouseover and pfUI.uf.mouseover.unit
                and UnitExists(pfUI.uf.mouseover.unit) then
                 unitTok = pfUI.uf.mouseover.unit
-            else
-                unitTok = nil
-            end
-        end
-
-        if unitTok == "focus" or unitTok == "focustarget" then
-            local isFocusTarget = unitTok == "focustarget"
-            local fTok = CleveRoids.GetFocusUnitId()
-            if fTok then
-                unitTok = fTok .. (isFocusTarget and "target" or "")
-                if not UnitExists(unitTok) then unitTok = nil end
             else
                 unitTok = nil
             end
@@ -5166,75 +5134,6 @@ CleveRoids.RegisterMouseOverResolver = function(fn)
 end
 
 CleverMacro = true
-
-do
-    local f = CreateFrame("Frame")
-    f:SetScript("OnEvent", function(self, event, arg1)
-        if event == "PLAYER_LOGIN" then
-            -- This ensures we wait until the player is fully in the world and all addons are loaded.
-            self:UnregisterEvent("PLAYER_LOGIN")
-
-            -- Ensure both pfUI and its focus module are loaded before attempting to hook.
-            -- This also checks that the slash command we want to modify exists.
-            if pfUI and pfUI.uf and pfUI.uf.focus and SlashCmdList.PFFOCUS then
-
-                local original_PFFOCUS_Handler = SlashCmdList.PFFOCUS
-                SlashCmdList.PFFOCUS = function(msg)
-                    -- First, execute the original /focus command from pfUI to set the unit name.
-                    original_PFFOCUS_Handler(msg)
-
-                -- Now, if a focus name was set, find the corresponding UnitID.
-                if pfUI.uf.focus.unitname then
-                    local focusName = pfUI.uf.focus.unitname
-                    local found_label, found_id = nil, nil
-
-                    -- This function iterates through all known friendly units to find a
-                    -- name match and return its specific UnitID components.
-                    local function findUnitID()
-                        -- Check party members and their pets
-                        for i = 1, GetNumPartyMembers() do
-                            if strlower(UnitName("party"..i) or "") == focusName then
-                                return "party", i
-                            end
-                            if UnitExists("partypet"..i) and strlower(UnitName("partypet"..i) or "") == focusName then
-                                return "partypet", i
-                            end
-                        end
-
-                        -- Check raid members and their pets
-                        for i = 1, GetNumRaidMembers() do
-                            if strlower(UnitName("raid"..i) or "") == focusName then
-                                return "raid", i
-                            end
-                            if UnitExists("raidpet"..i) and strlower(UnitName("raidpet"..i) or "") == focusName then
-                                return "raidpet", i
-                            end
-                        end
-
-                        -- Check player and pet
-                        if strlower(UnitName("player") or "") == focusName then return "player", nil end
-                        if UnitExists("pet") and strlower(UnitName("pet") or "") == focusName then return "pet", nil end
-
-                            return nil, nil
-                        end
-
-                        found_label, found_id = findUnitID()
-
-                        -- Store the found label and ID. CleveRoids' Core.lua will use this
-                        -- for a direct, reliable cast without needing to change your target.
-                        pfUI.uf.focus.label = found_label
-                        pfUI.uf.focus.id = found_id
-                    else
-                        -- Focus was cleared (e.g., via /clearfocus), so ensure our cached data is cleared too.
-                        pfUI.uf.focus.label = nil
-                        pfUI.uf.focus.id = nil
-                    end
-                end
-            end
-        end
-    end)
-    f:RegisterEvent("PLAYER_LOGIN")
-end
 
 SLASH_CLEVEROID1 = "/cleveroid"
 SLASH_CLEVEROID2 = "/cleveroidmacros"
