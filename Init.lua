@@ -245,20 +245,6 @@ function CleveRoids.IsToggledBuffAbility(spellName)
     return CleveRoids._toggledBuffAbilities[spellName]
 end
 
-CleveRoids.auraTextures = {
-    [CleveRoids.Localized.Spells["Stealth"]]    = "Interface\\Icons\\Ability_Stealth",
-    [CleveRoids.Localized.Spells["Prowl"]]      = "Interface\\Icons\\Spell_Nature_Invisibilty",
-    [CleveRoids.Localized.Spells["Shadowform"]] = "Interface\\Icons\\Spell_Shadow_Shadowform",
-    [CleveRoids.Localized.Spells["Shadowmeld"]] = "Interface\\Icons\\Spell_Nature_WispSplode",
-    ["Seal of Wisdom"] = "Interface\\Icons\\Spell_Holy_RighteousnessAura",
-    ["Seal of the Crusader"] = "Interface\\Icons\\Spell_Holy_HolySmite",
-    ["Seal of Light"] = "Interface\\Icons\\Spell_Holy_HealingAura",
-    ["Seal of the Justice"] = "Interface\\Icons\\Spell_Holy_SealOfWrath",
-    ["Seal of Righteousness"] = "Interface\\Icons\\Ability_ThunderBolt",
-    ["Seal of Command"] = "Interface\\Icons\\Ability_Warrior_InnerRage",
-}
-
-
 -- I need to make a 2h modifier
 -- Maps easy-to-use weapon type names (e.g. Axes, Shields) to their inventory
 -- slot plus the locale-independent item class/subclass IDs that identify them

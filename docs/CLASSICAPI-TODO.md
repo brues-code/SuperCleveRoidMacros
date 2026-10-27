@@ -197,10 +197,30 @@ Each step leaves a working addon.
    they feed), and the Cursive extension's `UNIT_CASTEVENT` frames. CLEU
    `SPELL_CAST_SUCCESS` does not fire for a spell with a cast time, so their
    replacement is `SPELL_AURA_APPLIED` + `C_UnitAuras`, not a cast event.
-3. **Aura events.** `AURA_CAST_*`, `BUFF_/DEBUFF_ADDED/REMOVED_*`,
-   `*_UPDATE_DURATION_SELF` → `UNIT_AURA_DELTA` + `C_UnitAuras`, or CLEU
-   `SPELL_AURA_*` for units with no token. Do this together with the libdebuff
-   retirement below.
+3. **Auras.** In three slices:
+   - **3a — DONE: aura reads.** `ValidateAura` (`[buff]`, `[mybuff]`,
+     `[mydebuff]`) and `ValidateUnitDebuff` (`[debuff]`) resolve every unit
+     through `ResolveUnitAura` (`C_UnitAuras.UnitAura`): polarity-based, so an
+     overflowed debuff still reads harmful; `expirationTime` for time left;
+     `applications` for stacks. On another unit a personal debuff counts only
+     when the player or pet cast it (`sourceUnit`). Gone: the libdebuff
+     `lib.objects` timer lookups and `lib:UnitDebuff` time-left, nampower's
+     `FindUnitAuraInfo`/`GetUnitAuras`/`GetUnitAuraApplications`,
+     `GetPlayerAura`, and the slot-by-slot scans. libdebuff still runs, but
+     nothing outside it reads its timers except the `/cleveroid` debug dump.
+   - **3b — libdebuff's tracking pipeline.** Its `UNIT_CASTEVENT`, `SPELL_GO_*`,
+     `SPELL_START_*`, `AURA_CAST_*`, `DEBUFF_ADDED/REMOVED_*` handlers,
+     `lib.objects`, `castTracking`, the duration learning and the Cursive
+     extension's `UNIT_CASTEVENT` frames. Still read from it: the pending arrays
+     (`IsPendingDebuffCast`, "debuff in flight") and the delayed CC/bleed
+     immunity verification. Both need a replacement (CLEU `SPELL_AURA_APPLIED` /
+     `SPELL_MISSED` from the player) before the pipeline can go. Do this after
+     the parity gate below passes in-game.
+   - **3c — nampower-only aura data.** `[buffcapped]`/`[debuffcapped]`
+     (`AURA_CAST` `auraCapStatus`), player buffs past the 32 client slots
+     (`OverflowBuffs`, the OverflowBuffFrame extension) and
+     `AllCasterAuraTracking`. ClassicAPI cannot see a buff that has no client
+     slot, so keep these on nampower or file a ClassicAPI gap.
 4. **Direct swaps.** `GetCurrentCastingInfo`, now read only for its on-swing
    and auto-attack flags (`[onswing]`, weapon swap, Core.lua:94) → ClassicAPI's
    next-melee/auto-attack state (`C_Spell.IsCurrentSpell` and friends); `IsSpellInRange`/`IsSpellUsable`/
@@ -226,12 +246,9 @@ candidates but are **worse** than the current implementation — recorded so we
 don't re-investigate.
 
 - ~~**Auras / `ValidateAura`** — `C_UnitAuras.expirationTime` is player-only~~ —
-  **STALE, do not trust this entry.** It was written before the `Aura::Source`
-  cache landed. Non-player `expirationTime`/`duration` now work (caster-modified,
-  talent extensions included), so this is no longer a reason to keep libdebuff's
-  remote-duration tracking. See Tier 1 §1 and "libdebuff retirement" for the
-  current picture and the real caveats. The nampower `GetUnitField` batch read is
-  a separate question and has not been re-examined.
+  **Wrong, and now migrated** (step 3a). The `Aura::Source` cache gives
+  non-player `expirationTime`/`duration`, and both aura validators read
+  `C_UnitAuras`.
 - **`GetCurrentShapeshiftIndex` form loop / `[stance]`·`[form]`** —
   `GetShapeshiftFormID()` returns the **DBC form id** (Cat=1, Bear=5,
   Shadowform=28…), NOT the 1-based **bar index** these conditionals compare
@@ -284,13 +301,14 @@ Carnage refresh and Dark Harvest tick compression in the DLL.
 `ShouldApplyDebuffRank`, `DidSpellFail`, `IsPersonalDebuff`, `GetSpellRank`/`GetSpellBaseName`,
 `HasPendingCast`. These are miss/rank/learning logic, not aura state.
 
-**Gate before removing Group A:** confirm parity in-game on one spell where
-ClassicAPI does the hard part — Rip under Carnage. Compare
-`CleveRoids.libdebuff:GetDuration(spellID)` against
-`C_UnitAuras.GetUnitAuraBySpellID(unit, spellID).duration` and the derived
-remaining (`expirationTime - GetTime()`), on a target you have debuffed. If those
-agree across a Carnage proc, Group A can go. Watch the documented best-effort
-gaps: an aura cast before you logged in, and refresh-at-max-stacks.
+**Gate before removing Group A (step 3b):** the conditionals already read
+ClassicAPI (step 3a), so test them in-game on a spell where ClassicAPI does the
+hard part — Rip under Carnage. Check `[debuff:Rip<3]` across a Carnage proc, and
+compare `CleveRoids.libdebuff:GetDuration(spellID)` with
+`C_UnitAuras.GetUnitAuraBySpellID("target", spellID, "HARMFUL")` (`duration`, and
+`expirationTime - GetTime()`). If they agree, Group A can go. Watch the
+documented best-effort gaps: an aura cast before you logged in, and
+refresh-at-max-stacks.
 
 ## Marginal / optional follow-ups
 
