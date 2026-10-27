@@ -5262,8 +5262,6 @@ SlashCmdList["CLEVEROID"] = function(msg)
         DEFAULT_CHAT_FRAME:AddMessage("/cleveroid macrocheck 0 or 1 - Enable/disable macro syntax checker")
         DEFAULT_CHAT_FRAME:AddMessage("/cleveroid debug [0|1] - Toggle learning debug messages")
         DEFAULT_CHAT_FRAME:AddMessage("|cffffaa00Spell Schools:|r")
-        DEFAULT_CHAT_FRAME:AddMessage('/cleveroid listschools - List all learned spell schools')
-        DEFAULT_CHAT_FRAME:AddMessage('/cleveroid clearschools - Clear learned spell school data')
         DEFAULT_CHAT_FRAME:AddMessage("|cffffaa00Immunity Tracking:|r")
         DEFAULT_CHAT_FRAME:AddMessage('/cleveroid listimmune [school] - List immunity data')
         DEFAULT_CHAT_FRAME:AddMessage('/cleveroid addimmune "<NPC>" <school> [buff] - Add immunity')
@@ -5472,64 +5470,6 @@ SlashCmdList["CLEVEROID"] = function(msg)
         end
 
         CleveRoids.RemoveCCImmunityCommand(npcName, ccType)
-        return
-    end
-
-    -- listschools (show learned spell schools)
-    if cmd == "listschools" or cmd == "schools" then
-        CleveRoids.Print("|cff88ff88=== Learned Spell Schools ===|r")
-        if not CleveRoids_SpellSchools or not next(CleveRoids_SpellSchools) then
-            CleveRoids.Print("No spell schools learned yet. Deal damage to enemies!")
-            CleveRoids.Print("Nampower damage events will automatically track spell schools.")
-        else
-            local count = 0
-            local bySchool = {}
-
-            -- Group by school
-            for spellID, school in pairs(CleveRoids_SpellSchools) do
-                if not bySchool[school] then
-                    bySchool[school] = {}
-                end
-                table.insert(bySchool[school], spellID)
-                count = count + 1
-            end
-
-            CleveRoids.Print("Total spells tracked: " .. count)
-            CleveRoids.Print(" ")
-
-            -- Display by school
-            for school, spellIDs in pairs(bySchool) do
-                local schoolColor = "|cff88ff88"
-                if school == "fire" then schoolColor = "|cffff4400"
-                elseif school == "frost" then schoolColor = "|cff00ffff"
-                elseif school == "nature" then schoolColor = "|cff00ff00"
-                elseif school == "shadow" then schoolColor = "|cff8800ff"
-                elseif school == "arcane" then schoolColor = "|cffff00ff"
-                elseif school == "holy" then schoolColor = "|cffffff00"
-                elseif school == "bleed" then schoolColor = "|cffff0000"
-                end
-
-                CleveRoids.Print(schoolColor .. string.upper(school) .. "|r (" .. table.getn(spellIDs) .. " spells):")
-                for _, spellID in ipairs(spellIDs) do
-                    local spellName = C_Spell.GetSpellName(spellID) or "Unknown"
-                    CleveRoids.Print("  " .. spellName .. " (ID:" .. spellID .. ")")
-                end
-            end
-        end
-        return
-    end
-
-    -- clearschools (clear learned spell schools)
-    if cmd == "clearschools" then
-        local count = 0
-        if CleveRoids_SpellSchools then
-            for _ in pairs(CleveRoids_SpellSchools) do
-                count = count + 1
-            end
-        end
-        CleveRoids_SpellSchools = {}
-        CleveRoids.spellSchoolMapping = CleveRoids_SpellSchools
-        CleveRoids.Print("Cleared " .. count .. " learned spell schools")
         return
     end
 

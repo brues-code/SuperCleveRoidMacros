@@ -256,6 +256,12 @@ Each step leaves a working addon.
    `GetUnitData` and `GetSpellRecField`/`GetSpellRec`, and also
    `GetSpellModifiers`, `GetSpellDuration`, `IsAuraHidden`, `GetItemLevel`,
    `SetMouseoverUnit` and `[rooted]`. File each gap against ClassicAPI.
+   - **Spell schools — DONE.** `GetSpellSchool` resolves a name through the
+     spellbook (`CleveRoids.GetSpell(name).id`) and reads ClassicAPI's
+     `GetSpellSchool(spellID)` (Spell.dbc), with bleeds from the DBC mechanic
+     (`IsBleedByMechanic`). Gone: `KNOWN_NON_DAMAGING_SPELLS`, the tooltip
+     scanner, the name patterns, `BLEED_SPELL_IDS`, `LearnSpellSchool`, the
+     `CleveRoids_SpellSchools` SavedVariable and `listschools`/`clearschools`.
 
 The "keep nampower" verdicts below (`FindItemLocation`, `[usable]`,
 `[rooted]`) are now gaps to close under steps 4–5, not reasons to keep nampower.

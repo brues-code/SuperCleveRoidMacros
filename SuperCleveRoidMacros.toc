@@ -4,7 +4,7 @@
 ## Notes: /cleveroid for settings
 ## Version: @project-version@
 ## OptionalDeps: ClassicFocus, FocusFrame, pfUI, SuperMacro, Bongos_ActionBar, Cursive, XPerl, LunaUnitFrames, DragonflightReloaded, -Dragonflight3
-## SavedVariables: CleveRoidMacros, CleveRoids_ImmunityData, CleveRoids_SpellSchools
+## SavedVariables: CleveRoidMacros, CleveRoids_ImmunityData
 ## LoadSavedVariablesFirst: 1
 Localization.lua
 Init.lua

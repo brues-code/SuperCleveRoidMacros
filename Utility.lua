@@ -1425,27 +1425,6 @@ function CleveRoids.GetEquippedSetPieceCount(nameOrId)
 end
 
 -- BLEEDS
--- The debuff IDs of the bleeds whose immunity is learned (the aura on the
--- target, not the cast: Pounce applies Pounce Bleed)
-local BLEED_SPELL_IDS = {
-    -- Rip (bleed DoT from Cat Form finisher)
-    [1079] = true,   -- Rank 1
-    [9492] = true,   -- Rank 2
-    [9493] = true,   -- Rank 3
-    [9752] = true,   -- Rank 4
-    [9894] = true,   -- Rank 5
-    [9896] = true,   -- Rank 6
-    -- Rake (cast ID = debuff ID for Rake)
-    [1822] = true,   -- Rank 1
-    [1823] = true,   -- Rank 2
-    [1824] = true,   -- Rank 3
-    [9904] = true,   -- Rank 4
-    -- Pounce Bleed (triggered spell IDs, different from cast IDs)
-    [9007] = true,   -- Rank 1 (triggered by Pounce 9005)
-    [9824] = true,   -- Rank 2 (triggered by Pounce 9823)
-    [9826] = true,   -- Rank 3 (triggered by Pounce 9827)
-}
-
 -- Pounce cast ID -> the Pounce Bleed debuff it applies
 local POUNCE_BLEED_IDS = {
     [9005] = 9007,   -- Pounce Rank 1 → Pounce Bleed Rank 1
@@ -1591,176 +1570,6 @@ local SPLIT_DAMAGE_SPELLS = {
     ["Garrote"] = { initial = "physical", debuff = "bleed" },
 }
 
--- Known non-damaging spells that won't be learned via combat log damage events
--- These need explicit school mapping to avoid pattern matching errors
--- (e.g., "Faerie Fire" contains "fire" but is actually arcane)
---
--- Add spells here if:
---   1. They don't deal damage (so won't trigger a damage event)
---   2. Their name causes false positives in pattern matching
---   3. You need accurate school detection for immunity checking
---
--- Format: ["Spell Name"] = "school" (without rank)
-local KNOWN_NON_DAMAGING_SPELLS = {
-    -- Druid
-    ["Faerie Fire"] = "nature",
-    ["Faerie Fire (Feral)"] = "nature",
-    ["Faerie Fire (Bear)"] = "nature",
-    ["Moonfire"] = "arcane",  -- Initial hit deals damage, but debuff is arcane
-    ["Insect Swarm"] = "nature",
-    ["Abolish Poison"] = "nature",
-    ["Remove Curse"] = "arcane",
-    ["Pounce Bleed"] = "bleed",  -- Triggered by Pounce (9005→9007, 9823→9824, 9827→9826)
-
-    -- Mage
-    ["Amplify Magic"] = "arcane",
-    ["Dampen Magic"] = "arcane",
-    ["Remove Lesser Curse"] = "arcane",
-    ["Slow Fall"] = "arcane",
-    ["Detect Magic"] = "arcane",
-
-    -- Priest
-    ["Dispel Magic"] = "holy",
-    ["Cure Disease"] = "holy",
-    ["Abolish Disease"] = "holy",
-    ["Power Word: Fortitude"] = "holy",
-    ["Power Word: Shield"] = "holy",
-    ["Divine Spirit"] = "holy",
-    ["Fear Ward"] = "holy",
-    ["Resurrection"] = "holy",
-
-    -- Paladin
-    ["Cleanse"] = "holy",
-    ["Purify"] = "holy",
-    ["Divine Protection"] = "holy",
-    ["Divine Shield"] = "holy",
-    ["Blessing of Protection"] = "holy",
-    ["Blessing of Freedom"] = "holy",
-    ["Blessing of Sacrifice"] = "holy",
-    ["Redemption"] = "holy",
-
-    -- Warlock
-    ["Banish"] = "shadow",
-    ["Curse of Weakness"] = "shadow",
-    ["Curse of Recklessness"] = "shadow",
-    ["Curse of Tongues"] = "shadow",
-    ["Amplify Curse"] = "shadow",
-    ["Death Coil"] = "shadow",  -- Has damage component but often used for CC
-
-    -- Shaman
-    ["Cure Poison"] = "nature",
-    ["Cure Disease"] = "nature",
-    ["Purge"] = "nature",
-    ["Ancestral Spirit"] = "nature",
-
-    -- Hunter
-    ["Aspect of the Hawk"] = "nature",
-    ["Aspect of the Monkey"] = "nature",
-    ["Aspect of the Cheetah"] = "nature",
-    ["Aspect of the Pack"] = "nature",
-    ["Aspect of the Wild"] = "nature",
-}
-
--- Spell school mapping learned from combat log damage events
--- This table maps spell IDs to their damage school (fire, frost, nature, shadow, arcane, holy, physical, bleed)
--- Persisted via SavedVariable (CleveRoids_SpellSchools) for accuracy across sessions
-CleveRoids_SpellSchools = CleveRoids_SpellSchools or {}
-CleveRoids.spellSchoolMapping = CleveRoids_SpellSchools  -- Alias for easier access
-
--- Spell.dbc school enum to school name
--- Based on WoW 1.12.1 SpellSchools enum values (NOT bitmasks)
-local SCHOOL_NAMES = {
-    [0] = "physical",  -- SPELL_SCHOOL_NORMAL (Physical/Armor)
-    [1] = "holy",      -- SPELL_SCHOOL_HOLY
-    [2] = "fire",      -- SPELL_SCHOOL_FIRE
-    [3] = "nature",    -- SPELL_SCHOOL_NATURE
-    [4] = "frost",     -- SPELL_SCHOOL_FROST
-    [5] = "shadow",    -- SPELL_SCHOOL_SHADOW
-    [6] = "arcane"     -- SPELL_SCHOOL_ARCANE
-}
-
--- Combat log school bitmask to school name
-local SCHOOL_MASK_NAMES = {
-    [1] = "physical",
-    [2] = "holy",
-    [4] = "fire",
-    [8] = "nature",
-    [16] = "frost",
-    [32] = "shadow",
-    [64] = "arcane",
-}
-
--- Learn a spell's school from its damage (SPELL_DAMAGE / SPELL_PERIODIC_DAMAGE
--- / RANGE_DAMAGE, from the combat log dispatcher). This is the most accurate
--- school source and the only one that tells a bleed from plain physical damage:
--- periodic physical damage is a bleed.
-local function LearnSpellSchool(spellId, schoolMask, periodic)
-    if not spellId or not schoolMask then return end
-
-    -- PERFORMANCE: Skip if already learned and finalized
-    local currentSchool = CleveRoids.spellSchoolMapping[spellId]
-    if currentSchool then
-        -- If already learned as anything other than physical, we're done (can't be upgraded)
-        if currentSchool ~= "physical" then
-            return
-        end
-        -- If learned as physical, continue processing - might upgrade to bleed
-    end
-
-    local schoolName = SCHOOL_MASK_NAMES[schoolMask] or "physical"
-    if schoolName == "physical" and periodic then
-        schoolName = "bleed"
-    end
-
-    -- Check if this is a known bleed spell by name (fallback) - only if physical
-    if schoolName == "physical" then
-        local spellName = C_Spell.GetSpellName(spellId)
-        if spellName then
-            local baseName = string.gsub(spellName, "%s*%(.-%)%s*$", "")
-            local lower = string.lower(baseName)
-            if string.find(lower, "rip") or string.find(lower, "rake") or string.find(lower, "rupture") or
-               string.find(lower, "garrote") or string.find(lower, "rend") or string.find(lower, "deep wound") or
-               string.find(lower, "hemorrhage") or string.find(lower, "pounce") then
-                schoolName = "bleed"
-            end
-        end
-    end
-
-    -- PERFORMANCE: Skip if the detected school matches what we already know
-    if currentSchool == schoolName then
-        return  -- No change needed
-    end
-
-    -- Only update if not already known or if upgrading from physical to bleed
-    if not currentSchool or (currentSchool == "physical" and schoolName == "bleed") then
-        CleveRoids.spellSchoolMapping[spellId] = schoolName
-
-        if CleveRoids.debug then
-            local spellName = C_Spell.GetSpellName(spellId) or "Unknown"
-            CleveRoids.Print(string.format("|cff88ff88[School Learned]|r %s (ID:%d) = %s (mask:%d)",
-                spellName, spellId, schoolName, schoolMask))
-        end
-    end
-end
-
--- Cache for spell school lookups
-local spellSchoolCache = {}
-
--- Get the damage school of a spell
--- Parameters:
---   spellName: The name of the spell (with or without rank)
---   spellID: Optional spell ID for more accurate lookups
--- Returns: School name (fire, frost, nature, shadow, arcane, holy, physical, bleed) or nil
--- Priority:
---   0. Split damage spell table (e.g., Rake = bleed debuff)
---   1. Learned from combat log damage events (most accurate for bleed detection)
---   2. Name-to-ID resolution + learned mapping
---   3. DBC spell school via GetSpellRecField (authoritative for non-bleed spells)
---   4. Cached lookups
---   6. Known non-damaging spells table (e.g., Faerie Fire = arcane)
---   7. Tooltip scanning (player's spellbook only)
---   8. Name pattern matching (fallback, least accurate)
---   Returns nil if school cannot be determined (not cached)
 -- Authoritative bleed test from Spell.dbc mechanics. A bleed carries
 -- SpellMechanic 15 either at the spell level (Garrote/Rupture/Rend/Rip/Pounce/
 -- Deep Wounds) OR on an effect (Rake: spell-level 0, EffectMechanic[2]=15), so
@@ -1781,213 +1590,33 @@ local function IsBleedByMechanic(spellID)
     return false
 end
 
+local function BaseSpellName(spellName)
+    return (string.gsub(spellName, "%s*%(.-%)%s*$", ""))
+end
+
+-- A spell's school as an immunity key: "bleed" for a bleed (the DBC school of
+-- a bleed is physical), otherwise its Spell.dbc school, lowercased
+local function DbcSchool(spellID)
+    if IsBleedByMechanic(spellID) then return "bleed" end
+    local _, name = _G.GetSpellSchool(spellID)
+    return name and string.lower(name)
+end
+
+-- The school a spell's immunity is checked under. A split-damage spell checks
+-- its debuff school (Rake: bleed). A name with no ID resolves through the
+-- player's spellbook, so a spell the player does not know has no school.
 local function GetSpellSchool(spellName, spellID)
     if not spellName and not spellID then return nil end
-
-    -- Get base name early for split damage spell check
-    local baseName = nil
-    if spellName then
-        baseName = string.gsub(spellName, "%s*%(.-%)%s*$", "")
-    elseif spellID then
-        local fullName = C_Spell.GetSpellName(spellID)
-        if fullName then
-            baseName = string.gsub(fullName, "%s*%(.-%)%s*$", "")
-        end
+    spellName = spellName or C_Spell.GetSpellName(spellID)
+    local split = spellName and SPLIT_DAMAGE_SPELLS[BaseSpellName(spellName)]
+    if split then
+        return split.debuff
     end
-
-    -- PRIORITY 0 (HIGHEST): Split damage spells ALWAYS use their debuff school for immunity checks
-    -- This prevents the initial physical hit from being learned and masking bleed immunity.
-    -- Example: Rake's initial hit is physical, but the DoT is bleed. On bleed-immune targets,
-    -- the DoT never ticks, so spellSchoolMapping stays "physical" - which would miss bleed immunity!
-    if baseName and SPLIT_DAMAGE_SPELLS[baseName] then
-        local school = SPLIT_DAMAGE_SPELLS[baseName].debuff
-        return school
+    if not spellID then
+        local spell = CleveRoids.GetSpell(spellName)
+        spellID = spell and spell.id
     end
-
-    -- PRIORITY 0.5: DBC bleed mechanic (authoritative, proactive). Catches bleeds
-    -- before any damage event is seen, incl. effect-level ones like Rake, and
-    -- correctly excludes non-bleeds the name patterns would false-positive (e.g.
-    -- Hemorrhage). Only bleed is decided here; other schools fall through.
-    if spellID and IsBleedByMechanic(spellID) then
-        return "bleed"
-    end
-
-    -- PRIORITY 1: Use learned school from combat log damage events (most accurate)
-    if spellID and CleveRoids.spellSchoolMapping[spellID] then
-        return CleveRoids.spellSchoolMapping[spellID]
-    end
-
-    -- PRIORITY 2: If we have name but no ID, try to find ID and check mapping
-    if spellName and not spellID then
-        if CleveRoids.GetSpellIdForName then
-            spellID = CleveRoids.GetSpellIdForName(spellName)
-            if spellID and CleveRoids.spellSchoolMapping[spellID] then
-                return CleveRoids.spellSchoolMapping[spellID]
-            end
-        end
-    end
-
-    -- PRIORITY 3: DBC spell school lookup via Nampower (authoritative for non-bleed spells)
-    -- Note: DBC school field returns 0 (physical) for bleed spells too, so learned mapping
-    -- from damage events (priority 1-2) takes precedence for bleed detection
-    if spellID and GetSpellRecField then
-        local dbcSchool = GetSpellRecField(spellID, "school")
-        if dbcSchool and SCHOOL_NAMES[dbcSchool] then
-            local school = SCHOOL_NAMES[dbcSchool]
-            -- Don't cache physical from DBC - it might be bleed (learned later from damage events)
-            if school ~= "physical" then
-                if not baseName and spellName then
-                    baseName = string.gsub(spellName, "%s*%(.-%)%s*$", "")
-                end
-                if baseName then
-                    spellSchoolCache[baseName] = school
-                end
-                return school
-            end
-        end
-    end
-
-    -- If we only have spellID but no name, try to get name from GetSpellRecField
-    if spellID and not spellName then
-        spellName = C_Spell.GetSpellName(spellID)
-    end
-
-    if not spellName then return nil end
-
-    -- Remove rank information for cache consistency (may already be set from above)
-    if not baseName then
-        baseName = string.gsub(spellName, "%s*%(.-%)%s*$", "")
-    end
-
-    -- PRIORITY 4: Check cache
-    if spellSchoolCache[baseName] then
-        return spellSchoolCache[baseName]
-    end
-
-    -- PRIORITY 5: SPLIT_DAMAGE_SPELLS already checked at Priority 0
-
-    -- PRIORITY 6: Check known non-damaging spells
-    -- These won't be learned via damage events and need explicit mapping
-    if KNOWN_NON_DAMAGING_SPELLS[baseName] then
-        local school = KNOWN_NON_DAMAGING_SPELLS[baseName]
-        spellSchoolCache[baseName] = school
-        return school
-    end
-
-    -- PRIORITY 7: Try to find spell in player's spellbook and scan tooltip
-    local school = nil
-    local spell = CleveRoids.GetSpell(baseName)
-
-    if spell then
-        -- Create tooltip if needed
-        if not CleveRoidsSchoolTooltip then
-            CreateFrame("GameTooltip", "CleveRoidsSchoolTooltip", nil, "GameTooltipTemplate")
-            CleveRoidsSchoolTooltip:SetOwner(WorldFrame, "ANCHOR_NONE")
-        end
-
-        CleveRoidsSchoolTooltip:ClearLines()
-        CleveRoidsSchoolTooltip:SetSpell(spell.spellSlot, spell.bookType)
-
-        -- Scan tooltip for school keywords
-        for i = 1, CleveRoidsSchoolTooltip:NumLines() do
-            local line = _G["CleveRoidsSchoolTooltipTextLeft" .. i]
-            if line then
-                local text = string.lower(line:GetText() or "")
-
-                if string.find(text, "bleed") then
-                    school = "bleed"
-                    break
-                elseif string.find(text, "fire") or string.find(text, "flame") then
-                    school = "fire"
-                    break
-                elseif string.find(text, "frost") or
-                       string.find(text, "^ice[^%a]") or string.find(text, "[^%a]ice[^%a]") or string.find(text, "[^%a]ice$") then
-                    school = "frost"
-                    break
-                elseif string.find(text, "nature") or string.find(text, "poison") then
-                    school = "nature"
-                    break
-                elseif string.find(text, "shadow") or string.find(text, "dark") then
-                    school = "shadow"
-                    break
-                elseif string.find(text, "arcane") then
-                    school = "arcane"
-                    break
-                elseif string.find(text, "holy") or string.find(text, "divine") then
-                    school = "holy"
-                    break
-                end
-            end
-        end
-    end
-
-    -- PRIORITY 8: Fallback pattern matching for common spell name patterns
-    -- NOTE: This is the lowest priority fallback - be specific to avoid false positives
-    -- (e.g., "Faerie Fire" should not match as "fire" school)
-    if not school then
-        local lower = string.lower(baseName)
-
-        -- Bleed effects (DoTs that ignore armor)
-        if string.find(lower, "rip") or string.find(lower, "rake") or string.find(lower, "rupture") or
-           string.find(lower, "garrote") or string.find(lower, "rend") or string.find(lower, "deep wound") or
-           string.find(lower, "pounce") then
-            -- NOTE: Hemorrhage intentionally excluded -- Spell.dbc gives it no bleed
-            -- mechanic (its damage is physical), so bleed-immune mobs don't resist it.
-            school = "bleed"
-
-        -- Arcane
-        elseif string.find(lower, "arcane") or string.find(lower, "polymorph") or
-               string.find(lower, "mana burn") then
-            school = "arcane"
-
-        -- Nature: Faerie Fire (check before "fire" to avoid false positive)
-        elseif string.find(lower, "faerie") then
-            school = "nature"
-
-        -- Fire (specific patterns to avoid false positives)
-        elseif string.find(lower, "^fire") or string.find(lower, " fire") or  -- Starts with or contains " fire"
-               string.find(lower, "flame") or string.find(lower, "immolat") or
-               string.find(lower, "scorch") or string.find(lower, "pyroblast") or
-               string.find(lower, "ignite") or string.find(lower, "combustion") then
-            school = "fire"
-
-        -- Frost (use word-boundary matching for "ice" to avoid false positives
-        -- from spell names like "Slice and Dice" containing "ice" as substring)
-        elseif string.find(lower, "frost") or
-               string.find(lower, "^ice[^%a]") or string.find(lower, "[^%a]ice[^%a]") or string.find(lower, "[^%a]ice$") or
-               string.find(lower, "blizzard") or string.find(lower, "freeze") or
-               string.find(lower, "chill") then
-            school = "frost"
-
-        -- Nature
-        elseif string.find(lower, "nature") or string.find(lower, "poison") or
-               string.find(lower, "sting") or string.find(lower, "wrath") or
-               string.find(lower, "starfire") or string.find(lower, "thorns") then
-            school = "nature"
-
-        -- Shadow
-        elseif string.find(lower, "shadow") or string.find(lower, "curse") or
-               string.find(lower, "corruption") or string.find(lower, "drain") or
-               string.find(lower, "vampir") or string.find(lower, "affliction") then
-            school = "shadow"
-
-        -- Holy
-        elseif string.find(lower, "holy") or string.find(lower, "smite") or
-               string.find(lower, "exorcism") or string.find(lower, "consecrat") or
-               string.find(lower, "judgment") or string.find(lower, "hammer of wrath") then
-            school = "holy"
-
-        -- No default fallback - return nil for unknown schools
-        -- RecordImmunity() will classify nil as "unknown" rather than
-        -- incorrectly attributing physical immunity
-        end
-    end
-
-    -- Cache the result (only cache if we actually determined a school)
-    if school then
-        spellSchoolCache[baseName] = school
-    end
-    return school
+    return spellID and DbcSchool(spellID)
 end
 
 -- Public API: Get spell school by name and/or ID
@@ -2350,49 +1979,18 @@ local function RecordImmunity(npcName, spellName, conditionalBuff, spellID)
         return
     end
 
-    -- Determine school: DBC lookup by spellID is authoritative for immunity recording.
-    -- Unlike GetSpellSchool() (designed for debuff tracking, skips physical to detect bleed),
-    -- immunity recording needs the actual DBC school — physical immunity IS a real thing.
+    -- A split-damage spell records its initial school: a Pounce whose stun was
+    -- immune says nothing about its bleed. Everything else records its own
+    -- school, a bleed under "bleed".
     local school = nil
-
-    -- SPLIT DAMAGE SPELLS: Use initial hit school, not the debuff school.
-    -- e.g., Pounce stun-immune doesn't mean bleed-immune.
-    if spellName then
-        local baseName = string.gsub(spellName, "%s*%(.-%)%s*$", "")
-        if SPLIT_DAMAGE_SPELLS[baseName] then
-            school = SPLIT_DAMAGE_SPELLS[baseName].initial
-            if CleveRoids.debug then
-                CleveRoids.Print("|cff00aaff[Split Damage]|r " .. baseName .. " immunity recorded as '" .. school .. "' (initial), not '" .. SPLIT_DAMAGE_SPELLS[baseName].debuff .. "' (debuff)")
-            end
-        end
-    end
-
-    -- Direct DBC lookup: spellID → GetSpellRecField → school enum → name
-    if not school and spellID and GetSpellRecField then
-        local dbcSchool = GetSpellRecField(spellID, "school")
-        if dbcSchool and SCHOOL_NAMES[dbcSchool] then
-            school = SCHOOL_NAMES[dbcSchool]
-        end
-        -- Bleed spells have DBC school=0 (physical) but immunity should be "bleed", not "physical"
-        -- Split damage spells (Rake/Pounce/Garrote) are already handled above — their cast spell
-        -- triggers IMMUNE for the initial physical hit, so "physical" is correct for those.
-        -- Pure bleed spells (Rip, etc.) that reach this path need the override.
-        if school == "physical" and BLEED_SPELL_IDS[spellID] then
-            school = "bleed"
-            if CleveRoids.debug then
-                CleveRoids.Print("|cff00aaff[Bleed Override]|r " .. (spellName or tostring(spellID)) .. " immunity recorded as 'bleed' (DBC school=physical, but spell is a bleed)")
-            end
-        end
-    end
-
-    -- Fallback: try learned mapping from damage events
-    if not school and spellID and CleveRoids.spellSchoolMapping[spellID] then
-        school = CleveRoids.spellSchoolMapping[spellID]
-    end
-
-    -- Last resort: name-based lookup (no spellID available)
-    if not school and spellName then
-        school = GetSpellSchool(spellName, nil)
+    spellName = spellName or C_Spell.GetSpellName(spellID)
+    local split = spellName and SPLIT_DAMAGE_SPELLS[BaseSpellName(spellName)]
+    if split then
+        school = split.initial
+    elseif spellID then
+        school = DbcSchool(spellID)
+    else
+        school = GetSpellSchool(spellName)
     end
 
     if not school then
@@ -2533,7 +2131,7 @@ local function ResolveMissingAura(e)
         return
     end
 
-    if BLEED_SPELL_IDS[e.auraID] then
+    if IsBleedByMechanic(e.auraID) then
         -- Bosses known to take bleeds hit the debuff cap often; never record them
         if MOBS_THAT_BLEED[UnitCreatureID(unit)] then return end
         -- Recorded as bleed directly: RecordImmunity would use Rake's initial
@@ -3351,7 +2949,6 @@ combatLogFrame:SetScript("OnEvent", function()
         end
     elseif subevent == "SPELL_DAMAGE" or subevent == "SPELL_PERIODIC_DAMAGE" or subevent == "RANGE_DAMAGE" then
         -- spellId, spellName, spellSchool, amount, overkill, school, resisted
-        LearnSpellSchool(a1, a3, subevent == "SPELL_PERIODIC_DAMAGE")
         if a7 and sourceGUID == playerGUID then
             CleveRoids.SetResistState("partial", destGUID)
         end
