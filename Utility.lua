@@ -100,42 +100,6 @@ function CleveRoids.IsUnitDeadOrGhost(unit)
     return CleveRoids.IsUnitDead(unit) or UnitIsGhost(unit)
 end
 
-if type(hooksecurefunc) ~= "function" then
-  function hooksecurefunc(arg1, arg2, arg3)
-    local tgt, fname, post
-
-    if type(arg1) == "string" and type(arg2) == "function" and arg3 == nil then
-      fname, post = arg1, arg2
-      local orig = _G[fname]
-      if type(orig) ~= "function" then return end
-      _G[fname] = function(...)
-        local args = arg or {}
-        local n = (type(args) == "table" and args.n) or 0
-        local r = { orig(unpack(args, 1, n)) }
-        post(unpack(args, 1, n))
-        return unpack(r, 1, table.getn(r))
-      end
-      return
-    end
-
-    if type(arg1) == "table" and type(arg2) == "string" and type(arg3) == "function" then
-      tgt, fname, post = arg1, arg2, arg3
-      local orig = tgt[fname]
-      if type(orig) ~= "function" then return end
-      tgt[fname] = function(...)
-        local args = arg or {}
-        local n = (type(args) == "table" and args.n) or 0
-        local r = { orig(unpack(args, 1, n)) }
-        post(unpack(args, 1, n))
-        return unpack(r, 1, table.getn(r))
-      end
-      return
-    end
-  end
-end
-
-
-
 function CleveRoids.Seq(_, i)
     return (i or 0) + 1
 end
