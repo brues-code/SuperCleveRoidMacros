@@ -877,21 +877,23 @@ function CleveRoids.TestForActiveAction(actions)
         local previousUsable = actions.active.usable
         local previousOom = actions.active.oom
         local previousInRange = actions.active.inRange
+        local previousRangeUnit = actions.active.rangeUnit
+
+        -- The passing clause's @unit, which the button's range check aims at.
+        -- nil aims it at the target.
+        local conds = actions.active.activeConditionals or actions.active.conditionals
+        local unit = conds and conds.target
+        actions.active.rangeUnit = CleveRoids.ResolveRaidMarkUnit(unit) or unit
 
         if actions.active.spell then
             -- 1 in range, 0 out of range, -1 when the check does not apply (no unit,
             -- a rangeless spell, or a unit the spell cannot be cast at)
             actions.active.inRange = -1
 
-            local conds = actions.active.activeConditionals or actions.active.conditionals
-            local unit = conds and conds.target or "target"
-            local resolvedMark = CleveRoids.ResolveRaidMarkUnit(unit)
-            if resolvedMark then unit = resolvedMark end
-
             -- A rank entry is its own spell; a base entry stands for its highest rank
             local spell = actions.active.spell
             local spellId = (spell.rank and spell or spell.highest or spell).id
-            local inRange = CleveRoids.ClassicAPI.IsSpellInRange(spellId, unit)
+            local inRange = CleveRoids.ClassicAPI.IsSpellInRange(spellId, actions.active.rangeUnit or "target")
             if inRange ~= nil then
                 actions.active.inRange = inRange and 1 or 0
             end
@@ -1024,7 +1026,8 @@ function CleveRoids.TestForActiveAction(actions)
         end
         if actions.active.usable ~= previousUsable or
            actions.active.oom ~= previousOom or
-           actions.active.inRange ~= previousInRange then
+           actions.active.inRange ~= previousInRange or
+           actions.active.rangeUnit ~= previousRangeUnit then
             changed = true
             if CleveRoids.debug and actions.active.isReactive then
                 DEFAULT_CHAT_FRAME:AddMessage(
@@ -1054,7 +1057,7 @@ local function DisplayValueFor(action)
     return action.action
 end
 
--- Last value handed to SetMacroDisplay, per macro index.
+-- Last value and range unit handed to SetMacroDisplay, per macro index.
 --
 -- Publishing is NOT free. The client repaints every slot holding the macro through
 -- its own notifier, and that comes back to us as ACTIONBAR_SLOT_CHANGED ->
@@ -1063,6 +1066,7 @@ end
 -- GetAction and IndexActionSlot both call in on paths that fire constantly, so the
 -- no-op check below is what keeps that from turning into a churn loop.
 local publishedDisplay = {}
+local publishedUnit = {}
 
 -- Publish one macro's resolved action. Nothing is re-evaluated for us, so this must
 -- be called whenever the answer changes; the published value stands until replaced.
@@ -1075,11 +1079,18 @@ function CleveRoids.PublishDisplay(actions)
     local macroID = actions and actions.macroID
     if not macroID then return end  -- SuperMacro macros have no Blizzard index
 
-    local value = DisplayValueFor(actions.active) or false
-    if publishedDisplay[macroID] == value then return end
+    local active = actions.active
+    local value = DisplayValueFor(active) or false
+    local unit = active and active.rangeUnit
+    if publishedDisplay[macroID] == value and publishedUnit[macroID] == unit then return end
     publishedDisplay[macroID] = value
+    publishedUnit[macroID] = unit
 
-    C_Macro.SetMacroDisplay(macroID, value)
+    -- The client resolves the token again at every range check, so a new
+    -- mouseover or focus needs no republish. SetMacroDisplay raises on a string
+    -- that is not a token (an @Name target); that range stays on the target.
+    if not IsUnitToken(unit) then unit = nil end
+    C_Macro.SetMacroDisplay(macroID, value, unit)
 end
 
 -- Republish every parsed macro. Used after login and after a re-parse, since
@@ -1091,6 +1102,7 @@ function CleveRoids.PublishAllDisplays()
     -- after login and after a re-parse, where a cached value could otherwise
     -- suppress the publish a freshly rebuilt macro still needs.
     publishedDisplay = {}
+    publishedUnit = {}
     for _, macro in pairs(CleveRoids.Macros) do
         if type(macro) == "table" and macro.actions and macro.actions.macroID then
             CleveRoids.TestForActiveAction(macro.actions)
@@ -1110,6 +1122,7 @@ function CleveRoids.ReleaseDisplays()
         C_Macro.SetMacroDisplay(i, nil)
     end
     publishedDisplay = {}
+    publishedUnit = {}
     CleveRoids.ClassicAPIMacroDisplay = false
 end
 

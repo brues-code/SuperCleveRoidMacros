@@ -313,10 +313,10 @@ end
 -- client. `spell` is a spellID or a spellbook name, optionally with "(Rank N)";
 -- `unit` is any token or GUID string.
 --
--- C_Spell raises on a string that is not a unit token (an @Name target), so
--- UnitExists screens those out first.
+-- C_Spell raises on a string that is not a unit token (an @Name target), as
+-- UnitExists does, so IsUnitToken screens those out first.
 function API.IsSpellInRange(spell, unit)
-    if not spell or not unit or not UnitExists(unit) then return nil end
+    if not spell or not IsUnitToken(unit) then return nil end
     return C_Spell.IsSpellInRange(spell, unit)
 end
 
