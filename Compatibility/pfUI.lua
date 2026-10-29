@@ -53,10 +53,10 @@ function Extension.OverridePfUISlashCommands()
 
     -- Override with CleveRoids' conditional-aware handlers
     SlashCmdList.USE = CleveRoids.DoUse
-    SlashCmdList.EQUIP = CleveRoids.DoUse
+    SlashCmdList.EQUIP = CleveRoids.DoEquip
     SlashCmdList.PFUSE = CleveRoids.DoUse
-    SlashCmdList.PFEQUIP = CleveRoids.DoUse
-    SlashCmdList.SMEQUIP = CleveRoids.DoUse
+    SlashCmdList.PFEQUIP = CleveRoids.DoEquip
+    SlashCmdList.SMEQUIP = CleveRoids.DoEquip
 
     Extension.slashCommandsOverridden = true
 

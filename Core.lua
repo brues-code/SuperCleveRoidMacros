@@ -3246,9 +3246,9 @@ local function FindEquippedItemSlot(msg, itemId)
     return nil
 end
 
--- Attempts to use or equip an item by a set of conditionals
+-- Attempts to use an item by a set of conditionals
 -- Also checks if a condition is a spell so that you can mix item and spell use
--- msg: The raw message intercepted from a /use or /equip command
+-- msg: The raw message intercepted from a /use command
 function CleveRoids.DoUse(msg)
     -- Check macro stop flags
     if CleveRoids.stopMacroFlag or CleveRoids.skipMacroFlag then
@@ -3760,6 +3760,28 @@ function CleveRoids.DoEquipSet(msg)
     for i = 1, table.getn(parts) do
         local v = string.gsub(parts[i], "^%?", "")
         if CleveRoids.DoWithConditionals(v, _equipSetAction, CleveRoids.FixEmptyTarget, false, _equipSetAction) then
+            return true
+        end
+    end
+    return false
+end
+
+-- /equip: equip a bag item into the slot the engine picks from its inventory
+-- type. Using the item instead (DoUse) only casts its on-use spell, so gear
+-- without one, like a Fishing Pole, never moved. An item already worn is left
+-- alone. itemIDs pass as numbers; names/links pass through unchanged.
+local function _equipAction(msg)
+    C_Item.EquipItemByName(tonumber(msg) or msg)
+end
+
+function CleveRoids.DoEquip(msg)
+    local parts = CleveRoids.splitStringIgnoringQuotes(msg)
+    for i = 1, table.getn(parts) do
+        if CleveRoids.DoWithConditionals(parts[i], _equipAction, CleveRoids.FixEmptyTarget, false, _equipAction) then
+            -- If /firstaction was used, stop macro evaluation after the first equip
+            if CleveRoids.stopOnCastFlag then
+                CleveRoids.stopMacroFlag = true
+            end
             return true
         end
     end

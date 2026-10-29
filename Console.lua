@@ -39,10 +39,10 @@ SlashCmdList.USE = CleveRoids.DoUse
 
 SLASH_EQUIP1 = "/equip"
 
-SlashCmdList.EQUIP = CleveRoids.DoUse
+SlashCmdList.EQUIP = CleveRoids.DoEquip
 -- take back supermacro and pfUI /equip and /use
-SlashCmdList.SMEQUIP = CleveRoids.DoUse
-SlashCmdList.PFEQUIP = CleveRoids.DoUse
+SlashCmdList.SMEQUIP = CleveRoids.DoEquip
+SlashCmdList.PFEQUIP = CleveRoids.DoEquip
 SlashCmdList.PFUSE = CleveRoids.DoUse
 
 SLASH_EQUIPMH1 = "/equipmh"
