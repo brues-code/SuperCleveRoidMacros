@@ -192,22 +192,7 @@ requirementCheckFrame:SetScript("OnEvent", function()
     local hasNampower30 = hasNampower and CleveRoids.NampowerAPI
         and CleveRoids.NampowerAPI.HasMinimumVersion(3, 0, 0)
     local hasClassicAPI = CleveRoids.ClassicAPI and CleveRoids.ClassicAPI.IsAvailable()
-    -- v1.15.0 added frame:RegisterUnitEvent, which Utility.lua calls at file scope.
-    -- On an older build that call raises, aborting the rest of the chunk -- so this
-    -- is not a degraded-features warning, it's "the addon did not finish loading".
-    -- v1.15.8 scoped GetMouseButtonClicked to the click dispatch. Below it the
-    -- function exists but a held button keeps its value, so [button:N] reads the
-    -- button you are turning the camera with -- wrong quietly, which is the worse
-    -- failure and why the floor moved rather than the conditional being gated.
-    -- v1.15.9 added C_LossOfControl.GetSchoolLockout, which [locked] calls.
-    -- v1.15.10 added PLAYER_SWING, the only source for the swing-timer conditionals.
-    -- v1.17.0 made GetSpellInfo's castTime the player's own (talents, cast speed),
-    -- which [spellcasttime] and the Slam/ranged clip checks read.
-    -- v1.18.0 gave C_Spell.IsSpellInRange the engine's target gate (nil for a unit
-    -- the spell can't be cast at, and for a rangeless spell), which [inrange] and
-    -- button range read, and added GetShapeshiftForm ([stance]/[form]) and
-    -- IsAutoRepeatSpell (the Auto Shot / Shoot recast guard).
-    local hasClassicAPIMin = hasClassicAPI and CleveRoids.ClassicAPI.HasMinimumVersion(1, 18, 0)
+    local hasClassicAPIMin = hasClassicAPI and CleveRoids.ClassicAPI.HasMinimumVersion(1, 18, 1)
 
     if not hasNampower30 or not hasUnitXP or not hasClassicAPI or not hasClassicAPIMin then
         -- Show warnings (don't disable — tearing down a partially-initialized addon causes hangs)
@@ -231,7 +216,7 @@ requirementCheckFrame:SetScript("OnEvent", function()
             CleveRoids.Print("Dispel-type and movement conditionals will be unavailable without it.")
         elseif not hasClassicAPIMin then
             local major, minor, patch = CleveRoids.ClassicAPI.GetVersion()
-            CleveRoids.Print(format("|cFFFF9900WARNING:|r |cFF00FFFFClassicAPI v1.18.0+|r is required (you have v%d.%d.%d):", major, minor, patch))
+            CleveRoids.Print(format("|cFFFF9900WARNING:|r |cFF00FFFFClassicAPI v1.18.1+|r is required (you have v%d.%d.%d):", major, minor, patch))
             CleveRoids.Print("https://github.com/brues-code/ClassicAPI")
             CleveRoids.Print("The addon cannot finish loading on this version -- update ClassicAPI.")
         end
