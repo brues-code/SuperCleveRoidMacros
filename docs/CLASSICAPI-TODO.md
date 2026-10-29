@@ -141,8 +141,9 @@ API references are line numbers into `C:\Git\ClassicAPI\docs\API.md`.
 
 - **`C_NamePlate.GetNamePlates()` / `nameplateN` tokens** (`API.md:5742+`) —
   alternative to UnitXP enemy enumeration for AoE counting (`Conditionals.lua:3099`).
-- **`GetShapeshiftFormID()` + `UPDATE_SHAPESHIFT_FORM`** (`API.md:7792`) —
-  cleaner stance/form conditionals.
+- ~~**`GetShapeshiftFormID()` + `UPDATE_SHAPESHIFT_FORM`** (`API.md:7792`) —
+  cleaner stance/form conditionals.~~ — DONE with `GetShapeshiftForm(true)`
+  instead (see the trap below).
 - **`CastSpellNoToggle` / numeric spellIDs in `/cast`** (`API.md:5336+`) —
   rank-specific casting by ID, no-toggle behavior; could back a `/cast <spellID>`.
 - **State helpers** `IsStealthed` / `IsMounted` / `UnitStandState` (`API.md:7574+`) —
@@ -249,12 +250,18 @@ Each step leaves a working addon.
      flags. Like the spell queue, this is a nampower feature SCRM keeps.
 4. **Direct swaps.** `GetCurrentCastingInfo`, now read only for its on-swing
    and auto-attack flags (`[onswing]`, weapon swap, Core.lua:94) → ClassicAPI's
-   next-melee/auto-attack state (`C_Spell.IsCurrentSpell` and friends); `IsSpellInRange`/`IsSpellUsable`/
+   next-melee/auto-attack state (`C_Spell.IsCurrentSpell` and friends); `IsSpellUsable`/
    `GetSpellPowerCost` → `C_Spell.*`; `GetPlayerAuraDuration`/`GetUnitAuras` →
    `C_UnitAuras`; `GetSpellIdForName`/`GetSpellNameAndRankForId`/
    `GetSpellSlotTypeIdForName` → `C_Spell.GetSpellInfo`/`FindSpellBookSlotByID`;
    item lookups (`FindPlayerItemSlot`, `GetBagItems`, `GetEquippedItems`,
    `GetTrinkets`, `UseItemIdOrName`, `GetItemStats`) → `C_Container`/`C_Item`.
+   - **`IsSpellInRange` — DONE.** Button range, `[inrange]`/`[outrange]` and
+     their negations (count mode too) and the no-UnitXP melee fallback read
+     `C_Spell.IsSpellInRange`. v1.18.0 gave it the engine's target gate, which
+     replaced the rangeIndex / implicit-target heuristics and the UnitXP
+     distance fallback. nil (rangeless spell, or a unit the spell can't be cast
+     at) passes neither `[inrange]` nor `[outrange]`.
 5. **Field reads.** Match each field SCRM reads through `GetUnitField`/
    `GetUnitData` and `GetSpellRecField`/`GetSpellRec`, and also
    `GetSpellModifiers`, `GetSpellDuration`, `IsAuraHidden`, `GetItemLevel`,
@@ -281,11 +288,11 @@ don't re-investigate.
   **Wrong, and now migrated** (step 3a). The `Aura::Source` cache gives
   non-player `expirationTime`/`duration`, and both aura validators read
   `C_UnitAuras`.
-- **`GetCurrentShapeshiftIndex` form loop / `[stance]`·`[form]`** —
+- ~~**`GetCurrentShapeshiftIndex` form loop / `[stance]`·`[form]`**~~ —
   `GetShapeshiftFormID()` returns the **DBC form id** (Cat=1, Bear=5,
   Shadowform=28…), NOT the 1-based **bar index** these conditionals compare
-  against. Swapping would silently break every `[stance:N]`/`[form:N]` macro.
-  (Only the Rogue *stealth* branch was migrated, via `IsStealthed`.)
+  against, so it is still the wrong call. **Migrated anyway** to v1.18.0's
+  `GetShapeshiftForm(true)`, which returns the bar index.
 - **Range / distance / behind / facing** — UnitXP_SP3 gives precise yards +
   facing; `UnitInRange` is a binary 40yd and has no facing/behind. Keep UnitXP.
 - **`FindItemLocation`** — nampower `FindPlayerItemSlot` finds an item by id/name

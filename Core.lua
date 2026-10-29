@@ -36,12 +36,6 @@ CleveRoids.lastUnitHealthUpdate = 0
 CleveRoids.lastUnitPowerUpdate = 0
 CleveRoids.EVENT_THROTTLE = 0.1  -- 100ms throttle for high-frequency events
 
--- PERFORMANCE: Spell ID cache to avoid repeated GetSpellIdForName lookups
-CleveRoids.spellIdCache = {}
-
--- PERFORMANCE: Spell name construction cache
-CleveRoids.spellNameCache = {}
-
 CleveRoids.playerGuid = UnitGUID('player')
 CleveRoids.playerClass = UnitClassBase("player")
 
@@ -209,7 +203,11 @@ requirementCheckFrame:SetScript("OnEvent", function()
     -- v1.15.10 added PLAYER_SWING, the only source for the swing-timer conditionals.
     -- v1.17.0 made GetSpellInfo's castTime the player's own (talents, cast speed),
     -- which [spellcasttime] and the Slam/ranged clip checks read.
-    local hasClassicAPIMin = hasClassicAPI and CleveRoids.ClassicAPI.HasMinimumVersion(1, 17, 0)
+    -- v1.18.0 gave C_Spell.IsSpellInRange the engine's target gate (nil for a unit
+    -- the spell can't be cast at, and for a rangeless spell), which [inrange] and
+    -- button range read, and added GetShapeshiftForm ([stance]/[form]) and
+    -- IsAutoRepeatSpell (the Auto Shot / Shoot recast guard).
+    local hasClassicAPIMin = hasClassicAPI and CleveRoids.ClassicAPI.HasMinimumVersion(1, 18, 0)
 
     if not hasNampower30 or not hasUnitXP or not hasClassicAPI or not hasClassicAPIMin then
         -- Show warnings (don't disable — tearing down a partially-initialized addon causes hangs)
@@ -233,7 +231,7 @@ requirementCheckFrame:SetScript("OnEvent", function()
             CleveRoids.Print("Dispel-type and movement conditionals will be unavailable without it.")
         elseif not hasClassicAPIMin then
             local major, minor, patch = CleveRoids.ClassicAPI.GetVersion()
-            CleveRoids.Print(format("|cFFFF9900WARNING:|r |cFF00FFFFClassicAPI v1.17.0+|r is required (you have v%d.%d.%d):", major, minor, patch))
+            CleveRoids.Print(format("|cFFFF9900WARNING:|r |cFF00FFFFClassicAPI v1.18.0+|r is required (you have v%d.%d.%d):", major, minor, patch))
             CleveRoids.Print("https://github.com/brues-code/ClassicAPI")
             CleveRoids.Print("The addon cannot finish loading on this version -- update ClassicAPI.")
         end
@@ -896,78 +894,22 @@ function CleveRoids.TestForActiveAction(actions)
         local previousInRange = actions.active.inRange
 
         if actions.active.spell then
-            -- Default to -1 (unknown) so we fall through to proxy slot or original function
-            -- Only set to 1/0 when we have a definitive answer from IsSpellInRange
+            -- 1 in range, 0 out of range, -1 when the check does not apply (no unit,
+            -- a rangeless spell, or a unit the spell cannot be cast at)
             actions.active.inRange = -1
 
-            -- Enhanced nampower range check with spell ID support
-			if IsSpellInRange then
-                local conds = actions.active.activeConditionals or actions.active.conditionals
-                local unit = conds and conds.target or "target"
-				local resolvedMark = CleveRoids.ResolveRaidMarkUnit(unit)
-				if resolvedMark then unit = resolvedMark end
+            local conds = actions.active.activeConditionals or actions.active.conditionals
+            local unit = conds and conds.target or "target"
+            local resolvedMark = CleveRoids.ResolveRaidMarkUnit(unit)
+            if resolvedMark then unit = resolvedMark end
 
-				-- PERFORMANCE: Cache spell name construction using two-level cache (no string concat for lookup)
-				local castName = actions.active.action
-				if actions.active.spell and actions.active.spell.name then
-					local spellName = actions.active.spell.name
-					local rank = actions.active.spell.rank
-								 or (actions.active.spell.highest and actions.active.spell.highest.rank)
-					if rank and rank ~= "" then
-						-- Two-level cache: spellNameCache[spellName][rank] = "SpellName(Rank X)"
-						local nameCache = CleveRoids.spellNameCache[spellName]
-						if not nameCache then
-							nameCache = {}
-							CleveRoids.spellNameCache[spellName] = nameCache
-						end
-						castName = nameCache[rank]
-						if not castName then
-							castName = spellName .. "(" .. rank .. ")"
-							nameCache[rank] = castName
-						end
-					end
-				end
-
-				-- PERFORMANCE: Try to get spell ID with caching
-				local spellId = nil
-				if GetSpellIdForName then
-					-- Check cache first
-					local cachedId = CleveRoids.spellIdCache[castName]
-					if cachedId then
-						spellId = cachedId
-					else
-						spellId = GetSpellIdForName(castName)
-						if spellId and spellId > 0 then
-							CleveRoids.spellIdCache[castName] = spellId
-						end
-					end
-				end
-
-				-- Check range using API wrapper (handles all cases properly)
-				local API = CleveRoids.NampowerAPI
-				local checkValue = spellId and spellId > 0 and spellId or castName
-
-				if UnitExists(unit) then
-					-- We have a target - use API wrapper for proper range checking
-					-- API.IsSpellInRange handles: native check, -1 for self-cast, UnitXP fallback
-					if API then
-						local r = API.IsSpellInRange(checkValue, unit)
-						if r ~= nil then
-							actions.active.inRange = r
-						end
-					elseif IsSpellInRange then
-						-- No API, use native directly
-						local nativeResult = IsSpellInRange(checkValue, unit)
-						if nativeResult == 0 or nativeResult == 1 then
-							actions.active.inRange = nativeResult
-						elseif nativeResult == -1 then
-							-- Self-cast/ground-targeted spell, always in range
-							actions.active.inRange = 1
-						end
-					end
-				end
-				-- No target: don't set inRange, let proxy slot / original behavior handle it
-			end
+            -- A rank entry is its own spell; a base entry stands for its highest rank
+            local spell = actions.active.spell
+            local spellId = (spell.rank and spell or spell.highest or spell).id
+            local inRange = CleveRoids.ClassicAPI.IsSpellInRange(spellId, unit)
+            if inRange ~= nil then
+                actions.active.inRange = inRange and 1 or 0
+            end
 
             -- Check if spell is usable first (handles forms, stances, and power type correctly)
             local isUsableBySpell, notEnoughPower = nil, nil
@@ -1525,14 +1467,6 @@ function CleveRoids.ExecuteMacroBody(body,inline)
     CleveRoids.skipMacroFlag = false
 
     return true
-end
-
--- Gets the body of the Macro with the given name
--- name: The name of the Macro
--- returns: The body of the macro
-function CleveRoids.GetMacroBody(name)
-    local macro = CleveRoids.GetMacro(name)
-    return macro and macro.body
 end
 
 -- Attempts to execute a macro by the given name or index (Blizzard or Super tab)
@@ -4502,12 +4436,6 @@ function CleveRoids.Frame:PLAYER_LOGOUT()
     if CleveRoids._auraCleanupTicker then
         CleveRoids._auraCleanupTicker:Cancel()
     end
-    -- Clear spell caches to prevent stale data
-    if CleveRoids.spellIdCache then
-        for k in pairs(CleveRoids.spellIdCache) do
-            CleveRoids.spellIdCache[k] = nil
-        end
-    end
 end
 
 function CleveRoids.Frame:PLAYER_LEAVING_WORLD()
@@ -4806,9 +4734,7 @@ function CleveRoids.Frame:UPDATE_MACROS()
 end
 
 function CleveRoids.Frame:SPELLS_CHANGED()
-    -- Clear spell caches immediately (cheap); defer the heavy rebuild.
-    CleveRoids.spellIdCache = {}
-    CleveRoids.spellNameCache = {}
+    -- Defer the heavy rebuild.
     CleveRoids.macroRebuildTime = GetTime() + 0.3
 end
 
@@ -4894,24 +4820,12 @@ function CleveRoids.Frame:PLAYER_EQUIPMENT_CHANGED()
 end
 
 function CleveRoids.Frame:START_AUTOREPEAT_SPELL()
-    local spells = CleveRoids.Spells[BOOKTYPE_SPELL]
-    if spells and spells[CleveRoids.Localized.AutoShot] then
-        CleveRoids.CurrentSpell.autoShot = true
-    else
-        CleveRoids.CurrentSpell.wand = true
-    end
     if CleveRoidMacros.realtime == 0 then
         CleveRoids.QueueActionUpdate()
     end
 end
 
 function CleveRoids.Frame:STOP_AUTOREPEAT_SPELL()
-    local spells = CleveRoids.Spells[BOOKTYPE_SPELL]
-    if spells and spells[CleveRoids.Localized.AutoShot] then
-        CleveRoids.CurrentSpell.autoShot = false
-    else
-        CleveRoids.CurrentSpell.wand = false
-    end
     if CleveRoidMacros.realtime == 0 then
         CleveRoids.QueueActionUpdate()
     end

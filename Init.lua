@@ -85,10 +85,6 @@ CleveRoids._keyState = {}
 CleveRoids.CurrentSpell = {
     -- is the Attack ability enabled
     autoAttack = false,
-    -- is the Auto Shot ability enabled
-    autoShot = false,
-    -- is the Shoot ability (wands) enabled
-    wand = false,
 }
 
 -- The player's cast in progress, from ClassicAPI's cast state, which has the

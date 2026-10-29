@@ -3,7 +3,8 @@
 
     ClassicAPI is a client mod (sibling to Nampower/SuperWoW) that backports the
     modern C_* API into the 1.12.1 Lua environment. It is a HARD REQUIREMENT of
-    this addon (ClassicAPI v1.17.0+, whose GetSpellInfo castTime is the player's;
+    this addon (ClassicAPI v1.18.0+, whose C_Spell.IsSpellInRange gates on the target;
+    v1.17.0 made GetSpellInfo castTime the player's;
     v1.15.10 added PLAYER_SWING; v1.15.8 scoped
     GetMouseButtonClicked to the click dispatch; v1.15.0 added
     frame:RegisterUnitEvent), so the
@@ -302,6 +303,21 @@ end
 -- proxy.
 function API.GetSpellBonusHealing()
     return GetSpellBonusHealing()
+end
+
+-- Whether `unit` is in range of `spell`: true, false, or nil when the check does
+-- not apply -- a rangeless spell (self buff, Arcane Explosion), an absent unit,
+-- or a unit the spell cannot be cast at (a heal on an enemy, a damage spell on a
+-- friend, the wrong creature type). The engine's own range check, the one the
+-- action-button range coloring uses, so melee reach and min range match the
+-- client. `spell` is a spellID or a spellbook name, optionally with "(Rank N)";
+-- `unit` is any token or GUID string.
+--
+-- C_Spell raises on a string that is not a unit token (an @Name target), so
+-- UnitExists screens those out first.
+function API.IsSpellInRange(spell, unit)
+    if not spell or not unit or not UnitExists(unit) then return nil end
+    return C_Spell.IsSpellInRange(spell, unit)
 end
 
 -- Spell haste for `unit` as a percentage: 0 unhasted, positive when casts are

@@ -1503,20 +1503,10 @@ end
 
 -- Returns the current shapeshift / stance index
 -- returns: The index of the current shapeshift form / stance. 0 if in no shapeshift form / stance
+-- The number ClassicAPI's own [stance:N] tests. A form that is not on the stance
+-- bar (Shadowform, Stealth, Ghost Wolf) counts as one past the bar's last slot.
 function CleveRoids.GetCurrentShapeshiftIndex()
-    if CleveRoids.playerClass == "PRIEST" then
-        return CleveRoids.ValidatePlayerBuff(CleveRoids.Localized.Spells["Shadowform"]) and 1 or 0
-    elseif CleveRoids.playerClass == "ROGUE" then
-        return CleveRoids.ClassicAPI.IsStealthed() and 1 or 0
-    end
-    for i=1, GetNumShapeshiftForms() do
-        local _, _, active = GetShapeshiftFormInfo(i)
-        if active then
-            return i
-        end
-    end
-
-    return 0
+    return GetShapeshiftForm(true)
 end
 
 function CleveRoids.CancelAura(auraName)
@@ -1701,42 +1691,10 @@ function CleveRoids.CheckChanneled(channeledSpell)
         return true
     end
 
-    if channeled == CleveRoids.Localized.AutoShot then
-        -- ALWAYS check action bar state first - it's the authoritative source
-        -- Event-based tracking can get stale if STOP_AUTOREPEAT_SPELL doesn't fire
-        local slot = CleveRoids.GetProxyActionSlot(CleveRoids.Localized.AutoShot)
-        if slot then
-            local isActive = IsAutoRepeatAction(slot)
-            -- Sync the event-based flag with actual game state
-            CleveRoids.CurrentSpell.autoShot = isActive
-            if isActive then
-                return false
-            end
-        elseif CleveRoids.CurrentSpell.autoShot then
-            -- No slot found but flag is set - trust event-based tracking
-            -- (Auto Shot not on action bar, but event says it's active)
-            return false
-        end
-        return true
-    end
-
-    if channeled == CleveRoids.Localized.Shoot then
-        -- ALWAYS check action bar state first - it's the authoritative source
-        -- Event-based tracking can get stale if STOP_AUTOREPEAT_SPELL doesn't fire
-        local slot = CleveRoids.GetProxyActionSlot(CleveRoids.Localized.Shoot)
-        if slot then
-            local isActive = IsAutoRepeatAction(slot)
-            -- Sync the event-based flag with actual game state
-            CleveRoids.CurrentSpell.wand = isActive
-            if isActive then
-                return false
-            end
-        elseif CleveRoids.CurrentSpell.wand then
-            -- No slot found but flag is set - trust event-based tracking
-            -- (Shoot not on action bar, but event says it's active)
-            return false
-        end
-        return true
+    -- Auto Shot and Shoot: the repeat state comes from the spellbook, so the
+    -- spell need not be on an action bar
+    if channeled == CleveRoids.Localized.AutoShot or channeled == CleveRoids.Localized.Shoot then
+        return not IsAutoRepeatSpell(channeled)
     end
 
     -- If none of the special cases matched, allow the cast (not channeling the specified spell)
@@ -2955,11 +2913,13 @@ function CleveRoids.ValidatePlayerBuff(args)
     if searchName then
         -- PERFORMANCE: Use cached lowercase normalization to avoid per-call string allocation
         searchName = GetLowerNormalizedName(searchName)
-        local numForms = GetNumShapeshiftForms()
-        for i = 1, numForms do
-            local icon, name, isActive, isCastable = GetShapeshiftFormInfo(i)
-            -- PERFORMANCE: Use cached lowercase to avoid per-iteration string allocation
-            if name and isActive and GetLowercaseString(name) == searchName then
+        -- Only a form on the stance bar has a name to match; one that is not
+        -- (Shadowform, Stealth) is numbered one past the bar's last slot
+        local form = GetShapeshiftForm()
+        if form > 0 and form <= GetNumShapeshiftForms() then
+            local _, name = GetShapeshiftFormInfo(form)
+            -- PERFORMANCE: Use cached lowercase to avoid per-call string allocation
+            if name and GetLowercaseString(name) == searchName then
                 return true
             end
         end
@@ -3703,40 +3663,8 @@ function CleveRoids.ValidateUnitCCDirect(unit, mechanic)
     return false
 end
 
--- ============================================================================
--- MELEE RANGE CHECK VIA IsSpellInRange
--- ============================================================================
--- Uses Nampower's IsSpellInRange with a melee-range spell from the player's
--- spellbook for reliable game-engine range checking (avoids UnitXP issues).
-
-local meleeRangeSpellId = nil -- cached spell ID, false = searched but none found
-
---- Find a melee-range spell (rangeIndex == 1) with unit targeting from the
---- player's spellbook. Caches the result for subsequent calls.
-local function FindMeleeRangeSpell()
-    if meleeRangeSpellId then return meleeRangeSpellId end
-    if meleeRangeSpellId == false then return nil end
-
-    local API = CleveRoids.NampowerAPI
-    if not API or not IsSpellInRange then return nil end
-    if not CleveRoids.Spells or not CleveRoids.Spells[BOOKTYPE_SPELL] then return nil end
-
-    for name, data in pairs(CleveRoids.Spells[BOOKTYPE_SPELL]) do
-        local spellId = API.GetSpellIdFromName(name)
-        if spellId then
-            local rangeIndex = API.GetSpellField(spellId, "rangeIndex")
-            if rangeIndex == 1 then -- Melee range (5 yards)
-                if API.IsUnitTargetedSpell(spellId) then
-                    meleeRangeSpellId = spellId
-                    return spellId
-                end
-            end
-        end
-    end
-
-    meleeRangeSpellId = false -- No suitable spell found
-    return nil
-end
+-- Auto Attack: every class knows it, and its range is the melee swing range
+local AUTO_ATTACK_SPELL_ID = 6603
 
 --- Check if a unit is in melee range.
 --- @param unit string Unit token or GUID to check
@@ -3755,13 +3683,10 @@ function CleveRoids.IsUnitInMeleeRange(unit, cleaveRange)
         if distance then return distance <= threshold end
     end
 
-    -- Fallback: IsSpellInRange with a melee-range spell (works with GUID tokens)
-    local spellId = FindMeleeRangeSpell()
-    if spellId then
-        local result = IsSpellInRange(spellId, unit)
-        if result == 1 then return true end
-        if result == 0 then return false end
-    end
+    -- Fallback: the engine's range check for Auto Attack (nil for a unit it
+    -- cannot be aimed at, such as a friend)
+    local inRange = CleveRoids.ClassicAPI.IsSpellInRange(AUTO_ATTACK_SPELL_ID, unit)
+    if inRange ~= nil then return inRange end
 
     -- Last resort (~10 yards, less accurate)
     return CheckInteractDistance(unit, 3)
@@ -5396,122 +5321,76 @@ CleveRoids.Keywords = {
     -- [inrange] or [inrange:Spell] - Target is in range of spell
     -- [inrange:Spell>N] - More than N enemies are in range of spell (count mode)
     inrange = function(conditionals)
-        if not IsSpellInRange then return end
-        local API = CleveRoids.NampowerAPI
         return Multi(conditionals.inrange, function(args)
             -- Check for count mode: [inrange:Multi-Shot>1]
             if type(args) == "table" and args.operator and args.amount then
                 local spellName = args.name or conditionals.action
-                local spellId = API.GetSpellIdFromName(spellName)
-                local spellRange = spellId and API.GetSpellRange(spellId)
                 local count = CleveRoids.CountEnemiesMatching(function(unit)
-                    if spellRange and spellRange > 0 and CleveRoids.hasUnitXP then
-                        local distance = UnitXP("distanceBetween", "player", unit)
-                        if distance then
-                            return distance <= spellRange
-                        end
-                    end
-                    return API.IsSpellInRange(spellName, unit) == 1
+                    return CleveRoids.ClassicAPI.IsSpellInRange(spellName, unit) == true
                 end)
                 return CleveRoids.comparators[args.operator](count, args.amount)
             end
 
-            -- Original single-target behavior
             local target = conditionals.target or "target"
             local checkValue = (type(args) == "string" and args) or conditionals.action
-            return API.IsSpellInRange(checkValue, target) == 1
+            return CleveRoids.ClassicAPI.IsSpellInRange(checkValue, target) == true
         end, conditionals, "inrange")
     end,
 
     -- [noinrange] or [noinrange:Spell] - Target is NOT in range of spell
     -- [noinrange:Spell>N] - More than N enemies are NOT in range of spell (count mode)
     noinrange = function(conditionals)
-        if not IsSpellInRange then return end
-        local API = CleveRoids.NampowerAPI
         return NegatedMulti(conditionals.noinrange, function(args)
             -- Check for count mode: [noinrange:Multi-Shot>1]
             if type(args) == "table" and args.operator and args.amount then
                 local spellName = args.name or conditionals.action
-                local spellId = API.GetSpellIdFromName(spellName)
-                local spellRange = spellId and API.GetSpellRange(spellId)
                 local count = CleveRoids.CountEnemiesMatching(function(unit)
-                    if spellRange and spellRange > 0 and CleveRoids.hasUnitXP then
-                        local distance = UnitXP("distanceBetween", "player", unit)
-                        if distance then
-                            return distance > spellRange
-                        end
-                    end
-                    return API.IsSpellInRange(spellName, unit) == 0
+                    return CleveRoids.ClassicAPI.IsSpellInRange(spellName, unit) == false
                 end)
                 return CleveRoids.comparators[args.operator](count, args.amount)
             end
 
-            -- Original single-target behavior
             local target = conditionals.target or "target"
             local checkValue = (type(args) == "string" and args) or conditionals.action
-            return API.IsSpellInRange(checkValue, target) == 0
+            return CleveRoids.ClassicAPI.IsSpellInRange(checkValue, target) == false
         end, conditionals, "noinrange")
     end,
 
     -- [outrange] or [outrange:Spell] - Target is out of range of spell
     -- [outrange:Spell>N] - More than N enemies are out of range of spell (count mode)
     outrange = function(conditionals)
-        if not IsSpellInRange then return end
-        local API = CleveRoids.NampowerAPI
         return Multi(conditionals.outrange, function(args)
             -- Check for count mode: [outrange:Multi-Shot>1]
             if type(args) == "table" and args.operator and args.amount then
                 local spellName = args.name or conditionals.action
-                local spellId = API.GetSpellIdFromName(spellName)
-                local spellRange = spellId and API.GetSpellRange(spellId)
                 local count = CleveRoids.CountEnemiesMatching(function(unit)
-                    if spellRange and spellRange > 0 and CleveRoids.hasUnitXP then
-                        local distance = UnitXP("distanceBetween", "player", unit)
-                        if distance then
-                            return distance > spellRange
-                        end
-                    end
-                    return API.IsSpellInRange(spellName, unit) == 0
+                    return CleveRoids.ClassicAPI.IsSpellInRange(spellName, unit) == false
                 end)
                 return CleveRoids.comparators[args.operator](count, args.amount)
             end
 
-            -- Original single-target behavior
             local target = conditionals.target or "target"
             local checkValue = (type(args) == "string" and args) or conditionals.action
-            return API.IsSpellInRange(checkValue, target) == 0
+            return CleveRoids.ClassicAPI.IsSpellInRange(checkValue, target) == false
         end, conditionals, "outrange")
     end,
 
     -- [nooutrange] or [nooutrange:Spell] - Target is NOT out of range (same as inrange)
     -- [nooutrange:Spell>N] - More than N enemies are NOT out of range (count mode)
     nooutrange = function(conditionals)
-        if not IsSpellInRange then return end
-        local API = CleveRoids.NampowerAPI
         return NegatedMulti(conditionals.nooutrange, function(args)
             -- Check for count mode: [nooutrange:Multi-Shot>1]
             if type(args) == "table" and args.operator and args.amount then
                 local spellName = args.name or conditionals.action
-                local spellId = API.GetSpellIdFromName(spellName)
-                local spellRange = spellId and API.GetSpellRange(spellId)
                 local count = CleveRoids.CountEnemiesMatching(function(unit)
-                    if spellRange and spellRange > 0 and CleveRoids.hasUnitXP then
-                        local distance = UnitXP("distanceBetween", "player", unit)
-                        if distance then
-                            return distance <= spellRange
-                        end
-                    end
-                    return API.IsSpellInRange(spellName, unit) == 1
+                    return CleveRoids.ClassicAPI.IsSpellInRange(spellName, unit) == true
                 end)
                 return CleveRoids.comparators[args.operator](count, args.amount)
             end
 
-            -- Original single-target behavior
             local target = conditionals.target or "target"
             local checkValue = (type(args) == "string" and args) or conditionals.action
-
-            local result = API.IsSpellInRange(checkValue, target)
-            return result == 1  -- In range = nooutrange passes
+            return CleveRoids.ClassicAPI.IsSpellInRange(checkValue, target) == true
         end, conditionals, "nooutrange")
     end,
 
