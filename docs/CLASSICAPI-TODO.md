@@ -113,9 +113,11 @@ API references are line numbers into `C:\Git\ClassicAPI\docs\API.md`.
 ### 4. `C_Spell.*` / `GetSpellInfo(spellID)`
 - **API:** `API.md:6649+` — `GetSpellCooldown`, `IsUsableSpell`, `IsSpellKnown`,
   `SpellHasRange`, `GetSpellSchool`, `FindSpellBookSlotByID`.
-- **Replaces today:** spellbook scanning via `GetSpellName(i, BOOKTYPE_SPELL)`
-  (`Conditionals.lua:2500`) and the Slam-slot hack. Simplifies `[known]`,
-  `[usable]`, range checks.
+- **Replaces today:** spellbook scanning via `GetSpellName(i, BOOKTYPE_SPELL)`.
+  Simplifies `[known]`, `[usable]`, range checks.
+- **Done:** the Slam-slot and `[spellcasttime]` tooltip scans read
+  `C_Spell.GetSpellInfo(name).castTime` (the player's cast time since v1.17.0).
+  Left: the `[gcd]` fallback scan; ClassicAPI has no GCD field to replace it.
 
 ### 5. `C_Timer.After` / `NewTicker` (+ coroutines)
 - **API:** `API.md:8008+`.
@@ -284,9 +286,6 @@ don't re-investigate.
   Shadowform=28…), NOT the 1-based **bar index** these conditionals compare
   against. Swapping would silently break every `[stance:N]`/`[form:N]` macro.
   (Only the Rogue *stealth* branch was migrated, via `IsStealthed`.)
-- **Cast-time scans** (Slam-clip, `GetSpellCastTime`) — ClassicAPI/DBC cast time
-  is **base only** (no haste/talents/buffs), which defeats the reason these scan
-  the tooltip.
 - **Range / distance / behind / facing** — UnitXP_SP3 gives precise yards +
   facing; `UnitInRange` is a binary 40yd and has no facing/behind. Keep UnitXP.
 - **`FindItemLocation`** — nampower `FindPlayerItemSlot` finds an item by id/name

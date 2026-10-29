@@ -911,15 +911,6 @@ function API.GetSpellNameById(spellId)
     return nil
 end
 
--- Get spell cast time in seconds
-function API.GetSpellCastTime(spellId)
-    local castTime = API.GetSpellField(spellId, "castTime")
-    if castTime then
-        return castTime / 1000  -- Convert from ms to seconds
-    end
-    return nil
-end
-
 -- Get spell school (0=Physical, 1=Holy, 2=Fire, 3=Nature, 4=Frost, 5=Shadow, 6=Arcane)
 function API.GetSpellSchool(spellId)
     return API.GetSpellField(spellId, "school")

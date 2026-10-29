@@ -3,7 +3,8 @@
 
     ClassicAPI is a client mod (sibling to Nampower/SuperWoW) that backports the
     modern C_* API into the 1.12.1 Lua environment. It is a HARD REQUIREMENT of
-    this addon (ClassicAPI v1.15.10+, which added PLAYER_SWING; v1.15.8 scoped
+    this addon (ClassicAPI v1.17.0+, whose GetSpellInfo castTime is the player's;
+    v1.15.10 added PLAYER_SWING; v1.15.8 scoped
     GetMouseButtonClicked to the click dispatch; v1.15.0 added
     frame:RegisterUnitEvent), so the
     wrappers below call the API directly — no fallbacks. The load-time requirement

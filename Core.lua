@@ -207,7 +207,9 @@ requirementCheckFrame:SetScript("OnEvent", function()
     -- failure and why the floor moved rather than the conditional being gated.
     -- v1.15.9 added C_LossOfControl.GetSchoolLockout, which [locked] calls.
     -- v1.15.10 added PLAYER_SWING, the only source for the swing-timer conditionals.
-    local hasClassicAPIMin = hasClassicAPI and CleveRoids.ClassicAPI.HasMinimumVersion(1, 15, 10)
+    -- v1.17.0 made GetSpellInfo's castTime the player's own (talents, cast speed),
+    -- which [spellcasttime] and the Slam/ranged clip checks read.
+    local hasClassicAPIMin = hasClassicAPI and CleveRoids.ClassicAPI.HasMinimumVersion(1, 17, 0)
 
     if not hasNampower30 or not hasUnitXP or not hasClassicAPI or not hasClassicAPIMin then
         -- Show warnings (don't disable — tearing down a partially-initialized addon causes hangs)
@@ -231,7 +233,7 @@ requirementCheckFrame:SetScript("OnEvent", function()
             CleveRoids.Print("Dispel-type and movement conditionals will be unavailable without it.")
         elseif not hasClassicAPIMin then
             local major, minor, patch = CleveRoids.ClassicAPI.GetVersion()
-            CleveRoids.Print(format("|cFFFF9900WARNING:|r |cFF00FFFFClassicAPI v1.15.10+|r is required (you have v%d.%d.%d):", major, minor, patch))
+            CleveRoids.Print(format("|cFFFF9900WARNING:|r |cFF00FFFFClassicAPI v1.17.0+|r is required (you have v%d.%d.%d):", major, minor, patch))
             CleveRoids.Print("https://github.com/brues-code/ClassicAPI")
             CleveRoids.Print("The addon cannot finish loading on this version -- update ClassicAPI.")
         end
