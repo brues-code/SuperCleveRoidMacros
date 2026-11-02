@@ -1740,18 +1740,18 @@ function CleveRoids.GetSwingTimer(swingType)
     return remaining, timer.duration
 end
 
--- Returns percent (0-100) of the current swing elapsed, or nil when idle
+-- Returns percent (0-100) of the current swing elapsed. Idle is 100: the next
+-- swing is ready and only waits on the player (moving, casting, not attacking).
 function CleveRoids.GetSwingPercentElapsed(swingType)
     local remaining, duration = CleveRoids.GetSwingTimer(swingType)
-    if not remaining then return nil end
+    if not remaining then return 100 end
     return (duration - remaining) / duration * 100
 end
 
 -- True if the swing's elapsed percent passes every comparison in args (a single
--- operator/amount, or a multi-comparison list such as >50&<80). Idle is false.
+-- operator/amount, or a multi-comparison list such as >50&<80)
 function CleveRoids.ValidateSwingPercent(swingType, args)
     local percentElapsed = CleveRoids.GetSwingPercentElapsed(swingType)
-    if not percentElapsed then return false end
     for _, comp in ipairs(args.comparisons or { args }) do
         local compare = CleveRoids.comparators[comp.operator]
         if not compare or not compare(percentElapsed, comp.amount) then
@@ -6111,7 +6111,7 @@ CleveRoids.Keywords = {
     end,
 
     -- Swing timer conditionals (ClassicAPI PLAYER_SWING)
-    -- Checks percentage of the current swing that has elapsed; false while idle
+    -- Checks percentage of the current swing that has elapsed; 100 while idle
     -- Usage: [swingtimer:<15] = less than 15% of swing has elapsed (early in swing)
     --        [swingtimer:>80] = more than 80% of swing has elapsed (late in swing)
     swingtimer = function(conditionals)
@@ -6146,7 +6146,7 @@ CleveRoids.Keywords = {
     end,
 
     -- Ranged swing timer conditional
-    -- Checks percentage of the current ranged swing that has elapsed; false while idle
+    -- Checks percentage of the current ranged swing that has elapsed; 100 while idle
     -- Usage: [rangedtimer:>80] = more than 80% of ranged swing has elapsed
     --        [rangedtimer:<20] = less than 20% of ranged swing has elapsed
     rangedtimer = function(conditionals)
