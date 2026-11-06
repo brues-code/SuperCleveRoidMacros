@@ -1713,11 +1713,25 @@ function CleveRoids.ValidateComboPoints(operator, amount)
 end
 
 -- Player attack timers, fed by ClassicAPI's PLAYER_SWING: it fires on every reset
--- with the seconds until that weapon's next swing. The server never rescales a
--- running swing when haste changes, so the duration captured at reset is that
--- swing's true length. A timer past its end is idle: auto-attack stopped, or no
--- swing has happened yet.
-local swingTimers = {}  -- [Enum.PlayerSwingType] = { start, duration }
+-- with the seconds until that weapon's next swing. That time can be shorter than
+-- a whole swing (a parry cuts it, a ranged shot's wind-up is already spent, a
+-- cast reset is reported when the attack starts), so the swing's length is the
+-- weapon's speed read at the reset. The server never rescales a running swing
+-- when haste changes, so that speed holds for the whole swing. A timer past its
+-- end is idle: auto-attack stopped, or no swing has happened yet.
+local swingTimers = {}  -- [Enum.PlayerSwingType] = { endTime, length }
+
+-- The weapon's current (hasted) swing speed in seconds, or nil without one
+local function WeaponSpeed(swingType)
+    if swingType == Enum.PlayerSwingType.Ranged then
+        return (UnitRangedDamage("player"))
+    end
+    local mainSpeed, offSpeed = UnitAttackSpeed("player")
+    if swingType == Enum.PlayerSwingType.OffHand then
+        return offSpeed
+    end
+    return mainSpeed
+end
 
 local swingFrame = CreateFrame("Frame", "CleveRoidsSwingFrame")
 swingFrame:RegisterEvent("PLAYER_SWING")
@@ -1727,25 +1741,26 @@ swingFrame:SetScript("OnEvent", function()
         timer = {}
         swingTimers[arg2] = timer
     end
-    timer.start = GetTime()
-    timer.duration = arg1
+    timer.endTime = GetTime() + arg1
+    timer.length = math.max(WeaponSpeed(arg2) or 0, arg1)
 end)
 
--- Returns timeRemaining, swingDuration for an Enum.PlayerSwingType, or nil when idle
+-- Returns timeRemaining, swingLength for an Enum.PlayerSwingType, or nil when
+-- idle. swingLength is the weapon's full swing, not the time the reset reported.
 function CleveRoids.GetSwingTimer(swingType)
     local timer = swingTimers[swingType]
     if not timer then return nil end
-    local remaining = timer.start + timer.duration - GetTime()
+    local remaining = timer.endTime - GetTime()
     if remaining <= 0 then return nil end
-    return remaining, timer.duration
+    return remaining, timer.length
 end
 
 -- Returns percent (0-100) of the current swing elapsed. Idle is 100: the next
 -- swing is ready and only waits on the player (moving, casting, not attacking).
 function CleveRoids.GetSwingPercentElapsed(swingType)
-    local remaining, duration = CleveRoids.GetSwingTimer(swingType)
+    local remaining, length = CleveRoids.GetSwingTimer(swingType)
     if not remaining then return 100 end
-    return (duration - remaining) / duration * 100
+    return (length - remaining) / length * 100
 end
 
 -- True if the swing's elapsed percent passes every comparison in args (a single
@@ -1798,9 +1813,9 @@ end
 -- Scenario: skip Slam this swing, cast an instant, then Slam next swing. The GCD
 -- plus Slam's cast must fit before the swing after this one lands. Idle is false.
 function CleveRoids.ValidateNoNextSlamClip()
-    local remaining, duration = CleveRoids.GetSwingTimer(Enum.PlayerSwingType.MainHand)
+    local remaining, length = CleveRoids.GetSwingTimer(Enum.PlayerSwingType.MainHand)
     return remaining ~= nil
-        and remaining + duration >= GCD_DURATION + CleveRoids.GetSlamCastTime()
+        and remaining + length >= GCD_DURATION + CleveRoids.GetSlamCastTime()
 end
 
 -- ============================================================================
