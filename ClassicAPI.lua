@@ -311,12 +311,10 @@ end
 -- friend, the wrong creature type). The engine's own range check, the one the
 -- action-button range coloring uses, so melee reach and min range match the
 -- client. `spell` is a spellID or a spellbook name, optionally with "(Rank N)";
--- `unit` is any token or GUID string.
---
--- C_Spell raises on a string that is not a unit token (an @Name target), as
--- UnitExists does, so IsUnitToken screens those out first.
+-- `unit` is any token or GUID string; @Name targets are resolved to one first
+-- (CleveRoids.ResolveUnit).
 function API.IsSpellInRange(spell, unit)
-    if not spell or not IsUnitToken(unit) then return nil end
+    if not spell or not unit then return nil end
     return C_Spell.IsSpellInRange(spell, unit)
 end
 

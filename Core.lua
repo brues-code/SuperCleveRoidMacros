@@ -883,7 +883,7 @@ function CleveRoids.TestForActiveAction(actions)
         -- nil aims it at the target.
         local conds = actions.active.activeConditionals or actions.active.conditionals
         local unit = conds and conds.target
-        actions.active.rangeUnit = CleveRoids.ResolveRaidMarkUnit(unit) or unit
+        actions.active.rangeUnit = CleveRoids.ResolveUnit(unit)
 
         if actions.active.spell then
             -- 1 in range, 0 out of range, -1 when the check does not apply (no unit,
@@ -1087,9 +1087,7 @@ function CleveRoids.PublishDisplay(actions)
     publishedUnit[macroID] = unit
 
     -- The client resolves the token again at every range check, so a new
-    -- mouseover or focus needs no republish. SetMacroDisplay raises on a string
-    -- that is not a token (an @Name target); that range stays on the target.
-    if not IsUnitToken(unit) then unit = nil end
+    -- mouseover or focus needs no republish.
     C_Macro.SetMacroDisplay(macroID, value, unit)
 end
 
@@ -1903,11 +1901,15 @@ function CleveRoids.ParseMsg(msg)
         conditionals.cancelaura = action
     end
 
-    -- Set the action's target to @unitid if found (e.g., @mouseover)
-    local _, _, target = string.find(conditionBlock, "(@[^%s,]+)")
-    if target then
-        conditionBlock = CleveRoids.Trim(string.gsub(conditionBlock, target, ""))
-        conditionals.target = string.sub(target, 2)
+    -- Set the action's target from @unit or target=unit (e.g., @mouseover,
+    -- target=party2). The unit may also be a raid mark or a character name.
+    local s, e, unit = string.find(conditionBlock, "@([^%s,]+)")
+    if not s then
+        s, e, unit = string.find(conditionBlock, "target=([^%s,]+)")
+    end
+    if s then
+        conditionBlock = CleveRoids.Trim(string.sub(conditionBlock, 1, s - 1) .. string.sub(conditionBlock, e + 1))
+        conditionals.target = unit
     end
 
     if conditionBlock and conditionals.action then
@@ -2267,10 +2269,12 @@ function CleveRoids.TestAction(cmd, args)
         end
     end
 
-    -- Resolve named raid marks (skull/cross/etc.) and mark1-mark8 to native mark# unit tokens
+    -- Resolve raid marks and character names to unit tokens. A name that finds
+    -- nobody fails the clause, as the cast path does.
     if conditionals.target then
-        local resolvedMark = CleveRoids.ResolveRaidMarkUnit(conditionals.target)
-        if resolvedMark then conditionals.target = resolvedMark end
+        local unit = CleveRoids.ResolveUnit(conditionals.target)
+        if not unit then return end
+        conditionals.target = unit
     end
 
     CleveRoids.FixEmptyTarget(conditionals)
@@ -2397,17 +2401,23 @@ function CleveRoids.DoWithConditionals(msg, hook, fixEmptyTargetFunc, targetBefo
         return false
     end
 
-    -- Resolve named raid marks (skull/cross/etc.) and mark1-mark8 to native mark# unit tokens
+    -- Resolve raid marks and character names to unit tokens. A name that finds
+    -- nobody fails the clause quietly, like @focus with no focus.
     if conditionals.target then
-        local resolvedMark = CleveRoids.ResolveRaidMarkUnit(conditionals.target)
-        if resolvedMark then conditionals.target = resolvedMark end
+        local unit = CleveRoids.ResolveUnit(conditionals.target)
+        if not unit then
+            if needRetarget then TargetLastTarget() end
+            conditionals.target = origTarget
+            return false
+        end
+        conditionals.target = unit
     end
 
     -- Handle [multiscan:priority] - scan enemies and find best target
     -- Must be processed BEFORE the Keywords loop since it sets conditionals.target
     -- Pass origTarget so @unit syntax makes that unit exempt from combat check
     if conditionals.multiscan then
-        local scanResult = CleveRoids.ResolveMultiscanTarget(conditionals, origTarget)
+        local scanResult = CleveRoids.ResolveMultiscanTarget(conditionals, origTarget and conditionals.target)
         if not scanResult then
             -- No valid target found - fail this conditional line (try next)
             conditionals.target = origTarget
@@ -2629,7 +2639,7 @@ end
 -- the same unit pfUI would cast on, and the final CastSpellByName gets the correct
 -- unit token. Module-level to avoid a closure per call.
 local function PfCastClause(v)
-    if string.find(v, "%[") and not string.find(v, "@") then
+    if string.find(v, "%[") and not string.find(v, "@") and not string.find(v, "target=") then
         local unit = ResolvePfCastUnit()
         if unit then
             v = string.gsub(v, "%[", "[@" .. unit .. ",", 1)
@@ -2777,9 +2787,8 @@ function CleveRoids.DoTarget(msg)
             end
         end
 
-        -- Resolve named raid marks (skull/cross/etc.) and mark1-mark8 to native mark# unit tokens
-        local resolvedMark = CleveRoids.ResolveRaidMarkUnit(unitTok)
-        if resolvedMark then unitTok = resolvedMark end
+        -- Resolve raid marks and character names to unit tokens
+        unitTok = CleveRoids.ResolveUnit(unitTok)
 
         if unitTok and UnitExists(unitTok) and IsGuidValid(unitTok, conditionals) then
             TargetUnit(unitTok)

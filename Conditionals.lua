@@ -7403,17 +7403,17 @@ CleveRoids.RAID_MARKS = {
     moon = 5, square = 6, cross = 7, skull = 8,
 }
 
--- Resolve any raid mark identifier to its native "mark#" unit token.
--- Accepts named marks (skull, cross, etc.) or direct mark# tokens (mark1-mark8).
--- Returns: "mark#" string if valid, nil otherwise.
-function CleveRoids.ResolveRaidMarkUnit(unitStr)
+-- Resolve an @unit value to a unit token the client accepts.
+-- A named raid mark (skull, cross, ...) becomes its "mark#" token, a unit token
+-- or GUID passes through, and anything else is read as a character name and
+-- looked up around you (exact match). Returns nil when a name finds nobody.
+-- Resolve at evaluation time: the token a name maps to changes with the group.
+function CleveRoids.ResolveUnit(unitStr)
     if not unitStr then return nil end
     local namedIdx = CleveRoids.RAID_MARKS[unitStr]
     if namedIdx then return "mark" .. namedIdx end
-    local _, _, markNum = string.find(unitStr, "^mark(%d+)$")
-    local n = markNum and tonumber(markNum)
-    if n and n >= 1 and n <= 8 then return "mark" .. n end
-    return nil
+    if IsUnitToken(unitStr) then return unitStr end
+    return UnitTokenFromName(unitStr, true)
 end
 
 -- Priority types for multiscan
