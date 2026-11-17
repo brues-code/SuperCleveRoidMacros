@@ -9,7 +9,7 @@ Enhanced macro addon for World of Warcraft 1.12.1 (Vanilla/Turtle WoW) with dyna
 | Mod | Required | Purpose |
 |-----|:--------:|---------|
 | [Nampower](https://github.com/brues-code/nampower/releases) (v3.0.0+) | ✅ | Spell queueing, DBC data, auto-attack events |
-| [UnitXP_SP3](https://codeberg.org/konaka/UnitXP_SP3/releases) | ✅ | Distance checks, `[multiscan]` enemy scanning |
+| [UnitXP_SP3](https://github.com/brues-code/UnitXP_SP3/releases) | ✅ | Distance checks, `[multiscan]` enemy scanning |
 | [ClassicAPI](https://github.com/brues-code/ClassicAPI/releases) (v1.18.0+) | ✅ | Modern `C_*` API: dispel-type conditionals (`[magic]`, `[curse]`, …), `[moving]` speed, swing timers, unit-filtered events |
 
 ## Installation

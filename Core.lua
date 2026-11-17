@@ -208,7 +208,7 @@ requirementCheckFrame:SetScript("OnEvent", function()
         end
         if not hasUnitXP then
             CleveRoids.Print("|cFFFF9900WARNING:|r |cFF00FFFFKonaka's UnitXP_SP3|r is required:")
-            CleveRoids.Print("https://codeberg.org/konaka/UnitXP_SP3")
+            CleveRoids.Print("https://github.com/brues-code/UnitXP_SP3")
         end
         if not hasClassicAPI then
             CleveRoids.Print("|cFFFF9900WARNING:|r |cFF00FFFFClassicAPI|r is required:")
