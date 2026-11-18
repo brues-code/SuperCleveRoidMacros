@@ -298,7 +298,7 @@ function Extension.OnPlayerLogin()
     -- treating a blocked lower-rank cast as pending.
     if pfUI and pfUI.libdebuff_downrank_blocked_hooks then
         table.insert(pfUI.libdebuff_downrank_blocked_hooks, function(spellName, castRank, activeRank, targetGuid, casterGuid)
-            local playerGuid = CleveRoids.GetGUID("player")
+            local playerGuid = CleveRoids.playerGuid
             if casterGuid ~= playerGuid then return end
             CleveRoids.DownrankBlocked[targetGuid] = CleveRoids.DownrankBlocked[targetGuid] or {}
             CleveRoids.DownrankBlocked[targetGuid][spellName] = {

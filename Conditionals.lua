@@ -692,7 +692,7 @@ function CleveRoids.GetAllCasterAuraTimeRemaining(targetGuid, spellId)
     if not casters then return nil end
 
     local now = GetTime()
-    local playerGuid = CleveRoids.GetGUID("player")
+    local playerGuid = CleveRoids.playerGuid
 
     -- Always check player's own entry first
     if playerGuid and casters[playerGuid] then
@@ -761,7 +761,7 @@ meleeResultFrame:SetScript("OnEvent", function()
         return
     end
 
-    local playerGuid = CleveRoids.GetGUID("player")
+    local playerGuid = CleveRoids.playerGuid
     local result
     if sourceGUID == playerGuid then
         -- Only a physical ability counts as a swing (spellSchool 1)
@@ -1095,7 +1095,7 @@ auraCastFrame:SetScript("OnEvent", function()
         end
 
         if spellId and spellId > 0 and durationMs and durationMs > 0 then
-            local playerGUID = CleveRoids.GetGUID("player")
+            local playerGUID = CleveRoids.playerGuid
             local durSpellName = C_Spell.GetSpellName(spellId)
             if playerGUID and durSpellName then
                 CleveRoids._allCasterAuraDirty = true

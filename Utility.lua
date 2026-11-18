@@ -952,7 +952,7 @@ local function HandleUnitDied(guid)
   lib.recentCCHits[guid] = nil
 
   -- Clean up overflow buff tracking (death removes all buffs)
-  local playerGUID = CleveRoids.GetGUID("player")
+  local playerGUID = CleveRoids.playerGuid
   if playerGUID and guid == playerGUID then
     -- Player died: clear all overflow buff entries and reset cap status
     if CleveRoids.OverflowBuffs then
@@ -2373,7 +2373,7 @@ combatLogFrame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
 combatLogFrame:SetScript("OnEvent", function()
     local subevent, sourceGUID, destGUID, destName = arg2, arg4, arg8, arg9
     local a1, a2, a4, a7 = arg12, arg13, arg15, arg18
-    local playerGUID = CleveRoids.GetGUID("player")
+    local playerGUID = CleveRoids.playerGuid
     local byPlayerOnOther = sourceGUID == playerGUID and destGUID and destGUID ~= playerGUID
 
     if subevent == "SPELL_MISSED" or subevent == "RANGE_MISSED" then

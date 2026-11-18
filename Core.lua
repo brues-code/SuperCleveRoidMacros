@@ -36,6 +36,9 @@ CleveRoids.lastUnitHealthUpdate = 0
 CleveRoids.lastUnitPowerUpdate = 0
 CleveRoids.EVENT_THROTTLE = 0.1  -- 100ms throttle for high-frequency events
 
+-- ClassicAPI answers UnitGUID("player") from addon load (the GUID is captured at
+-- the Enter World click), in the same "0x%016X" form as the combat log and
+-- Nampower's event GUIDs.
 CleveRoids.playerGuid = UnitGUID('player')
 CleveRoids.playerClass = UnitClassBase("player")
 
