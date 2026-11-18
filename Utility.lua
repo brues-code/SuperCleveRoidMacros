@@ -2365,12 +2365,14 @@ end
 -- One COMBAT_LOG_EVENT_UNFILTERED handler feeds immunity tracking, resist
 -- state, spell-school learning, CC/bleed landing and death cleanup. The event
 -- names units by GUID and carries the spell ID, school and miss type, so
--- nothing here reads the localized chat text.
+-- nothing here reads the localized chat text. Its values arrive as the
+-- arg1..argN globals: arg2 subevent, arg4 sourceGUID, arg8 destGUID,
+-- arg9 destName, then the subevent's own values from arg12 (a1 below).
 local combatLogFrame = CreateFrame("Frame", "CleveRoidsCombatLogFrame")
 combatLogFrame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
 combatLogFrame:SetScript("OnEvent", function()
-    local _, subevent, _, sourceGUID, _, _, _, destGUID, destName, _, _,
-          a1, a2, _, a4, _, _, a7 = CombatLogGetCurrentEventInfo()
+    local subevent, sourceGUID, destGUID, destName = arg2, arg4, arg8, arg9
+    local a1, a2, a4, a7 = arg12, arg13, arg15, arg18
     local playerGUID = CleveRoids.GetGUID("player")
     local byPlayerOnOther = sourceGUID == playerGUID and destGUID and destGUID ~= playerGUID
 

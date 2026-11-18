@@ -426,9 +426,9 @@ end
 local meleeRefreshFrame = CreateFrame("Frame")
 meleeRefreshFrame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
 meleeRefreshFrame:SetScript("OnEvent", function()
-    local _, subevent, _, sourceGuid, _, _, _, targetGuid = CombatLogGetCurrentEventInfo()
-    if subevent == "SWING_DAMAGE" and sourceGuid == CleveRoids.GetGUID("player") then
-        RefreshJudgementsOnTarget(targetGuid)
+    -- arg2 subevent, arg4 sourceGUID, arg8 destGUID
+    if arg2 == "SWING_DAMAGE" and arg4 == CleveRoids.GetGUID("player") then
+        RefreshJudgementsOnTarget(arg8)
     end
 end)
 

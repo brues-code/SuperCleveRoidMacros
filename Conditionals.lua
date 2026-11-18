@@ -751,9 +751,12 @@ end
 -- Strike counts for [lastswing:dodge] the same as a dodged swing).
 local meleeResultFrame = CreateFrame("Frame", "CleveRoidsMeleeResultFrame")
 meleeResultFrame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+-- The values arrive as the arg1..argN globals; the subevent's own values start
+-- at arg12 (a1 below).
 meleeResultFrame:SetScript("OnEvent", function()
-    local _, subevent, _, sourceGUID, _, _, _, destGUID, _, _, _,
-          a1, a2, a3, a4, a5, a6, a7, a8, a9, a10 = CombatLogGetCurrentEventInfo()
+    local subevent, sourceGUID, destGUID = arg2, arg4, arg8
+    local a1, a2, a3, a4, a5, a6, a7, a8, a9, a10 =
+        arg12, arg13, arg14, arg15, arg16, arg17, arg18, arg19, arg20, arg21
     if subevent ~= "SWING_DAMAGE" and subevent ~= "SWING_MISSED" and subevent ~= "SPELL_MISSED" then
         return
     end
