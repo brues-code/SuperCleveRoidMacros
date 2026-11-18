@@ -3943,9 +3943,6 @@ local GetTime = GetTime
 local UnitAffectingCombat = UnitAffectingCombat
 local pairs = pairs
 local next = next
-local IsAltKeyDown = IsAltKeyDown
-local IsShiftKeyDown = IsShiftKeyDown
-local IsControlKeyDown = IsControlKeyDown
 
 -- PERFORMANCE: Module-level constants (avoid re-creation per frame)
 local SEQUENCE_STALE_TIME = 300  -- 5 minutes
@@ -4106,27 +4103,6 @@ function CleveRoids.OnUpdate(self)
             CR.isActionUpdateQueued = false
         end
     end
-    -- PERFORMANCE: Check for modifier key state changes (no events for these in vanilla WoW)
-    -- Only queue update if modifier state actually changed - avoids full TestForAllActiveActions
-    -- Nampower v2.41+ fires KEY_DOWN/KEY_UP for all keys including modifiers, so skip polling
-    if not CR.NampowerAPI.features.hasKeyEvents then
-        local altDown = IsAltKeyDown()
-        local shiftDown = IsShiftKeyDown()
-        local ctrlDown = IsControlKeyDown()
-
-        if altDown ~= CR._lastAltDown or
-           shiftDown ~= CR._lastShiftDown or
-           ctrlDown ~= CR._lastCtrlDown then
-            CR._lastAltDown = altDown
-            CR._lastShiftDown = shiftDown
-            CR._lastCtrlDown = ctrlDown
-            -- Modifier changed - queue update in event-driven mode, or just mark for realtime
-            if CRM.realtime == 0 then
-                CR.isActionUpdateQueued = true
-            end
-        end
-    end
-
     -- A totem's timer runs down with nothing behind it: PLAYER_TOTEM_UPDATE fires
     -- when a slot changes hands, never as one counts toward zero, so a
     -- [totem:X<N] icon would hold the answer from its last refresh until some
@@ -4348,6 +4324,7 @@ FrameUtil.RegisterFrameForEvents(CleveRoids.Frame, {
     "UPDATE_SHAPESHIFT_FORM",
     "SPELL_UPDATE_COOLDOWN",
     "PLAYER_STARTED_MOVING",
+    "MODIFIER_STATE_CHANGED", -- ClassicAPI: [mod] icon refresh
     -- ClassicAPI loss-of-control (school-interrupt lockout) for [locked]/[nolocked].
     "LOSS_OF_CONTROL_ADDED",
     "LOSS_OF_CONTROL_UPDATE",
@@ -4983,7 +4960,8 @@ end
 
 -- Nampower v2.41+: KEY_DOWN/KEY_UP events
 -- arg1=keyCode (int), arg2=metaKeyState (Shift=1,Ctrl=2,Alt=4), arg3=repeat, arg4=time
--- Meta key codes (0=Shift, 1=Ctrl, 2=Alt) are skipped — they are already tracked via IsXKeyDown()
+-- Meta key codes (0=Shift, 1=Ctrl, 2=Alt) are skipped: [mod] reads the modifier
+-- query functions, refreshed by MODIFIER_STATE_CHANGED.
 function CleveRoids.Frame:KEY_DOWN()
     local keyCode = arg1
     if keyCode == 0 or keyCode == 1 or keyCode == 2 then return end
@@ -4996,6 +4974,13 @@ function CleveRoids.Frame:KEY_UP()
     if keyCode == 0 or keyCode == 1 or keyCode == 2 then return end
     CleveRoids._keyState[keyCode] = nil
     CleveRoids.isActionUpdateQueued = true
+end
+
+-- ClassicAPI: fires on every left/right modifier press and release, including a
+-- release missed while the game was in the background (reconciled on focus
+-- regain). Drives the [mod] icon refresh.
+function CleveRoids.Frame:MODIFIER_STATE_CHANGED()
+    CleveRoids.QueueActionUpdate()
 end
 
 -- ClassicAPI PLAYER_TOTEM_UPDATE: arg1 = the slot (1 Fire .. 4 Air) whose totem

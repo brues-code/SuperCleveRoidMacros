@@ -565,14 +565,17 @@ function CleveRoids.WasClickActivated()
     return GetMouseButtonClicked() ~= nil
 end
 
+-- ClassicAPI's left/right queries, not the stock IsShiftKeyDown family: those
+-- can report a modifier released while the game was in the background as
+-- still held, and the left/right ones are reconciled on focus regain.
 CleveRoids.kmods = {
-    ctrl   = IsControlKeyDown,
+    ctrl   = function() return IsLeftControlKeyDown() or IsRightControlKeyDown() end,
     lctrl  = IsLeftControlKeyDown,
     rctrl  = IsRightControlKeyDown,
-    alt    = IsAltKeyDown,
+    alt    = function() return IsLeftAltKeyDown() or IsRightAltKeyDown() end,
     lalt   = IsLeftAltKeyDown,
     ralt   = IsRightAltKeyDown,
-    shift  = IsShiftKeyDown,
+    shift  = function() return IsLeftShiftKeyDown() or IsRightShiftKeyDown() end,
     lshift = IsLeftShiftKeyDown,
     rshift = IsRightShiftKeyDown,
     mod    = IsModifierKeyDown,
