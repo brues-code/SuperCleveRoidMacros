@@ -100,13 +100,12 @@ API references are line numbers into `C:\Git\ClassicAPI\docs\API.md`.
   (`Extensions/Tooltip/Generic.lua`) rewritten to use it and resolve names via
   `GetSpellRecField` / `GetItem` / `GetMacroInfo`, replacing the per-slot
   GameTooltip scan + texture heuristic (which couldn't tell spell from item and
-  never recognized macros). Powers reactive-ability slot detection
-  (`IndexActionSlot`). Deleted the dead SuperWoW-`GetActionText` copy of
+  never recognized macros). Deleted the dead SuperWoW-`GetActionText` copy of
   `GetActionButtonInfo` in `Conditionals.lua`.
 - **Known limitation:** GetActionInfo returns `id = nil` for bag-instance items
   (items dragged from bags rather than placed by itemID), so those slots get no
   name. The consumers (`actionSlots` for `/startattack`·`/shoot`·auto-shot
-  proxies, reactive spells) only need spells, so this is acceptable.
+  proxies) only need spells, so this is acceptable.
 - **Follow-up (optional):** migrate the remaining `GetActionText` macro-slot
   detection in `Core.lua` to `GetActionInfo` too.
 
@@ -173,8 +172,7 @@ Each step leaves a working addon.
 
 1. ~~**Combat events → `COMBAT_LOG_EVENT_UNFILTERED`.**~~ — DONE. The
    dispatcher at the end of `Utility.lua` (`CleveRoidsCombatLogFrame`) feeds
-   immunity (`SPELL_MISSED`/`RANGE_MISSED` `IMMUNE`), reactive procs
-   (`ProcessAvoidance`, swings and spells alike), `[resisted]`, spell-school
+   immunity (`SPELL_MISSED`/`RANGE_MISSED` `IMMUNE`), `[resisted]`, spell-school
    learning, CC/bleed landing (`SPELL_AURA_APPLIED`) and `UNIT_DIED` cleanup.
    `CleveRoidsMeleeResultFrame` in `Conditionals.lua` records
    `[lastswing]`/`[incominghit]`; the Cursive extension refreshes Judgements on
@@ -299,8 +297,9 @@ don't re-investigate.
   across bags in one call; ClassicAPI has no equivalent (would need a manual
   `C_Container` bag scan). Keep nampower.
 - **`[known]`** (name+rank+talent logic richer than `IsSpellKnown`/`IsPlayerSpell`'s
-  current-rank/no-talent semantics) and **`[usable]`/reactive** (nampower
-  `IsSpellUsable` == `IsUsableSpell`). Keep.
+  current-rank/no-talent semantics) and **`[usable]`** (nampower
+  `IsSpellUsable` == `IsUsableSpell`). Keep. Reactive spells skip it:
+  `[reactive]` and their `[usable]` read `C_Spell.IsSpellReactiveReady`.
 
 ## Conditionals.lua audit — done
 

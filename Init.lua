@@ -144,9 +144,6 @@ CleveRoids.EQUIP_GLOBAL_COOLDOWN = 0.5  -- Global cooldown
 -- PERFORMANCE: Table pool for queue entries to reduce garbage collection
 CleveRoids.queueEntryPool = {}
 
--- PERFORMANCE: Static buffer for proc removal to avoid per-frame allocation
-CleveRoids._procRemovalBuffer = {}
-
 -- PERFORMANCE: Static buffer for action grouping to avoid per-call allocation
 CleveRoids._actionsToSlotsBuffer = {}
 CleveRoids._slotsBuffer = {}
@@ -207,7 +204,8 @@ CleveRoids.countedItemTypes = {
 
 -- TODO: Localize?
 CleveRoids.actionSlots    = {}
-CleveRoids.reactiveSlots  = {}
+-- Spells whose icon and [usable] follow the proc window (IsReactiveUsable)
+-- rather than stance and power. Each has a combo-point or aura-state gate.
 CleveRoids.reactiveSpells = {
     ["Revenge"]         = true,
     ["Overpower"]       = true,
@@ -217,7 +215,6 @@ CleveRoids.reactiveSpells = {
     ["Baited Shot"]     = true,
     ["Counterattack"]   = true,
     ["Arcane Surge"]    = true,
-    ["Aquatic Form"]    = true,
 }
 
 

@@ -2228,116 +2228,8 @@ function CleveRoids.RemoveCCImmunityCommand(npcName, ccType)
     end
 end
 
--- REACTIVE ABILITY PROC TRACKING SYSTEM
--- Tracks reactive ability procs independently of stance/usability
--- Allows detection of Overpower/Revenge/Riposte procs even when not in correct stance
-
--- Table to store reactive proc states with expiry times and target GUIDs
--- Structure: { spellName = { expiry = time, targetGUID = guid } }
-CleveRoids.reactiveProcs = CleveRoids.reactiveProcs or {}
-
--- Table to track which reactive spells we've seen proc at least once
--- This helps us decide whether to use combat log tracking vs fallback methods
-CleveRoids.reactiveProcsEverSeen = CleveRoids.reactiveProcsEverSeen or {}
-
--- The server's reactive window (REACTIVE_TIMER_START, 4000 ms). Measured in
--- game: Overpower's glow lasts 3.95 s after the dodge when left unused.
-local REACTIVE_PROC_DURATION = 4.0
-
--- Set a reactive proc state with optional target GUID
-function CleveRoids.SetReactiveProc(spellName, targetGUID)
-    CleveRoids.reactiveProcs[spellName] = {
-        expiry = GetTime() + REACTIVE_PROC_DURATION,
-        targetGUID = targetGUID
-    }
-    -- Mark that we've seen this reactive spell proc at least once
-    CleveRoids.reactiveProcsEverSeen[spellName] = true
-end
-
--- Check if a reactive proc is active (with optional GUID check)
-function CleveRoids.HasReactiveProc(spellName)
-    local procData = CleveRoids.reactiveProcs[spellName]
-    if not procData or not procData.expiry then
-        return false
-    end
-
-    local now = GetTime()
-    if now >= procData.expiry then
-        -- Expired, clear it
-        if CleveRoids.debug then
-            DEFAULT_CHAT_FRAME:AddMessage(
-                string.format("|cffff9900[HasReactiveProc]|r %s: EXPIRED - clearing and queuing update", spellName)
-            )
-        end
-        CleveRoids.reactiveProcs[spellName] = nil
-        -- Queue action update to refresh icon state
-        CleveRoids.QueueActionUpdate()
-        if CleveRoids.debug then
-            DEFAULT_CHAT_FRAME:AddMessage(
-                string.format("|cffff9900[HasReactiveProc]|r Action update queued, isActionUpdateQueued = %s", tostring(CleveRoids.isActionUpdateQueued))
-            )
-        end
-        return false
-    end
-
-    -- If proc has a target GUID requirement, check if current target matches
-    if procData.targetGUID then
-        local targetGUID = CleveRoids.GetGUID("target")
-        if not targetGUID or targetGUID ~= procData.targetGUID then
-            return false
-        end
-    end
-
-    return true
-end
-
--- Clear a reactive proc
-function CleveRoids.ClearReactiveProc(spellName)
-    if CleveRoids.reactiveProcs[spellName] then
-        CleveRoids.reactiveProcs[spellName] = nil
-        CleveRoids.QueueActionUpdate()
-    end
-end
-
--- REACTIVE PROCS AND IMMUNITY FROM THE COMBAT LOG
+-- IMMUNITY AND RESISTS FROM THE COMBAT LOG
 -- Fed by the COMBAT_LOG_EVENT_UNFILTERED dispatcher at the end of this file.
-
--- Set a reactive proc if the player uses that ability. Returns true when set.
-local function ProcReactive(spellName, targetGUID)
-    if not CleveRoids.reactiveSpells[spellName] then return false end
-    CleveRoids.SetReactiveProc(spellName, targetGUID)
-    if CleveRoids.debug then
-        DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[Reactive]|r " .. spellName .. " proc")
-    end
-    return true
-end
-
--- A swing or ability that was avoided. When the player's attack is dodged,
--- Overpower and Surprise Attack proc on that target. When the player parries,
--- Riposte procs on the attacker; a dodge, parry or block (full, or a hit that
--- lost `blocked` to one) procs Revenge on any target. missType is nil for a hit.
-local function ProcessAvoidance(sourceGUID, destGUID, playerGUID, missType, blocked)
-    if not CleveRoids.reactiveSpells or not playerGUID then return end
-
-    local procced = false
-    if sourceGUID == playerGUID then
-        if missType == "DODGE" then
-            procced = ProcReactive("Overpower", destGUID)
-            procced = ProcReactive("Surprise Attack", destGUID) or procced
-        end
-    elseif destGUID == playerGUID then
-        if missType == "PARRY" then
-            procced = ProcReactive("Riposte", sourceGUID)
-        end
-        if missType == "DODGE" or missType == "PARRY" or missType == "BLOCK" or (blocked and blocked > 0) then
-            procced = ProcReactive("Revenge", nil) or procced
-        end
-    end
-
-    if procced then
-        CleveRoids.QueueActionUpdate()
-    end
-end
 
 -- The player's spell missed. A RESIST sets [resisted]; an IMMUNE records the
 -- target's immunity unless something temporary explains it.
@@ -2470,21 +2362,20 @@ function CleveRoids.CheckResistState(resistType)
 end
 
 -- COMBAT LOG DISPATCHER
--- One COMBAT_LOG_EVENT_UNFILTERED handler feeds immunity tracking, reactive
--- procs, resist state, spell-school learning, CC/bleed landing and death
--- cleanup. The event names units by GUID and carries the spell ID, school and
--- miss type, so nothing here reads the localized chat text.
+-- One COMBAT_LOG_EVENT_UNFILTERED handler feeds immunity tracking, resist
+-- state, spell-school learning, CC/bleed landing and death cleanup. The event
+-- names units by GUID and carries the spell ID, school and miss type, so
+-- nothing here reads the localized chat text.
 local combatLogFrame = CreateFrame("Frame", "CleveRoidsCombatLogFrame")
 combatLogFrame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
 combatLogFrame:SetScript("OnEvent", function()
     local _, subevent, _, sourceGUID, _, _, _, destGUID, destName, _, _,
-          a1, a2, a3, a4, a5, a6, a7 = CombatLogGetCurrentEventInfo()
+          a1, a2, _, a4, _, _, a7 = CombatLogGetCurrentEventInfo()
     local playerGUID = CleveRoids.GetGUID("player")
     local byPlayerOnOther = sourceGUID == playerGUID and destGUID and destGUID ~= playerGUID
 
     if subevent == "SPELL_MISSED" or subevent == "RANGE_MISSED" then
         -- spellId, spellName, spellSchool, missType
-        ProcessAvoidance(sourceGUID, destGUID, playerGUID, a4, nil)
         if sourceGUID == playerGUID then
             ProcessSpellMissSelf(a1, destGUID, destName, a4)
             CancelAuraExpectation(a1, destGUID)
@@ -2495,18 +2386,8 @@ combatLogFrame:SetScript("OnEvent", function()
         if sourceGUID == playerGUID and a4 == "IMMUNE" then
             ProcessSpellMissSelf(a1, destGUID, destName, a4)
         end
-    elseif subevent == "SWING_MISSED" then
-        -- missType
-        ProcessAvoidance(sourceGUID, destGUID, playerGUID, a1, nil)
-    elseif subevent == "SWING_DAMAGE" then
-        -- amount, overkill, school, resisted, blocked
-        ProcessAvoidance(sourceGUID, destGUID, playerGUID, nil, a5)
     elseif subevent == "SPELL_CAST_SUCCESS" then
-        -- spellId, spellName: an instant spell went off at destGUID. Casting a
-        -- reactive ability uses up its proc.
-        if sourceGUID == playerGUID then
-            CleveRoids.ClearReactiveProc(a2)
-        end
+        -- spellId, spellName: an instant spell went off at destGUID.
         if byPlayerOnOther then
             ExpectAura(a1, destGUID, destName)
         end

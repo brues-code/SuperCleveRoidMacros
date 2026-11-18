@@ -192,7 +192,7 @@ requirementCheckFrame:SetScript("OnEvent", function()
     local hasNampower30 = hasNampower and CleveRoids.NampowerAPI
         and CleveRoids.NampowerAPI.HasMinimumVersion(3, 0, 0)
     local hasClassicAPI = CleveRoids.ClassicAPI and CleveRoids.ClassicAPI.IsAvailable()
-    local hasClassicAPIMin = hasClassicAPI and CleveRoids.ClassicAPI.HasMinimumVersion(1, 21, 0)
+    local hasClassicAPIMin = hasClassicAPI and CleveRoids.ClassicAPI.HasMinimumVersion(1, 22, 0)
 
     if not hasNampower30 or not hasUnitXP or not hasClassicAPI or not hasClassicAPIMin then
         -- Show warnings (don't disable — tearing down a partially-initialized addon causes hangs)
@@ -216,7 +216,7 @@ requirementCheckFrame:SetScript("OnEvent", function()
             CleveRoids.Print("Dispel-type and movement conditionals will be unavailable without it.")
         elseif not hasClassicAPIMin then
             local major, minor, patch = CleveRoids.ClassicAPI.GetVersion()
-            CleveRoids.Print(format("|cFFFF9900WARNING:|r |cFF00FFFFClassicAPI v1.21.0+|r is required (you have v%d.%d.%d):", major, minor, patch))
+            CleveRoids.Print(format("|cFFFF9900WARNING:|r |cFF00FFFFClassicAPI v1.22.0+|r is required (you have v%d.%d.%d):", major, minor, patch))
             CleveRoids.Print("https://github.com/brues-code/ClassicAPI")
             CleveRoids.Print("The addon cannot finish loading on this version -- update ClassicAPI.")
         end
@@ -926,58 +926,21 @@ function CleveRoids.TestForActiveAction(actions)
             local onCooldown = (start > 0 and duration > 0)
 
             if actions.active.isReactive then
-                -- For Overpower, Revenge, Riposte: ONLY use combat log tracking
-                local spellName = actions.active.action
-                local useCombatLogOnly = (spellName == "Overpower" or spellName == "Revenge" or spellName == "Riposte")
-
-                if useCombatLogOnly then
-                    -- Only trust HasReactiveProc for these spells
-                    local hasProc = CleveRoids.HasReactiveProc and CleveRoids.HasReactiveProc(spellName)
-                    if hasProc then
-                        -- Proc is active, show as usable if in range and have enough rage/mana
-                        if actions.active.inRange ~= 0 and not actions.active.oom then
-                            actions.active.usable = 1
-                        elseif pfUI and pfUI.bars and actions.active.oom then
-                            actions.active.usable = 2  -- pfUI: out of mana/rage
-                        else
-                            actions.active.usable = nil
-                        end
-                    else
-                        -- No proc = not usable
-                        actions.active.usable = nil
-                    end
-                    CleveRoids.DebugChanged("usable_" .. spellName,
-                        string.format("|cff00ff00[UPDATE USABLE]|r %s: hasProc=%s, usable=%s",
-                            spellName, tostring(hasProc), tostring(actions.active.usable)))
+                -- The proc window decides, whatever the stance: a warrior in
+                -- Defensive Stance sees Overpower light up before the swap.
+                local ready = CleveRoids.IsReactiveUsable(actions.active.action)
+                if not ready then
+                    actions.active.usable = nil
+                elseif actions.active.inRange ~= 0 and not actions.active.oom then
+                    actions.active.usable = 1
+                elseif pfUI and pfUI.bars and actions.active.oom then
+                    actions.active.usable = 2  -- pfUI: out of mana/rage
                 else
-                    -- For other reactive spells, use the original fallback logic
-                    -- Check combat log-based proc tracking first (stance-independent)
-                    if CleveRoids.HasReactiveProc and CleveRoids.HasReactiveProc(actions.active.action) then
-                        -- Proc is active, show as usable if in range and have enough rage/mana
-                        if actions.active.inRange ~= 0 and not actions.active.oom then
-                            actions.active.usable = 1
-                        elseif pfUI and pfUI.bars and actions.active.oom then
-                            actions.active.usable = 2  -- pfUI: out of mana/rage
-                        else
-                            actions.active.usable = nil
-                        end
-                    -- Use Nampower's IsSpellUsable if available (stance-aware fallback)
-                    elseif IsSpellUsable then
-                        -- pcall to handle spells not in spellbook (Nampower throws error)
-                        local ok, usable, oom = pcall(IsSpellUsable, actions.active.action)
-                        if ok and usable == 1 and oom ~= 1 then
-                            actions.active.usable = (pfUI and pfUI.bars) and nil or 1
-                        else
-                            actions.active.usable = nil
-                        end
-                        actions.active.oom = false
-                    elseif not CleveRoids.IsReactiveUsable(actions.active.action) then
-                        actions.active.oom = false
-                        actions.active.usable = nil
-                    else
-                        actions.active.usable = (pfUI and pfUI.bars) and nil or 1
-                    end
+                    actions.active.usable = nil
                 end
+                CleveRoids.DebugChanged("usable_" .. actions.active.action,
+                    string.format("|cff00ff00[UPDATE USABLE]|r %s: ready=%s, usable=%s",
+                        actions.active.action, tostring(ready), tostring(actions.active.usable)))
             elseif isUsableBySpell == 1 and actions.active.inRange ~= 0 then
                 -- Use IsUsableSpell result if available (handles forms/stances correctly)
                 actions.active.usable = 1
@@ -4072,37 +4035,6 @@ function CleveRoids.OnUpdate(self)
         CR.EnsureSendChatMessageHook()
     end
 
-    -- PERFORMANCE: Check for expired reactive procs only if we have any
-    -- Use statically allocated removal buffer to avoid per-frame allocation
-    local reactiveProcs = CR.reactiveProcs
-    if reactiveProcs then
-        local hasExpiredProc = false
-        local toRemove = CR._procRemovalBuffer
-        local removeCount = 0
-
-        -- PERFORMANCE: Use next() directly instead of pairs() to avoid iterator allocation
-        local spellName, procData = next(reactiveProcs)
-        while spellName do
-            if procData and procData.expiry and time >= procData.expiry then
-                removeCount = removeCount + 1
-                toRemove[removeCount] = spellName
-                hasExpiredProc = true
-            end
-            spellName, procData = next(reactiveProcs, spellName)
-        end
-
-        -- Remove expired procs using indexed array (no pairs() overhead)
-        for i = 1, removeCount do
-            reactiveProcs[toRemove[i]] = nil
-            toRemove[i] = nil  -- Clear for next use
-        end
-
-        -- If any proc expired, immediately update all actions
-        if hasExpiredProc then
-            CR.TestForAllActiveActions()
-            CR.isActionUpdateQueued = false
-        end
-    end
     -- A totem's timer runs down with nothing behind it: PLAYER_TOTEM_UPDATE fires
     -- when a slot changes hands, never as one counts toward zero, so a
     -- [totem:X<N] icon would hold the answer from its last refresh until some
@@ -4191,17 +4123,13 @@ function PickupAction(slot)
     if not slot then return end
     CleveRoids.ClearAction(slot)
     CleveRoids.ClearSlot(CleveRoids.actionSlots, slot)
-    CleveRoids.ClearAction(CleveRoids.reactiveSlots, slot)
     return CleveRoids.Hooks.PickupAction(slot)
 end
 
--- These two aliases outlived the overrides they were saved for: ClassicAPI now
--- draws the buttons, but callers still need the unmodified globals, which is all
--- these names are now. IsReactiveUsable (Conditionals.lua) reads the raw usable
--- state of a proxy slot; DeferStopAttack and the auto-attack drift check read the
--- true current-action state, which the old override could not report because it
--- only echoed our cached flag.
-CleveRoids.Hooks.OriginalIsUsableAction = IsUsableAction
+-- This alias outlived the override it was saved for: ClassicAPI now draws the
+-- buttons, but DeferStopAttack and the auto-attack drift check still need the
+-- unmodified global. They read the true current-action state, which the old
+-- override could not report because it only echoed our cached flag.
 CleveRoids.Hooks.IsCurrentAction = IsCurrentAction
 
 local function IsAutoAttackSpell(spell)
@@ -4323,6 +4251,7 @@ FrameUtil.RegisterFrameForEvents(CleveRoids.Frame, {
     "PLAYER_REGEN_ENABLED",   -- Left actual combat (no threat)
     "UPDATE_SHAPESHIFT_FORM",
     "SPELL_UPDATE_COOLDOWN",
+    "SPELL_UPDATE_USABLE",    -- reactive proc windows open and close
     "PLAYER_STARTED_MOVING",
     "MODIFIER_STATE_CHANGED", -- ClassicAPI: [mod] icon refresh
     -- ClassicAPI loss-of-control (school-interrupt lockout) for [locked]/[nolocked].
@@ -5010,6 +4939,14 @@ end
 -- event happened to queue a refresh. The token goes unread for the same reason
 -- the other unit streams ignore theirs.
 function CleveRoids.Frame:UNIT_TARGET()
+    CleveRoids.QueueActionUpdate()
+end
+
+-- The engine fires SPELL_UPDATE_USABLE when an input of a reactive proc changes:
+-- the player's combo points, the aura state of the player or the target, or the
+-- target itself. The server opens and closes the window (4 s after the dodge, or
+-- at once when the spell is cast), so this keeps the reactive icons on its clock.
+function CleveRoids.Frame:SPELL_UPDATE_USABLE()
     CleveRoids.QueueActionUpdate()
 end
 

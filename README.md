@@ -10,7 +10,7 @@ Enhanced macro addon for World of Warcraft 1.12.1 (Vanilla/Turtle WoW) with dyna
 |-----|:--------:|---------|
 | [Nampower](https://github.com/brues-code/nampower/releases) (v3.0.0+) | ✅ | Spell queueing, DBC data, auto-attack events |
 | [UnitXP_SP3](https://github.com/brues-code/UnitXP_SP3/releases) | ✅ | Distance checks, `[multiscan]` enemy scanning |
-| [ClassicAPI](https://github.com/brues-code/ClassicAPI/releases) (v1.21.0+) | ✅ | Modern `C_*` API: dispel-type conditionals (`[magic]`, `[curse]`, …), `[moving]` speed, swing timers, unit-filtered events |
+| [ClassicAPI](https://github.com/brues-code/ClassicAPI/releases) (v1.22.0+) | ✅ | Modern `C_*` API: dispel-type conditionals (`[magic]`, `[curse]`, …), `[moving]` speed, swing timers, unit-filtered events |
 
 ## Installation
 
@@ -58,7 +58,6 @@ See the **[Wiki](https://github.com/brues-code/SuperCleveRoidMacros/wiki)** for 
 ## Known Issues
 
 - Action-bar macros are identified by slot, so blank or duplicate macro names are fine. Only macros referenced *by name* (`{MacroName}` nesting, `/runmacro "Name"`) still need a unique name to disambiguate.
-- Reactive abilities must be on action bars for detection
 - Debuff time-left conditionals only work on own debuffs unless pfUI libdebuff or Cursive has data
 - Macro line length: 261 characters max (MacroLengthWarn extension prevents crashes)
 

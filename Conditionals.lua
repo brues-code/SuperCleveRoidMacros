@@ -3334,49 +3334,18 @@ function CleveRoids.ValidatePlayerAuraCount(bigger, amount)
     end
 end
 
-function CleveRoids.IsReactive(name)
-    return CleveRoids.reactiveSpells[name] ~= nil
-end
-
 -- NOTE: CleveRoids.GetActionButtonInfo is defined in Extensions/Tooltip/Generic.lua
 -- (ClassicAPI GetActionInfo-based) and loads after this file.
 
+-- Whether a reactive spell's proc window is open, in any stance or form.
+-- ClassicAPI reads the spell's own gates: the hidden combo point a dodge gives
+-- (Overpower) or the aura state a dodge, parry or block sets on the player
+-- (Revenge, Riposte, Surprise Attack, Counterattack, ...). Power and cooldown
+-- are not part of it. The combo point stays on the unit that dodged, so the
+-- window counts only while that unit is the target.
 function CleveRoids.IsReactiveUsable(spellName)
-    -- For Overpower, Revenge, and Riposte: ONLY use combat log tracking
-    -- These spells have specific proc conditions tracked via combat log
-    if spellName == "Overpower" or spellName == "Revenge" or spellName == "Riposte" then
-        if CleveRoids.HasReactiveProc and CleveRoids.HasReactiveProc(spellName) then
-            return 1
-        else
-            return nil
-        end
-    end
-
-    -- For other reactive spells, use fallback methods
-    -- Use Nampower's IsSpellUsable if available (more accurate)
-    if IsSpellUsable then
-        -- pcall to handle spells not in spellbook (Nampower throws error)
-        local ok, usable, oom = pcall(IsSpellUsable, spellName)
-        if ok then
-            if usable == 1 and oom ~= 1 then
-                return 1
-            else
-                return nil, oom
-            end
-        end
-        -- If pcall failed, spell not in spellbook - fall through to action bar check
-    end
-
-    -- Fallback to action bar slot checking (requires correct stance)
-    if not CleveRoids.reactiveSlots[spellName] then return false end
-    local actionSlot = CleveRoids.reactiveSlots[spellName]
-    local isUsable, oom = CleveRoids.Hooks.OriginalIsUsableAction(actionSlot)
-    local start, duration = GetActionCooldown(actionSlot)
-    if isUsable and (start == 0 or duration == 1.5) then -- 1.5 just means gcd is active
-        return 1
-    else
-        return nil, oom
-    end
+    local ready, comboTarget = C_Spell.IsSpellReactiveReady(spellName)
+    return ready and (comboTarget == nil or comboTarget == UnitGUID("target"))
 end
 
 -- Check if any spell is usable (not just reactive)
