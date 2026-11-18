@@ -200,12 +200,10 @@ local function CreateBuffFrame(name, savedPosKey, defaultY, labelColor, iconTabl
     frame:SetScript("OnMouseUp", function()
         frame:StopMovingOrSizing()
         local _, _, _, x, y = frame:GetPoint(1)
-        CleveRoidMacros = CleveRoidMacros or {}
         CleveRoidMacros[savedPosKey] = { x = x, y = y }
     end)
 
     -- Restore saved position
-    CleveRoidMacros = CleveRoidMacros or {}
     if CleveRoidMacros[savedPosKey] then
         frame:ClearAllPoints()
         frame:SetPoint("TOP", UIParent, "TOP",
@@ -470,7 +468,7 @@ end
 RebuildFrame = function()
     if not playerFrame then return end
 
-    local enabled = testMode or (CleveRoidMacros and CleveRoidMacros.overflowPlayerEnabled)
+    local enabled = testMode or CleveRoidMacros.overflowPlayerEnabled
 
     if enabled then
         local pBuffs = GetPlayerOverflowBuffs()
@@ -717,7 +715,6 @@ CleveRoids.ToggleOverflowTest = ToggleTestMode
 CleveRoids.RebuildOverflowFrame = function() RebuildFrame() end
 CleveRoids.ResetOverflowFramePositions = function()
     if not playerFrame or not targetFrame then return end
-    CleveRoidMacros = CleveRoidMacros or {}
     CleveRoidMacros.overflowPlayerPos = nil
     CleveRoidMacros.overflowTargetPos = nil
     playerFrame:ClearAllPoints()

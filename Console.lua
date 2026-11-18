@@ -118,7 +118,7 @@ local StartAttack = function(msg)
         -- Don't wait for PLAYER_ENTER_COMBAT event which has a delay
         CleveRoids.CurrentSpell.autoAttack = true
         -- FIX: Queue icon update so action bars reflect the new state
-        if CleveRoidMacros and CleveRoidMacros.realtime == 0 then
+        if CleveRoidMacros.realtime == 0 then
             CleveRoids.QueueActionUpdate()
         end
     end

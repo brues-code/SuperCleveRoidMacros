@@ -393,7 +393,6 @@ local VALID_COMMANDS = {
 -- ============================================================================
 
 local function GetWhitelistedCommands()
-    if not CleveRoidMacros then CleveRoidMacros = {} end
     if not CleveRoidMacros.whitelistedCommands then
         CleveRoidMacros.whitelistedCommands = {}
     end
@@ -1176,7 +1175,7 @@ end
 -- Slash command
 SLASH_MACROCHECK1 = "/macrocheck"
 SlashCmdList.MACROCHECK = function(msg)
-    if CleveRoidMacros and CleveRoidMacros.macrocheck == 0 then
+    if CleveRoidMacros.macrocheck == 0 then
         CleveRoids.Print("Macro syntax checker is disabled. Enable with /cleveroid macrocheck 1")
         return
     end
@@ -1196,6 +1195,6 @@ SlashCmdList.MACROCHECK = function(msg)
     end
 end
 
-if not CleveRoidMacros or CleveRoidMacros.macrocheck ~= 0 then
+if CleveRoidMacros.macrocheck ~= 0 then
     CleveRoids.Print("Macro syntax checker loaded. Use /macrocheck [macroname] or /macrocheck all")
 end

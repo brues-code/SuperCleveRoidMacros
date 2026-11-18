@@ -1409,7 +1409,7 @@ end
 
 function Extension.OnLoad()
     -- Skip if macro checker is disabled
-    if CleveRoidMacros and CleveRoidMacros.macrocheck == 0 then return end
+    if CleveRoidMacros.macrocheck == 0 then return end
 
     -- Skip if SuperMacro is loaded (detected at load time)
     if SuperMacroFrame ~= nil then return end

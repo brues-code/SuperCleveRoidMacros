@@ -569,27 +569,20 @@ function CleveRoids.DisableAddon(reason)
     CleveRoids.Print("Please install required dependencies and /reload")
 end
 
-local frame = CreateFrame("Frame")
-frame:RegisterEvent("VARIABLES_LOADED")
-frame:SetScript("OnEvent", function()
-    if not CleveRoidMacros then CleveRoidMacros = {} end
+-- LoadSavedVariablesFirst: the saved variables are already in place at file load.
+CleveRoidMacros = CleveRoidMacros or {}
 
-    if type(CleveRoidMacros.realtime) ~= "number" then
-        CleveRoidMacros.realtime = 0
-    end
+if type(CleveRoidMacros.realtime) ~= "number" then
+    CleveRoidMacros.realtime = 0
+end
 
-    if type(CleveRoidMacros.refresh) ~= "number" then
-        CleveRoidMacros.refresh = 5
-    end
+if type(CleveRoidMacros.refresh) ~= "number" then
+    CleveRoidMacros.refresh = 5
+end
 
-    if type(CleveRoidMacros.macrocheck) ~= "number" then
-        CleveRoidMacros.macrocheck = 1  -- enabled by default
-    end
-
-    -- The saved realtime setting is only readable now; the unit streams were
-    -- registered at load assuming event-driven mode.
-    CleveRoids.ApplyUnitStreamEvents()
-end)
+if type(CleveRoidMacros.macrocheck) ~= "number" then
+    CleveRoidMacros.macrocheck = 1  -- enabled by default
+end
 
 -- Queues a full update of all action bars.
 -- This is called by game event handlers to avoid running heavy logic inside the event itself.
@@ -3002,7 +2995,7 @@ local function _startAttackAction()
         -- Don't wait for PLAYER_ENTER_COMBAT event which has a delay
         CleveRoids.CurrentSpell.autoAttack = true
         -- FIX: Queue icon update so action bars reflect the new state
-        if CleveRoidMacros and CleveRoidMacros.realtime == 0 then
+        if CleveRoidMacros.realtime == 0 then
             CleveRoids.QueueActionUpdate()
         end
     end
@@ -4373,11 +4366,10 @@ end
 -- They do fire continuously for every unit in range, and in realtime mode their
 -- handlers do nothing at all: the OnUpdate refreshes on every throttled tick and
 -- QueueActionUpdate no-ops. Rather than pay a Lua dispatch per event to return
--- early, drop the registrations entirely while realtime is on. Re-applied at
--- VARIABLES_LOADED (when the saved value is first known) and whenever
--- `/cleveroid realtime` flips it.
+-- early, drop the registrations entirely while realtime is on. Applied at load
+-- and re-applied whenever `/cleveroid realtime` flips it.
 function CleveRoids.ApplyUnitStreamEvents()
-    local eventDriven = not CleveRoidMacros or CleveRoidMacros.realtime == 0
+    local eventDriven = CleveRoidMacros.realtime == 0
     for i = 1, table.getn(unitStreamEvents) do
         if eventDriven then
             CleveRoids.Frame:RegisterEvent(unitStreamEvents[i])
@@ -5586,7 +5578,6 @@ SlashCmdList["CLEVEROID"] = function(msg)
 
     -- overflowframe (enable/disable player overflow buff frame)
     if cmd == "overflowframe" then
-        CleveRoidMacros = CleveRoidMacros or {}
         if val == "on" or val == "1" then
             CleveRoidMacros.overflowPlayerEnabled = true
             CleveRoids.Print("Player overflow buff frame |cff00ff00enabled|r")

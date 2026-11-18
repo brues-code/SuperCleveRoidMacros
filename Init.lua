@@ -303,8 +303,6 @@ initFrame:SetScript("OnEvent", function()
     this:UnregisterAllEvents()
 
     -- Check immunity data version and reset if outdated
-    CleveRoidMacros = CleveRoidMacros or {}
-    CleveRoids_ImmunityData = CleveRoids_ImmunityData or {}
     local savedVersion = CleveRoidMacros.immunityDataVersion or 0
 
     if savedVersion < CleveRoids.IMMUNITY_DATA_VERSION then
