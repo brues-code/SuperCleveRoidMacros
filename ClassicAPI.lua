@@ -3,8 +3,8 @@
 
     ClassicAPI is a client mod (sibling to Nampower/SuperWoW) that backports the
     modern C_* API into the 1.12.1 Lua environment. It is a HARD REQUIREMENT of
-    this addon (ClassicAPI v1.18.10+, which added UNIT_TARGET;
-    v1.18.0 made C_Spell.IsSpellInRange gate on the target;
+    this addon (ClassicAPI v1.21.0+, which added WEAPON_ENCHANT_CHANGED;
+    v1.18.10 added UNIT_TARGET; v1.18.0 made C_Spell.IsSpellInRange gate on the target;
     v1.17.0 made GetSpellInfo castTime the player's;
     v1.15.10 added PLAYER_SWING; v1.15.8 scoped
     GetMouseButtonClicked to the click dispatch; v1.15.0 added

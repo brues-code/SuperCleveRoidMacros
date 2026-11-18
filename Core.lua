@@ -192,7 +192,7 @@ requirementCheckFrame:SetScript("OnEvent", function()
     local hasNampower30 = hasNampower and CleveRoids.NampowerAPI
         and CleveRoids.NampowerAPI.HasMinimumVersion(3, 0, 0)
     local hasClassicAPI = CleveRoids.ClassicAPI and CleveRoids.ClassicAPI.IsAvailable()
-    local hasClassicAPIMin = hasClassicAPI and CleveRoids.ClassicAPI.HasMinimumVersion(1, 18, 10)
+    local hasClassicAPIMin = hasClassicAPI and CleveRoids.ClassicAPI.HasMinimumVersion(1, 21, 0)
 
     if not hasNampower30 or not hasUnitXP or not hasClassicAPI or not hasClassicAPIMin then
         -- Show warnings (don't disable — tearing down a partially-initialized addon causes hangs)
@@ -216,7 +216,7 @@ requirementCheckFrame:SetScript("OnEvent", function()
             CleveRoids.Print("Dispel-type and movement conditionals will be unavailable without it.")
         elseif not hasClassicAPIMin then
             local major, minor, patch = CleveRoids.ClassicAPI.GetVersion()
-            CleveRoids.Print(format("|cFFFF9900WARNING:|r |cFF00FFFFClassicAPI v1.18.10+|r is required (you have v%d.%d.%d):", major, minor, patch))
+            CleveRoids.Print(format("|cFFFF9900WARNING:|r |cFF00FFFFClassicAPI v1.21.0+|r is required (you have v%d.%d.%d):", major, minor, patch))
             CleveRoids.Print("https://github.com/brues-code/ClassicAPI")
             CleveRoids.Print("The addon cannot finish loading on this version -- update ClassicAPI.")
         end
@@ -4343,6 +4343,8 @@ FrameUtil.RegisterFrameForEvents(CleveRoids.Frame, {
 
     -- ClassicAPI totem-bar tracking, for [totem:X] icon refresh.
     "PLAYER_TOTEM_UPDATE",
+    -- ClassicAPI temporary weapon enchants, for [mhenchant]/[mhimbue] icon refresh.
+    "WEAPON_ENCHANT_CHANGED",
 })
 
 if QueueSpellByName then
@@ -4990,6 +4992,16 @@ end
 -- is refreshed: a [totem:X] macro may name any slot, and [nototem:X] flips on any
 -- of them.
 function CleveRoids.Frame:PLAYER_TOTEM_UPDATE()
+    CleveRoids.QueueActionUpdate()
+end
+
+-- ClassicAPI WEAPON_ENCHANT_CHANGED: a poison, oil, stone or imbue on a weapon
+-- was applied, renewed or removed, or spent a charge. These are not auras, so no
+-- UNIT_AURA covers them and [mhenchant]/[ohenchant]/[mhimbue]/[ohimbue] icons
+-- held their old answer. A weapon swap fires PLAYER_EQUIPMENT_CHANGED instead.
+-- Time-left comparisons ([mhimbue:<60]) ride the ambient refreshes, as aura
+-- time comparisons do.
+function CleveRoids.Frame:WEAPON_ENCHANT_CHANGED()
     CleveRoids.QueueActionUpdate()
 end
 
