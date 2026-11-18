@@ -26,15 +26,11 @@ _G.CleveRoids = CleveRoids
 CleveRoids.lastItemIndexTime = 0
 CleveRoids.initializationTimer = nil
 CleveRoids.isActionUpdateQueued = true
+CleveRoids.isStreamUpdateQueued = false
+CleveRoids.nextStreamUpdate = 0
 CleveRoids.lastEquipTime = CleveRoids.lastEquipTime or {}
 CleveRoids.lastWeaponSwapTime = 0
 CleveRoids.equipInProgress = false
-
--- PERFORMANCE: Event throttling to reduce spam from high-frequency events
-CleveRoids.lastUnitAuraUpdate = 0
-CleveRoids.lastUnitHealthUpdate = 0
-CleveRoids.lastUnitPowerUpdate = 0
-CleveRoids.EVENT_THROTTLE = 0.1  -- 100ms throttle for high-frequency events
 
 -- ClassicAPI answers UnitGUID("player") from addon load (the GUID is captured at
 -- the Enter World click), in the same "0x%016X" form as the combat log and
@@ -593,6 +589,14 @@ function CleveRoids.QueueActionUpdate()
     if CleveRoidMacros.realtime == 0 then
         CleveRoids.isActionUpdateQueued = true
     end
+end
+
+-- For the unit state streams (aura, health, power, target changes), which fire
+-- continuously for every unit in range. Nothing is dropped: OnUpdate turns the pending mark into
+-- a refresh at most once per STREAM_UPDATE_INTERVAL, so the newest state always
+-- lands. Realtime mode unregisters these events, so no realtime check is needed.
+function CleveRoids.QueueStreamUpdate()
+    CleveRoids.isStreamUpdateQueued = true
 end
 
 -- Count of `itemId` in *bags only* (not bank), matched by itemID throughout --
@@ -3912,6 +3916,10 @@ local next = next
 
 -- PERFORMANCE: Module-level constants (avoid re-creation per frame)
 local SEQUENCE_STALE_TIME = 300  -- 5 minutes
+-- The shortest gap between two refreshes driven by the unit state streams
+-- (QueueStreamUpdate). Caps the cost at ~10 refreshes a second in heavy combat,
+-- and a change in the stream is on the icons within this time.
+local STREAM_UPDATE_INTERVAL = 0.1
 
 function CleveRoids.OnUpdate(self)
     -- PERFORMANCE: Local alias for global namespace (saves ~80+ global lookups per frame)
@@ -4016,6 +4024,14 @@ function CleveRoids.OnUpdate(self)
         CR.cachedRefreshRate = refreshRate
     end
 
+    -- A pending stream change becomes a queued refresh once the interval since
+    -- the last stream-driven refresh has passed.
+    if CR.isStreamUpdateQueued and time >= CR.nextStreamUpdate then
+        CR.isStreamUpdateQueued = false
+        CR.nextStreamUpdate = time + STREAM_UPDATE_INTERVAL
+        CR.isActionUpdateQueued = true
+    end
+
     -- PERFORMANCE: Throttle check FIRST - skip most work on non-throttled frames
     local lastUpdate = CR.lastUpdate or 0
     local bypassThrottle = CR.isActionUpdateQueued and CRM.realtime == 0
@@ -4062,6 +4078,9 @@ function CleveRoids.OnUpdate(self)
         if CR.isActionUpdateQueued then
             CR.TestForAllActiveActions()
             CR.isActionUpdateQueued = false
+            -- The refresh read the current state, so it covers any stream
+            -- change that was still waiting for its interval.
+            CR.isStreamUpdateQueued = false
         end
     end
 
@@ -4303,10 +4322,10 @@ else
 end
 
 -- They do fire continuously for every unit in range, and in realtime mode their
--- handlers do nothing at all: the OnUpdate refreshes on every throttled tick and
--- QueueActionUpdate no-ops. Rather than pay a Lua dispatch per event to return
--- early, drop the registrations entirely while realtime is on. Applied at load
--- and re-applied whenever `/cleveroid realtime` flips it.
+-- handlers have nothing to add: the OnUpdate refreshes on every throttled tick.
+-- Rather than pay a Lua dispatch per event for nothing, drop the registrations
+-- entirely while realtime is on. Applied at load and re-applied whenever
+-- `/cleveroid realtime` flips it.
 function CleveRoids.ApplyUnitStreamEvents()
     if CleveRoidMacros.realtime == 0 then
         FrameUtil.RegisterFrameForEvents(CleveRoids.Frame, unitStreamEvents)
@@ -4793,69 +4812,18 @@ function CleveRoids.UpdateAllManagedCooldowns()
         slot, actions = next(Actions, slot)
     end
 end
--- PERFORMANCE OPTIMIZATION: Throttled event handlers to reduce CPU spam
--- UNIT_AURA can fire dozens of times per second during combat
--- 100ms throttle reduces calls by 90%+ while maintaining responsiveness
-function CleveRoids.Frame:UNIT_AURA()
-    if CleveRoidMacros.realtime == 0 then
-        local now = GetTime()
-        if (now - CleveRoids.lastUnitAuraUpdate) >= CleveRoids.EVENT_THROTTLE then
-            CleveRoids.lastUnitAuraUpdate = now
-            CleveRoids.QueueActionUpdate()
-        end
-    end
-end
-function CleveRoids.Frame:UNIT_HEALTH()
-    if CleveRoidMacros.realtime == 0 then
-        local now = GetTime()
-        if (now - CleveRoids.lastUnitHealthUpdate) >= CleveRoids.EVENT_THROTTLE then
-            CleveRoids.lastUnitHealthUpdate = now
-            CleveRoids.QueueActionUpdate()
-        end
-    end
-end
-function CleveRoids.Frame:UNIT_POWER()
-    if CleveRoidMacros.realtime == 0 then
-        local now = GetTime()
-        if (now - CleveRoids.lastUnitPowerUpdate) >= CleveRoids.EVENT_THROTTLE then
-            CleveRoids.lastUnitPowerUpdate = now
-            CleveRoids.QueueActionUpdate()
-        end
-    end
-end
-
--- GUID event handlers (v2.39+): fire once per unit state change instead of per-token
-function CleveRoids.Frame:UNIT_AURA_GUID()
-    if CleveRoidMacros.realtime == 0 then
-        local now = GetTime()
-        if (now - CleveRoids.lastUnitAuraUpdate) >= CleveRoids.EVENT_THROTTLE then
-            CleveRoids.lastUnitAuraUpdate = now
-            CleveRoids.QueueActionUpdate()
-        end
-    end
-end
-function CleveRoids.Frame:UNIT_HEALTH_GUID()
-    if CleveRoidMacros.realtime == 0 then
-        local now = GetTime()
-        if (now - CleveRoids.lastUnitHealthUpdate) >= CleveRoids.EVENT_THROTTLE then
-            CleveRoids.lastUnitHealthUpdate = now
-            CleveRoids.QueueActionUpdate()
-        end
-    end
-end
--- All power GUID events share the same handler
-local function OnPowerGuidEvent()
-    if CleveRoidMacros.realtime == 0 then
-        local now = GetTime()
-        if (now - CleveRoids.lastUnitPowerUpdate) >= CleveRoids.EVENT_THROTTLE then
-            CleveRoids.lastUnitPowerUpdate = now
-            CleveRoids.QueueActionUpdate()
-        end
-    end
-end
-CleveRoids.Frame.UNIT_MANA_GUID = OnPowerGuidEvent
-CleveRoids.Frame.UNIT_RAGE_GUID = OnPowerGuidEvent
-CleveRoids.Frame.UNIT_ENERGY_GUID = OnPowerGuidEvent
+-- The unit state streams: UNIT_AURA / UNIT_HEALTH / UNIT_POWER, or Nampower's
+-- per-GUID versions (v2.39+), which fire once per unit change rather than once
+-- per token. They fire dozens of times a second in combat, so they go through
+-- QueueStreamUpdate's capped refresh rather than the next-frame one.
+CleveRoids.Frame.UNIT_AURA = CleveRoids.QueueStreamUpdate
+CleveRoids.Frame.UNIT_HEALTH = CleveRoids.QueueStreamUpdate
+CleveRoids.Frame.UNIT_POWER = CleveRoids.QueueStreamUpdate
+CleveRoids.Frame.UNIT_AURA_GUID = CleveRoids.QueueStreamUpdate
+CleveRoids.Frame.UNIT_HEALTH_GUID = CleveRoids.QueueStreamUpdate
+CleveRoids.Frame.UNIT_MANA_GUID = CleveRoids.QueueStreamUpdate
+CleveRoids.Frame.UNIT_RAGE_GUID = CleveRoids.QueueStreamUpdate
+CleveRoids.Frame.UNIT_ENERGY_GUID = CleveRoids.QueueStreamUpdate
 
 function CleveRoids.Frame:SPELL_QUEUE_EVENT()
     if event == "SPELL_QUEUE_EVENT" then
@@ -4933,10 +4901,9 @@ end
 -- ClassicAPI UNIT_TARGET: arg1 = a token whose unit changed targets. Vanilla has
 -- no event for this, so a [targeting:X] icon only repainted when some unrelated
 -- event happened to queue a refresh. The token goes unread for the same reason
--- the other unit streams ignore theirs.
-function CleveRoids.Frame:UNIT_TARGET()
-    CleveRoids.QueueActionUpdate()
-end
+-- the other unit streams ignore theirs. Any unit in range can fire it, so it
+-- takes the capped stream refresh as they do.
+CleveRoids.Frame.UNIT_TARGET = CleveRoids.QueueStreamUpdate
 
 -- The engine fires SPELL_UPDATE_USABLE when an input of a reactive proc changes:
 -- the player's combo points, the aura state of the player or the target, or the
