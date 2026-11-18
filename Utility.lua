@@ -2237,16 +2237,14 @@ CleveRoids.reactiveProcs = CleveRoids.reactiveProcs or {}
 -- This helps us decide whether to use combat log tracking vs fallback methods
 CleveRoids.reactiveProcsEverSeen = CleveRoids.reactiveProcsEverSeen or {}
 
--- Proc durations (in seconds)
--- Overpower and Revenge: 4 seconds
--- Riposte: 5 seconds (keeping at 5 for safety, can be adjusted)
+-- The server's reactive window (REACTIVE_TIMER_START, 4000 ms). Measured in
+-- game: Overpower's glow lasts 3.95 s after the dodge when left unused.
 local REACTIVE_PROC_DURATION = 4.0
 
 -- Set a reactive proc state with optional target GUID
-function CleveRoids.SetReactiveProc(spellName, duration, targetGUID)
-    duration = duration or REACTIVE_PROC_DURATION
+function CleveRoids.SetReactiveProc(spellName, targetGUID)
     CleveRoids.reactiveProcs[spellName] = {
-        expiry = GetTime() + duration,
+        expiry = GetTime() + REACTIVE_PROC_DURATION,
         targetGUID = targetGUID
     }
     -- Mark that we've seen this reactive spell proc at least once
@@ -2292,23 +2290,11 @@ end
 
 -- Clear a reactive proc
 function CleveRoids.ClearReactiveProc(spellName)
-    CleveRoids.reactiveProcs[spellName] = nil
+    if CleveRoids.reactiveProcs[spellName] then
+        CleveRoids.reactiveProcs[spellName] = nil
+        CleveRoids.QueueActionUpdate()
+    end
 end
-
--- Removed: ClearReactiveProcOnCast plus wrappers around Frame.UNIT_CASTEVENT and
--- Frame.SPELL_START_SELF that tried to clear a reactive proc when its spell was cast.
--- The feature never worked, for three independent reasons:
---   1. Both wrappers guarded on `CleveRoids.Frame and CleveRoids.Frame.<handler>`,
---      but CleveRoids.Frame is created in Core.lua, which loads AFTER this file, so
---      the guard was always false and neither wrapper was ever installed.
---   2. The UNIT_CASTEVENT wrapper tested arg2 == "START", but that signature is
---      (caster, target, action, spell_id, cast_time) -- the action is arg3, so it was
---      comparing the target.
---   3. Both passed a spell *ID* to a function that looks the name up in
---      CleveRoids.reactiveSpells, which is keyed by name, so nothing could match.
--- They also each allocated an `arg` table per call and unpack()'d it. Deleting is
--- behaviour-preserving; if clearing a reactive proc on cast is still wanted it needs
--- to be written fresh against the real handler signatures.
 
 -- REACTIVE PROCS AND IMMUNITY FROM THE COMBAT LOG
 -- Fed by the COMBAT_LOG_EVENT_UNFILTERED dispatcher at the end of this file.
@@ -2316,7 +2302,7 @@ end
 -- Set a reactive proc if the player uses that ability. Returns true when set.
 local function ProcReactive(spellName, targetGUID)
     if not CleveRoids.reactiveSpells[spellName] then return false end
-    CleveRoids.SetReactiveProc(spellName, 4.0, targetGUID)
+    CleveRoids.SetReactiveProc(spellName, targetGUID)
     if CleveRoids.debug then
         DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[Reactive]|r " .. spellName .. " proc")
     end
@@ -2513,7 +2499,11 @@ combatLogFrame:SetScript("OnEvent", function()
         -- amount, overkill, school, resisted, blocked
         ProcessAvoidance(sourceGUID, destGUID, playerGUID, nil, a5)
     elseif subevent == "SPELL_CAST_SUCCESS" then
-        -- spellId: an instant spell went off at destGUID
+        -- spellId, spellName: an instant spell went off at destGUID. Casting a
+        -- reactive ability uses up its proc.
+        if sourceGUID == playerGUID then
+            CleveRoids.ClearReactiveProc(a2)
+        end
         if byPlayerOnOther then
             ExpectAura(a1, destGUID, destName)
         end
