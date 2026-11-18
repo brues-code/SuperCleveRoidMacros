@@ -4247,8 +4247,7 @@ FrameUtil.RegisterFrameForEvents(CleveRoids.Frame, {
     "PLAYER_FOCUS_CHANGED",   -- For focus addons
     "PLAYER_ENTER_COMBAT",    -- Auto-attack started
     "PLAYER_LEAVE_COMBAT",    -- Auto-attack stopped
-    "PLAYER_REGEN_DISABLED",  -- Entered actual combat (has threat)
-    "PLAYER_REGEN_ENABLED",   -- Left actual combat (no threat)
+    "PLAYER_IN_COMBAT_CHANGED", -- ClassicAPI: actual combat (threat) entered or left
     "UPDATE_SHAPESHIFT_FORM",
     "SPELL_UPDATE_COOLDOWN",
     "SPELL_UPDATE_USABLE",    -- reactive proc windows open and close
@@ -4485,25 +4484,19 @@ function CleveRoids.Frame:PLAYER_LEAVE_COMBAT()
     end
 end
 
--- PLAYER_REGEN_DISABLED/PLAYER_REGEN_ENABLED are for ACTUAL combat state (threat/aggro)
--- These events track what UnitAffectingCombat("player") reports
-function CleveRoids.Frame:PLAYER_REGEN_DISABLED()
+-- ClassicAPI PLAYER_IN_COMBAT_CHANGED: arg1 = inCombat, the actual combat state
+-- (threat/aggro) that UnitAffectingCombat("player") reports, not auto-attack.
+-- It fires as PLAYER_REGEN_DISABLED / PLAYER_REGEN_ENABLED do, just before them.
+function CleveRoids.Frame:PLAYER_IN_COMBAT_CHANGED(inCombat)
     -- PERFORMANCE: Cache actual combat state for event-driven [combat]/[nocombat] conditionals
-    CleveRoids._cachedPlayerInCombat = true
-    if CleveRoidMacros.realtime == 0 then
-        CleveRoids.QueueActionUpdate()
-    end
-end
+    CleveRoids._cachedPlayerInCombat = inCombat
 
-function CleveRoids.Frame:PLAYER_REGEN_ENABLED()
-    -- PERFORMANCE: Cache actual combat state for event-driven [combat]/[nocombat] conditionals
-    CleveRoids._cachedPlayerInCombat = false
-
-    -- Reset any sequence with reset=combat that has progressed past the first step
-    -- Uses PLAYER_REGEN_ENABLED (actual combat ends) instead of PLAYER_LEAVE_COMBAT (auto-attack stops)
-    for _, sequence in pairs(CleveRoids.Sequences) do
-        if sequence.index > 1 and sequence.reset and sequence.reset.combat then
-            CleveRoids.ResetSequence(sequence)
+    -- Leaving combat resets any reset=combat sequence past its first step
+    if not inCombat then
+        for _, sequence in pairs(CleveRoids.Sequences) do
+            if sequence.index > 1 and sequence.reset and sequence.reset.combat then
+                CleveRoids.ResetSequence(sequence)
+            end
         end
     end
 

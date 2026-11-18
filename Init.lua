@@ -170,7 +170,7 @@ CleveRoids.queuedSpell = nil
 CleveRoids.stopMacroFlag = false
 
 -- PERFORMANCE: Event-driven cached state (updated on events, not polled)
-CleveRoids._cachedPlayerInCombat = nil   -- Updated on PLAYER_REGEN_DISABLED, PLAYER_REGEN_ENABLED
+CleveRoids._cachedPlayerInCombat = nil   -- Updated on PLAYER_IN_COMBAT_CHANGED
 
 CleveRoids.ignoreKeywords = {
     action        = true,
