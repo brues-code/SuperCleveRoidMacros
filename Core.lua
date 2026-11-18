@@ -192,7 +192,7 @@ requirementCheckFrame:SetScript("OnEvent", function()
     local hasNampower30 = hasNampower and CleveRoids.NampowerAPI
         and CleveRoids.NampowerAPI.HasMinimumVersion(3, 0, 0)
     local hasClassicAPI = CleveRoids.ClassicAPI and CleveRoids.ClassicAPI.IsAvailable()
-    local hasClassicAPIMin = hasClassicAPI and CleveRoids.ClassicAPI.HasMinimumVersion(1, 18, 1)
+    local hasClassicAPIMin = hasClassicAPI and CleveRoids.ClassicAPI.HasMinimumVersion(1, 18, 10)
 
     if not hasNampower30 or not hasUnitXP or not hasClassicAPI or not hasClassicAPIMin then
         -- Show warnings (don't disable — tearing down a partially-initialized addon causes hangs)
@@ -216,7 +216,7 @@ requirementCheckFrame:SetScript("OnEvent", function()
             CleveRoids.Print("Dispel-type and movement conditionals will be unavailable without it.")
         elseif not hasClassicAPIMin then
             local major, minor, patch = CleveRoids.ClassicAPI.GetVersion()
-            CleveRoids.Print(format("|cFFFF9900WARNING:|r |cFF00FFFFClassicAPI v1.18.1+|r is required (you have v%d.%d.%d):", major, minor, patch))
+            CleveRoids.Print(format("|cFFFF9900WARNING:|r |cFF00FFFFClassicAPI v1.18.10+|r is required (you have v%d.%d.%d):", major, minor, patch))
             CleveRoids.Print("https://github.com/brues-code/ClassicAPI")
             CleveRoids.Print("The addon cannot finish loading on this version -- update ClassicAPI.")
         end
@@ -4356,15 +4356,17 @@ end
 
 -- The unit state streams that drive icon refresh: GUID events when Nampower
 -- provides them (v2.39+, one event per unit change rather than one per token),
--- else the stock per-token events. These cannot become RegisterUnitEvent calls
--- -- the handlers ignore the unit and refresh every macro, because a conditional
--- may name any unit ([@party3,hp:<50], @focus, @mouseover), so narrowing the
--- token set would leave those icons stale.
+-- else the stock per-token events, plus ClassicAPI's UNIT_TARGET, which keeps
+-- [targeting:X], [@targettarget] and [@focustarget] icons current when a unit
+-- swaps targets. These cannot become RegisterUnitEvent calls -- the handlers
+-- ignore the unit and refresh every macro, because a conditional may name any
+-- unit ([@party3,hp:<50], @focus, @mouseover), so narrowing the token set would
+-- leave those icons stale.
 local unitStreamEvents
 if CleveRoids.NampowerAPI.features.hasUnitGuidEvents then
-    unitStreamEvents = { "UNIT_AURA_GUID", "UNIT_HEALTH_GUID", "UNIT_MANA_GUID", "UNIT_RAGE_GUID", "UNIT_ENERGY_GUID" }
+    unitStreamEvents = { "UNIT_AURA_GUID", "UNIT_HEALTH_GUID", "UNIT_MANA_GUID", "UNIT_RAGE_GUID", "UNIT_ENERGY_GUID", "UNIT_TARGET" }
 else
-    unitStreamEvents = { "UNIT_AURA", "UNIT_HEALTH", "UNIT_POWER" }
+    unitStreamEvents = { "UNIT_AURA", "UNIT_HEALTH", "UNIT_POWER", "UNIT_TARGET" }
 end
 
 -- They do fire continuously for every unit in range, and in realtime mode their
@@ -4988,6 +4990,14 @@ end
 -- is refreshed: a [totem:X] macro may name any slot, and [nototem:X] flips on any
 -- of them.
 function CleveRoids.Frame:PLAYER_TOTEM_UPDATE()
+    CleveRoids.QueueActionUpdate()
+end
+
+-- ClassicAPI UNIT_TARGET: arg1 = a token whose unit changed targets. Vanilla has
+-- no event for this, so a [targeting:X] icon only repainted when some unrelated
+-- event happened to queue a refresh. The token goes unread for the same reason
+-- the other unit streams ignore theirs.
+function CleveRoids.Frame:UNIT_TARGET()
     CleveRoids.QueueActionUpdate()
 end
 
