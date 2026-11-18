@@ -563,7 +563,6 @@ local ERROR_TYPES = {
     INVALID_OPERATOR = "Invalid operator",
     MISSING_ARGUMENT = "Missing argument",
     INVALID_COMMAND = "Unknown command",
-    INVALID_TARGET = "Invalid target format",
     MALFORMED_QUOTES = "Malformed quotes",
     EMPTY_ACTION = "Empty action",
     INVALID_SYNTAX = "Invalid syntax",
@@ -897,21 +896,22 @@ local function validateLine(line, lineNum)
             for _, conditionBlock in ipairs(blocks) do
                 -- `[]` is the always-true group; nothing to validate
                 if safeTrim(conditionBlock) ~= "" then
-                    -- Check for invalid @ target syntax
-                    local _, _, target = safeStringFind(conditionBlock, "(@[^%s,]+)")
-                    if target and not safeStringFind(target, "^@[a-z]+%d*") then
-                        table.insert(localErrors, {
-                            type = ERROR_TYPES.INVALID_TARGET,
-                            line = lineNum,
-                            message = "Invalid target: " .. target
-                        })
+                    -- Strip @unit / target=unit the way the runtime does. The unit
+                    -- may be a token, a raid mark or a character name, so any
+                    -- spelling is valid here; an unknown name just fails at runtime.
+                    local s, e = safeStringFind(conditionBlock, "@[^%s,]+")
+                    if not s then
+                        s, e = safeStringFind(conditionBlock, "target=[^%s,]+")
+                    end
+                    if s then
+                        conditionBlock = safeStringSub(conditionBlock, 1, s - 1) .. safeStringSub(conditionBlock, e + 1)
                     end
 
                     -- Parse individual conditionals
                     local condGroups = CleveRoids.splitStringIgnoringQuotes(conditionBlock, {",", " "})
                     if condGroups then
                         for _, condGroup in condGroups do
-                            if condGroup ~= "" and condGroup ~= target then
+                            if condGroup ~= "" then
                                 local parts = CleveRoids.splitStringIgnoringQuotes(condGroup, ":")
                                 if parts then
                                     local cond = string.lower(safeTrim(parts[1] or ""))
@@ -919,7 +919,7 @@ local function validateLine(line, lineNum)
 
                                     -- Check for missing ':' between conditional and its argument
                                     -- e.g., "combo>0" should be "combo:>0", "hp50" should be "hp:50"
-                                    if cond ~= "" and (not parts[2] or args == "") and not safeStringFind(cond, "^@") then
+                                    if cond ~= "" and (not parts[2] or args == "") then
                                         local _, _, condPrefix, valueSuffix = safeStringFind(cond, "^([a-z]+)([<>=~%d].+)$")
                                         if condPrefix and valueSuffix and VALID_CONDITIONALS[condPrefix] then
                                             table.insert(localErrors, {
