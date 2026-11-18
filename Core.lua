@@ -4322,34 +4322,61 @@ end)
 -- Flag to prevent SuperWoW API calls during logout (crash prevention)
 CleveRoids.isShuttingDown = false
 
--- == CORE EVENT REGISTRATION ==
-CleveRoids.Frame:RegisterEvent("PLAYER_LOGIN")
-CleveRoids.Frame:RegisterEvent("ADDON_LOADED")
-CleveRoids.Frame:RegisterEvent("PLAYER_LOGOUT")
-CleveRoids.Frame:RegisterEvent("PLAYER_LEAVING_WORLD")
-CleveRoids.Frame:RegisterEvent("PLAYER_ENTERING_WORLD")
-CleveRoids.Frame:RegisterEvent("UPDATE_MACROS")
-CleveRoids.Frame:RegisterEvent("SPELLS_CHANGED")
-CleveRoids.Frame:RegisterEvent("ACTIONBAR_SLOT_CHANGED")
-CleveRoids.Frame:RegisterEvent("BAG_UPDATE_DELAYED")
-CleveRoids.Frame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
-CleveRoids.Frame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
-CleveRoids.Frame:RegisterEvent("UNIT_PET")
-CleveRoids.Frame:RegisterEvent("UNIT_HAPPINESS")
+-- == EVENT REGISTRATION ==
+FrameUtil.RegisterFrameForEvents(CleveRoids.Frame, {
+    "PLAYER_LOGIN",
+    "ADDON_LOADED",
+    "PLAYER_LOGOUT",
+    "PLAYER_LEAVING_WORLD",
+    "PLAYER_ENTERING_WORLD",
+    "UPDATE_MACROS",
+    "SPELLS_CHANGED",
+    "ACTIONBAR_SLOT_CHANGED",
+    "BAG_UPDATE_DELAYED",
+    "GET_ITEM_INFO_RECEIVED",
+    "PLAYER_EQUIPMENT_CHANGED",
+    "UNIT_PET",
+    "UNIT_HAPPINESS",
 
--- == STATE CHANGE EVENT REGISTRATION (for performance) ==
-CleveRoids.Frame:RegisterEvent("PLAYER_TARGET_CHANGED")
-CleveRoids.Frame:RegisterEvent("PLAYER_FOCUS_CHANGED") -- For focus addons
-CleveRoids.Frame:RegisterEvent("PLAYER_ENTER_COMBAT")  -- Auto-attack started
-CleveRoids.Frame:RegisterEvent("PLAYER_LEAVE_COMBAT")  -- Auto-attack stopped
-CleveRoids.Frame:RegisterEvent("PLAYER_REGEN_DISABLED") -- Entered actual combat (has threat)
-CleveRoids.Frame:RegisterEvent("PLAYER_REGEN_ENABLED")  -- Left actual combat (no threat)
-CleveRoids.Frame:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
-CleveRoids.Frame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
-CleveRoids.Frame:RegisterEvent("PLAYER_STARTED_MOVING")
--- ClassicAPI loss-of-control (school-interrupt lockout) for [locked]/[nolocked].
-CleveRoids.Frame:RegisterEvent("LOSS_OF_CONTROL_ADDED")
-CleveRoids.Frame:RegisterEvent("LOSS_OF_CONTROL_UPDATE")
+    -- State changes
+    "PLAYER_TARGET_CHANGED",
+    "PLAYER_FOCUS_CHANGED",   -- For focus addons
+    "PLAYER_ENTER_COMBAT",    -- Auto-attack started
+    "PLAYER_LEAVE_COMBAT",    -- Auto-attack stopped
+    "PLAYER_REGEN_DISABLED",  -- Entered actual combat (has threat)
+    "PLAYER_REGEN_ENABLED",   -- Left actual combat (no threat)
+    "UPDATE_SHAPESHIFT_FORM",
+    "SPELL_UPDATE_COOLDOWN",
+    "PLAYER_STARTED_MOVING",
+    -- ClassicAPI loss-of-control (school-interrupt lockout) for [locked]/[nolocked].
+    "LOSS_OF_CONTROL_ADDED",
+    "LOSS_OF_CONTROL_UPDATE",
+
+    -- Spellcasting
+    "START_AUTOREPEAT_SPELL",
+    "STOP_AUTOREPEAT_SPELL",
+    "UNIT_SPELLCAST_SENT",
+    "UNIT_SPELLCAST_START",
+    "UNIT_SPELLCAST_STOP",
+    "UNIT_SPELLCAST_SUCCEEDED",
+    "UNIT_SPELLCAST_FAILED",
+    "UNIT_SPELLCAST_INTERRUPTED",
+    "UNIT_SPELLCAST_CHANNEL_START",
+    "UNIT_SPELLCAST_CHANNEL_STOP",
+
+    -- ClassicAPI totem-bar tracking, for [totem:X] icon refresh.
+    "PLAYER_TOTEM_UPDATE",
+})
+
+if QueueSpellByName then
+    CleveRoids.Frame:RegisterEvent("SPELL_QUEUE_EVENT")
+end
+
+-- Nampower v2.41+: keyboard input events for [keydown:X] conditional
+if CleveRoids.NampowerAPI.features.hasKeyEvents then
+    FrameUtil.RegisterFrameForEvents(CleveRoids.Frame, { "KEY_DOWN", "KEY_UP" })
+end
+
 -- The unit state streams that drive icon refresh: GUID events when Nampower
 -- provides them (v2.39+, one event per unit change rather than one per token),
 -- else the stock per-token events. These cannot become RegisterUnitEvent calls
@@ -4369,40 +4396,13 @@ end
 -- early, drop the registrations entirely while realtime is on. Applied at load
 -- and re-applied whenever `/cleveroid realtime` flips it.
 function CleveRoids.ApplyUnitStreamEvents()
-    local eventDriven = CleveRoidMacros.realtime == 0
-    for i = 1, table.getn(unitStreamEvents) do
-        if eventDriven then
-            CleveRoids.Frame:RegisterEvent(unitStreamEvents[i])
-        else
-            CleveRoids.Frame:UnregisterEvent(unitStreamEvents[i])
-        end
+    if CleveRoidMacros.realtime == 0 then
+        FrameUtil.RegisterFrameForEvents(CleveRoids.Frame, unitStreamEvents)
+    else
+        FrameUtil.UnregisterFrameForEvents(CleveRoids.Frame, unitStreamEvents)
     end
 end
 CleveRoids.ApplyUnitStreamEvents()
-if QueueSpellByName then
-    CleveRoids.Frame:RegisterEvent("SPELL_QUEUE_EVENT")
-end
-CleveRoids.Frame:RegisterEvent("START_AUTOREPEAT_SPELL")
-CleveRoids.Frame:RegisterEvent("STOP_AUTOREPEAT_SPELL")
-CleveRoids.Frame:RegisterEvent("UNIT_SPELLCAST_SENT")
-CleveRoids.Frame:RegisterEvent("UNIT_SPELLCAST_START")
-CleveRoids.Frame:RegisterEvent("UNIT_SPELLCAST_STOP")
-CleveRoids.Frame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
-CleveRoids.Frame:RegisterEvent("UNIT_SPELLCAST_FAILED")
-CleveRoids.Frame:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED")
-CleveRoids.Frame:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START")
-CleveRoids.Frame:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
-
--- Nampower v2.41+: keyboard input events for [keydown:X] conditional
-if CleveRoids.NampowerAPI.features.hasKeyEvents then
-    CleveRoids.Frame:RegisterEvent("KEY_DOWN")
-    CleveRoids.Frame:RegisterEvent("KEY_UP")
-end
-
--- ClassicAPI totem-bar tracking, for [totem:X] icon refresh. Ungated, unlike the
--- Nampower features above: it long predates the ClassicAPI floor the addon
--- already refuses to run below.
-CleveRoids.Frame:RegisterEvent("PLAYER_TOTEM_UPDATE")
 
 -- NOTE: SuperMacro hook installation is handled by Compatibility/SuperMacro.lua
 -- which has the complete implementation including the INTERCEPT path for all commands
