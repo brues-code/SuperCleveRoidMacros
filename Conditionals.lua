@@ -748,7 +748,9 @@ end
 
 -- Record melee results from the combat log: the player's swings, attacks on the
 -- player, and the player's physical abilities that missed (a dodged Mortal
--- Strike counts for [lastswing:dodge] the same as a dodged swing).
+-- Strike counts for [lastswing:dodge] the same as a dodged swing). An
+-- on-next-swing ability (Heroic Strike, Cleave, Maul, Raptor Strike) takes the
+-- place of a white swing, so its hit counts as one: it arrives as SPELL_DAMAGE.
 local meleeResultFrame = CreateFrame("Frame", "CleveRoidsMeleeResultFrame")
 meleeResultFrame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
 -- The values arrive as the arg1..argN globals; the subevent's own values start
@@ -757,7 +759,8 @@ meleeResultFrame:SetScript("OnEvent", function()
     local subevent, sourceGUID, destGUID = arg2, arg4, arg8
     local a1, a2, a3, a4, a5, a6, a7, a8, a9, a10 =
         arg12, arg13, arg14, arg15, arg16, arg17, arg18, arg19, arg20, arg21
-    if subevent ~= "SWING_DAMAGE" and subevent ~= "SWING_MISSED" and subevent ~= "SPELL_MISSED" then
+    if subevent ~= "SWING_DAMAGE" and subevent ~= "SWING_MISSED" and subevent ~= "SPELL_MISSED"
+        and subevent ~= "SPELL_DAMAGE" then
         return
     end
 
@@ -766,9 +769,10 @@ meleeResultFrame:SetScript("OnEvent", function()
     if sourceGUID == playerGuid then
         -- Only a physical ability counts as a swing (spellSchool 1)
         if subevent == "SPELL_MISSED" and a3 ~= 1 then return end
+        if subevent == "SPELL_DAMAGE" and not C_Spell.IsNextMeleeSpell(a1) then return end
         result = CleveRoids.LastSwing
         result.targetGuid = destGUID
-    elseif destGUID == playerGuid and subevent ~= "SPELL_MISSED" then
+    elseif destGUID == playerGuid and subevent ~= "SPELL_MISSED" and subevent ~= "SPELL_DAMAGE" then
         result = CleveRoids.LastIncomingHit
         result.attackerGuid = sourceGUID
     else
@@ -782,6 +786,10 @@ meleeResultFrame:SetScript("OnEvent", function()
         -- missType, isOffHand, amountMissed
         RecordMeleeResult(result, a1, 0, nil, a1 == "BLOCK" and a3, a1 == "ABSORB" and a3,
             nil, nil, nil, a2)
+    elseif subevent == "SPELL_DAMAGE" then
+        -- spellId, spellName, spellSchool, amount, overkill, school, resisted, blocked,
+        -- absorbed, critical, glancing, crushing, isOffHand
+        RecordMeleeResult(result, nil, a4, a7, a8, a9, a10, arg22, arg23, arg24)
     else
         -- spellId, spellName, spellSchool, missType, isOffHand, amountMissed
         RecordMeleeResult(result, a4, 0, nil, a4 == "BLOCK" and a6, a4 == "ABSORB" and a6,
