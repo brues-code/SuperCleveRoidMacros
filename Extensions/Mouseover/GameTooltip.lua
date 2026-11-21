@@ -2,6 +2,14 @@
 	Author: Dennis Werner Garske (DWG) / brian / Mewtiny
 	License: MIT License
 ]]
+
+-- ClassicAPI sets the game's mouseover itself: the 3D world, nameplates and
+-- every frame with a "unit" attribute. A unit taken from GameTooltip is then
+-- not something being hovered: ClassicAPI's soft-target tooltip shows units
+-- nobody points at, and making them the mouseover through SetMouseoverUnit
+-- left a mouseover (and its highlighted model) that nothing cleared.
+if CLASSIC_API_VERSION then return end
+
 local _G = _G or getfenv(0)
 local CleveRoids = _G.CleveRoids or {}
 local Extension = CleveRoids.RegisterExtension("GameTooltipMouseover")
