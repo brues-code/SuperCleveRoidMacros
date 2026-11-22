@@ -3396,6 +3396,7 @@ end
 -- tracks other units' casts from SMSG_SPELL_START, so this sees casts that began
 -- while the unit was in range.
 function CleveRoids.CheckSpellCast(unit, spell)
+    if not UnitExists(unit) then return false end
     local name = C_Spell.UnitCastingInfo(unit) or C_Spell.UnitChannelInfo(unit)
     if not name then return false end
     if not spell or spell == "" then return true end
