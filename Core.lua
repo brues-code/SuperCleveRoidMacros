@@ -1518,12 +1518,8 @@ function CleveRoids.SetHelp(conditionals)
 end
 
 function CleveRoids.FixEmptyTarget(conditionals)
-    if not conditionals.target then
-        if UnitExists("target") then
-            conditionals.target = "target"
-        elseif GetCVar("autoSelfCast") == "1" and conditionals.target ~= "help" then
-            conditionals.target = "player"
-        end
+    if not conditionals.target and UnitExists("target") then
+        conditionals.target = "target"
     end
     return false
 end
